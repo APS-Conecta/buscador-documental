@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+    <id>buscador_documental</id>
+    <name>Buscador Documental</name>
+    <summary>Búsqueda de texto completo en los documentos de la organización, con OCR y respeto estricto de permisos</summary>
+    <description><![CDATA[Indexa los documentos que el personal puede leer y los encuentra por su contenido, incluidos los PDF escaneados. Cada resultado se vuelve a verificar contra los permisos vigentes de Nextcloud antes de mostrarse.]]></description>
+    <version>0.1.0</version>
+    <licence>AGPL-3.0-or-later</licence>
+    <author>Daniel Espinoza</author>
+    <namespace>BuscadorDocumental</namespace>
+    <category>tools</category>
+    <dependencies>
+        <php min-version="8.2" max-version="8.5"/>
+        <!-- PostgreSQL only: the index lives in its own schema (aps_search) and uses
+             tsvector, unaccent and SECURITY DEFINER functions (ADR-0002, S1 design C2). -->
+        <database min-version="18">pgsql</database>
+        <nextcloud min-version="34" max-version="34"/>
+    </dependencies>
+    <commands>
+        <command>OCA\BuscadorDocumental\Command\DropSchema</command>
+    </commands>
+</info>
