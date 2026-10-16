@@ -1,0 +1,38 @@
+{
+ "avg_text_bytes": 1069.4383836324089,
+ "avg_tsv_bytes": 1175.4655383360523,
+ "bytes_per_chunk_total": 4898.6,
+ "chunk": {
+  "indexes_bytes": 841818112,
+  "table_bytes": 7516422144
+ },
+ "chunk_vec": {
+  "indexes_bytes": 3598843904,
+  "table_bytes": 2732630016
+ },
+ "chunks": 3000000,
+ "database_bytes": 14720439987,
+ "file_acl": {
+  "indexes_bytes": 1449984,
+  "table_bytes": 4702208
+ },
+ "host": {
+  "cpu_pressure": "some avg10=0.73 avg60=4.43 avg300=6.22 total=3034684500\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0",
+  "loadavg": [
+   5.2275390625,
+   7.134765625,
+   5.748046875
+  ]
+ },
+ "measured_at": "2026-10-16T02:17:57+0000",
+ "per_index_bytes": {
+  "bd_spike.chunk_file_idx": 20570112,
+  "bd_spike.chunk_pkey": 67403776,
+  "bd_spike.chunk_tsv_gin": 753844224,
+  "bd_spike.chunk_vec_file_idx": 20570112,
+  "bd_spike.chunk_vec_hnsw": 3510870016,
+  "bd_spike.chunk_vec_pkey": 67403776,
+  "bd_spike.file_acl_gin": 311296,
+  "bd_spike.file_acl_pkey": 1138688
+ }
+}

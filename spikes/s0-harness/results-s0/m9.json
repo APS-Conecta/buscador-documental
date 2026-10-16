@@ -1,0 +1,108 @@
+{
+ "a_perf_3_threshold_ms": 300,
+ "batched_check_p95_max_ms": 405.4,
+ "hits": 50,
+ "host": {
+  "cpu_pressure": "some avg10=0.59 avg60=0.58 avg300=1.09 total=8953068775\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0",
+  "loadavg": [
+   1.46484375,
+   2.447265625,
+   2.56640625
+  ]
+ },
+ "measured_at": "2026-10-16T11:29:46+0000",
+ "naive_check_p95_max_ms": 820.2,
+ "note": "check_ms excludes FS setup (setup_ms reported separately; it dominates for the 200-group user)",
+ "summary": {
+  "u_admin200/batched": {
+   "check_ms_p50": 362.7,
+   "check_ms_p95": 405.4,
+   "outcome_example": {
+    "denied": 0,
+    "excluded": 10,
+    "ok": 40,
+    "share_download_off": 0
+   },
+   "runs": 30,
+   "setup_ms_p50": 134.8,
+   "setup_ms_p95": 158,
+   "total_ms_p50": 499.5,
+   "total_ms_p95": 557.7
+  },
+  "u_admin200/naive": {
+   "check_ms_p50": 656.4,
+   "check_ms_p95": 820.2,
+   "outcome_example": {
+    "denied": 0,
+    "excluded": 10,
+    "ok": 40,
+    "share_download_off": 0
+   },
+   "runs": 30,
+   "setup_ms_p50": 138,
+   "setup_ms_p95": 180,
+   "total_ms_p50": 787.5,
+   "total_ms_p95": 1024.3
+  },
+  "u_narrow/batched": {
+   "check_ms_p50": 301.7,
+   "check_ms_p95": 328.7,
+   "outcome_example": {
+    "denied": 5,
+    "excluded": 10,
+    "ok": 35,
+    "share_download_off": 10
+   },
+   "runs": 30,
+   "setup_ms_p50": 101.3,
+   "setup_ms_p95": 108.8,
+   "total_ms_p50": 404.3,
+   "total_ms_p95": 437
+  },
+  "u_narrow/naive": {
+   "check_ms_p50": 516.8,
+   "check_ms_p95": 759.6,
+   "outcome_example": {
+    "denied": 5,
+    "excluded": 10,
+    "ok": 35,
+    "share_download_off": 10
+   },
+   "runs": 30,
+   "setup_ms_p50": 98.3,
+   "setup_ms_p95": 121,
+   "total_ms_p50": 621.1,
+   "total_ms_p95": 880.6
+  },
+  "u_shared/batched": {
+   "check_ms_p50": 206,
+   "check_ms_p95": 233.3,
+   "outcome_example": {
+    "denied": 40,
+    "excluded": 0,
+    "ok": 10,
+    "share_download_off": 10
+   },
+   "runs": 30,
+   "setup_ms_p50": 91.4,
+   "setup_ms_p95": 104.9,
+   "total_ms_p50": 297.3,
+   "total_ms_p95": 324.8
+  },
+  "u_shared/naive": {
+   "check_ms_p50": 242.4,
+   "check_ms_p95": 424.8,
+   "outcome_example": {
+    "denied": 40,
+    "excluded": 0,
+    "ok": 10,
+    "share_download_off": 10
+   },
+   "runs": 30,
+   "setup_ms_p50": 94.1,
+   "setup_ms_p95": 115.9,
+   "total_ms_p50": 338.1,
+   "total_ms_p95": 540.7
+  }
+ }
+}

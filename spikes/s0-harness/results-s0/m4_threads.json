@@ -1,0 +1,41 @@
+{
+ "batch": 32,
+ "chunks": 256,
+ "host": {
+  "cpu_pressure": "some avg10=8.53 avg60=2.55 avg300=1.23 total=8872198236\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0",
+  "loadavg": [
+   3.75634765625,
+   3.4130859375,
+   3.0322265625
+  ]
+ },
+ "measured_at": "2026-10-16T09:41:18+0000",
+ "model": "Xenova/multilingual-e5-small int8 (dynamic)",
+ "model_sha256": "4d24e2bc01a447951524466ef533e52944bf48509e6552810bcee1a2711cb02c",
+ "runs": [
+  {
+   "seconds": 33.21,
+   "threads": 1,
+   "tokens": 72984,
+   "tokens_per_s": 2197.5
+  },
+  {
+   "seconds": 16.13,
+   "threads": 2,
+   "tokens": 72984,
+   "tokens_per_s": 4523.7
+  },
+  {
+   "seconds": 9.59,
+   "threads": 4,
+   "tokens": 72984,
+   "tokens_per_s": 7612.7
+  },
+  {
+   "seconds": 7.99,
+   "threads": 8,
+   "tokens": 72984,
+   "tokens_per_s": 9138.8
+  }
+ ]
+}

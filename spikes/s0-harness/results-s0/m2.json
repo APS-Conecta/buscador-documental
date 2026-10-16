@@ -1,0 +1,104 @@
+{
+ "groups": {
+  "ocrmypdf/fake_invisible/force-ocr": {
+   "cer_max": 0.003,
+   "cer_median": 0.0015,
+   "n": 6,
+   "wer_median": 0.0098
+  },
+  "ocrmypdf/fake_invisible/redo-ocr": {
+   "cer_max": 0.0022,
+   "cer_median": 0.0007,
+   "n": 6,
+   "wer_median": 0.0054
+  },
+  "ocrmypdf/fake_invisible/skip-text": {
+   "cer_max": 0.9649,
+   "cer_median": 0.9608,
+   "n": 6,
+   "wer_median": 0.9973
+  },
+  "ocrmypdf/fake_visible/force-ocr": {
+   "cer_max": 0.0411,
+   "cer_median": 0.0364,
+   "n": 6,
+   "wer_median": 0.0455
+  },
+  "ocrmypdf/fake_visible/redo-ocr": {
+   "cer_max": 0.0411,
+   "cer_median": 0.0346,
+   "n": 6,
+   "wer_median": 0.0429
+  },
+  "ocrmypdf/fake_visible/skip-text": {
+   "cer_max": 0.9701,
+   "cer_median": 0.9669,
+   "n": 6,
+   "wer_median": 0.9961
+  },
+  "ocrmypdf/mixed/redo-ocr": {
+   "cer_max": 0.0007,
+   "cer_median": 0.0004,
+   "n": 6,
+   "wer_median": 0.0027
+  },
+  "ocrmypdf/mixed/skip-text": {
+   "cer_max": 0.0013,
+   "cer_median": 0.0004,
+   "n": 6,
+   "wer_median": 0.0027
+  },
+  "ocrmypdf/native/skip-text": {
+   "cer_max": 0.0,
+   "cer_median": 0.0,
+   "n": 4,
+   "wer_median": 0.0
+  },
+  "ocrmypdf/photo/image-dpi300": {
+   "cer_max": 0.898,
+   "cer_median": 0.0021,
+   "n": 6,
+   "wer_median": 0.0149
+  },
+  "ocrmypdf/photo/image-dpi300+deskew+rotate": {
+   "cer_max": 0.0018,
+   "cer_median": 0.0007,
+   "n": 6,
+   "wer_median": 0.0054
+  },
+  "ocrmypdf/scanned/force-ocr": {
+   "cer_max": 0.0026,
+   "cer_median": 0.001,
+   "n": 8,
+   "wer_median": 0.0069
+  },
+  "ocrmypdf/scanned/force-ocr+deskew+rotate": {
+   "cer_max": 0.0038,
+   "cer_median": 0.0016,
+   "n": 8,
+   "wer_median": 0.0111
+  },
+  "raw_tesseract/best": {
+   "cer_max": 0.897,
+   "cer_median": 0.0007,
+   "n": 14,
+   "wer_median": 0.0053
+  },
+  "raw_tesseract/fast": {
+   "cer_max": 0.898,
+   "cer_median": 0.0011,
+   "n": 14,
+   "wer_median": 0.0077
+  }
+ },
+ "host": {
+  "cpu_pressure": "some avg10=0.02 avg60=0.06 avg300=0.22 total=8897445090\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0",
+  "loadavg": [
+   1.48486328125,
+   1.70458984375,
+   2.05419921875
+  ]
+ },
+ "measured_at": "2026-10-16T10:18:30+0000",
+ "note": "synthetic clean-rendered Spanish text at 300 dpi; real documents will be worse"
+}

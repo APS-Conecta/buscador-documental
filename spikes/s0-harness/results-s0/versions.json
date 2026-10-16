@@ -1,0 +1,9 @@
+{
+ "postgres": "17.11 (Debian 17.11-1.pgdg12+2)",
+ "pgvector": "0.8.7",
+ "nextcloud": "34.0.4",
+ "tesseract": "tesseract 5.3.0",
+ "ocrmypdf": "14.0.1+dfsg1",
+ "python_libs": "numpy==2.5.4 onnxruntime==1.31.0 pillow==12.3.0 psycopg==3.3.6 pypdf==6.20.1 RapidFuzz==3.14.6 reportlab==5.0.1 tokenizers==0.23.3 ",
+ "tessdata_sha256": "e2c1ffdad8b30f26c45d4017a9183d3a7f9aa69e59918be4f88b126fac99ab2c tessdata_best/spa.traineddata 6f2e04d02774a18f01bed44b1111f2cd7f3ba7ac9dc4373cd3f898a40ea6b464 tessdata_fast/spa.traineddata "
+}

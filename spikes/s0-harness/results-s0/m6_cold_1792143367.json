@@ -1,0 +1,28 @@
+{
+ "configs": [
+  {
+   "conc": 1,
+   "name": "keyword",
+   "page": 25,
+   "pooled": {
+    "errors": 0,
+    "first_ms": 387.32239097589627,
+    "max_ms": 11330.839185975492,
+    "n": 60,
+    "p50_ms": 175.98640598589554,
+    "p95_ms": 9454.320941993501,
+    "p99_ms": 10133.724201994482
+   },
+   "state": "cold(shared_buffers only)"
+  }
+ ],
+ "host": {
+  "cpu_pressure": "some avg10=2.08 avg60=1.40 avg300=0.85 total=8866554567\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0",
+  "loadavg": [
+   3.76025390625,
+   3.62060546875,
+   2.92431640625
+  ]
+ },
+ "measured_at": "2026-10-16T09:36:07+0000"
+}

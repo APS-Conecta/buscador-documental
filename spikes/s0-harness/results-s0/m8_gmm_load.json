@@ -1,0 +1,14 @@
+{
+ "chunks": 3000000,
+ "host": {
+  "cpu_pressure": "some avg10=0.86 avg60=5.00 avg300=4.37 total=8948243915\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0",
+  "loadavg": [
+   4.98681640625,
+   4.99560546875,
+   2.900390625
+  ]
+ },
+ "index_seconds": 290.0,
+ "load_seconds": 23.7,
+ "measured_at": "2026-10-16T11:21:03+0000"
+}

@@ -1,0 +1,383 @@
+{
+ "exact_switch_sweep": [
+  {
+   "ann_p50_ms": 120.9,
+   "ann_p95_ms": 140.8,
+   "ann_recall_at_10": null,
+   "ann_shortfall_lt50": 1.0,
+   "exact_p50_ms": 0.8,
+   "exact_p95_ms": 1.1,
+   "plan_uses_hnsw": true,
+   "readable_files": 5
+  },
+  {
+   "ann_p50_ms": 116.7,
+   "ann_p95_ms": 134.5,
+   "ann_recall_at_10": null,
+   "ann_shortfall_lt50": 1.0,
+   "exact_p50_ms": 1.4,
+   "exact_p95_ms": 1.9,
+   "plan_uses_hnsw": true,
+   "readable_files": 20
+  },
+  {
+   "ann_p50_ms": 123.6,
+   "ann_p95_ms": 148.2,
+   "ann_recall_at_10": null,
+   "ann_shortfall_lt50": 0.867,
+   "exact_p50_ms": 5.3,
+   "exact_p95_ms": 6.0,
+   "plan_uses_hnsw": true,
+   "readable_files": 100
+  },
+  {
+   "ann_p50_ms": 67.5,
+   "ann_p95_ms": 86.6,
+   "ann_recall_at_10": null,
+   "ann_shortfall_lt50": 0.0,
+   "exact_p50_ms": 21.9,
+   "exact_p95_ms": 25.4,
+   "plan_uses_hnsw": true,
+   "readable_files": 500
+  },
+  {
+   "ann_p50_ms": 54.0,
+   "ann_p95_ms": 60.4,
+   "ann_recall_at_10": null,
+   "ann_shortfall_lt50": 0.0,
+   "exact_p50_ms": 86.3,
+   "exact_p95_ms": 96.4,
+   "plan_uses_hnsw": true,
+   "readable_files": 2000
+  },
+  {
+   "ann_p50_ms": 42.7,
+   "ann_p95_ms": 56.9,
+   "ann_recall_at_10": null,
+   "ann_shortfall_lt50": 0.0,
+   "exact_p50_ms": 6223.4,
+   "exact_p95_ms": 6555.7,
+   "plan_uses_hnsw": true,
+   "readable_files": 10000
+  }
+ ],
+ "host": {
+  "cpu_pressure": "some avg10=0.03 avg60=0.07 avg300=0.13 total=8860662110\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0",
+  "loadavg": [
+   3.09521484375,
+   2.7919921875,
+   2.34814453125
+  ]
+ },
+ "k": 10,
+ "limit": 50,
+ "measured_at": "2026-10-16T09:29:45+0000",
+ "queries": 60,
+ "recall_valid": false,
+ "schema": "bd_spike",
+ "views": {
+  "F1_narrow": {
+   "configs": [
+    {
+     "ef_search": 100,
+     "iterative_scan": "off",
+     "max_scan_tuples": 20000,
+     "p50_ms": 23.7,
+     "p95_ms": 37.8,
+     "plan_uses_hnsw": true,
+     "recall_at_10_mean": null,
+     "recall_at_10_min": null,
+     "shortfall_lt10": 1.0,
+     "shortfall_lt50": 1.0
+    },
+    {
+     "ef_search": 100,
+     "iterative_scan": "relaxed_order",
+     "max_scan_tuples": 5000,
+     "p50_ms": 44.1,
+     "p95_ms": 52.2,
+     "plan_uses_hnsw": true,
+     "recall_at_10_mean": null,
+     "recall_at_10_min": null,
+     "shortfall_lt10": 0.0,
+     "shortfall_lt50": 0.0
+    },
+    {
+     "ef_search": 100,
+     "iterative_scan": "relaxed_order",
+     "max_scan_tuples": 20000,
+     "p50_ms": 81.7,
+     "p95_ms": 97.3,
+     "plan_uses_hnsw": true,
+     "recall_at_10_mean": null,
+     "recall_at_10_min": null,
+     "shortfall_lt10": 0.0,
+     "shortfall_lt50": 0.0
+    },
+    {
+     "ef_search": 100,
+     "iterative_scan": "relaxed_order",
+     "max_scan_tuples": 100000,
+     "p50_ms": 61.0,
+     "p95_ms": 71.9,
+     "plan_uses_hnsw": true,
+     "recall_at_10_mean": null,
+     "recall_at_10_min": null,
+     "shortfall_lt10": 0.0,
+     "shortfall_lt50": 0.0
+    },
+    {
+     "ef_search": 40,
+     "iterative_scan": "relaxed_order",
+     "max_scan_tuples": 20000,
+     "p50_ms": 58.2,
+     "p95_ms": 65.5,
+     "plan_uses_hnsw": true,
+     "recall_at_10_mean": null,
+     "recall_at_10_min": null,
+     "shortfall_lt10": 0.0,
+     "shortfall_lt50": 0.0
+    },
+    {
+     "ef_search": 200,
+     "iterative_scan": "relaxed_order",
+     "max_scan_tuples": 20000,
+     "p50_ms": 63.7,
+     "p95_ms": 79.0,
+     "plan_uses_hnsw": true,
+     "recall_at_10_mean": null,
+     "recall_at_10_min": null,
+     "shortfall_lt10": 0.0,
+     "shortfall_lt50": 0.0
+    },
+    {
+     "ef_search": 400,
+     "iterative_scan": "relaxed_order",
+     "max_scan_tuples": 20000,
+     "p50_ms": 79.1,
+     "p95_ms": 91.5,
+     "plan_uses_hnsw": true,
+     "recall_at_10_mean": null,
+     "recall_at_10_min": null,
+     "shortfall_lt10": 0.0,
+     "shortfall_lt50": 0.0
+    },
+    {
+     "ef_search": 100,
+     "iterative_scan": "strict_order",
+     "max_scan_tuples": 20000,
+     "p50_ms": 74.1,
+     "p95_ms": 99.2,
+     "plan_uses_hnsw": true,
+     "recall_at_10_mean": null,
+     "recall_at_10_min": null,
+     "shortfall_lt10": 0.0,
+     "shortfall_lt50": 0.0
+    }
+   ],
+   "exact_seconds_per_query": null
+  },
+  "F2_admin200": {
+   "configs": [
+    {
+     "ef_search": 100,
+     "iterative_scan": "off",
+     "max_scan_tuples": 20000,
+     "p50_ms": 8.1,
+     "p95_ms": 10.3,
+     "plan_uses_hnsw": true,
+     "recall_at_10_mean": null,
+     "recall_at_10_min": null,
+     "shortfall_lt10": 0.0,
+     "shortfall_lt50": 0.0
+    },
+    {
+     "ef_search": 100,
+     "iterative_scan": "relaxed_order",
+     "max_scan_tuples": 5000,
+     "p50_ms": 9.2,
+     "p95_ms": 11.0,
+     "plan_uses_hnsw": true,
+     "recall_at_10_mean": null,
+     "recall_at_10_min": null,
+     "shortfall_lt10": 0.0,
+     "shortfall_lt50": 0.0
+    },
+    {
+     "ef_search": 100,
+     "iterative_scan": "relaxed_order",
+     "max_scan_tuples": 20000,
+     "p50_ms": 8.9,
+     "p95_ms": 11.2,
+     "plan_uses_hnsw": true,
+     "recall_at_10_mean": null,
+     "recall_at_10_min": null,
+     "shortfall_lt10": 0.0,
+     "shortfall_lt50": 0.0
+    },
+    {
+     "ef_search": 100,
+     "iterative_scan": "relaxed_order",
+     "max_scan_tuples": 100000,
+     "p50_ms": 8.9,
+     "p95_ms": 11.4,
+     "plan_uses_hnsw": true,
+     "recall_at_10_mean": null,
+     "recall_at_10_min": null,
+     "shortfall_lt10": 0.0,
+     "shortfall_lt50": 0.0
+    },
+    {
+     "ef_search": 40,
+     "iterative_scan": "relaxed_order",
+     "max_scan_tuples": 20000,
+     "p50_ms": 7.0,
+     "p95_ms": 8.2,
+     "plan_uses_hnsw": true,
+     "recall_at_10_mean": null,
+     "recall_at_10_min": null,
+     "shortfall_lt10": 0.0,
+     "shortfall_lt50": 0.0
+    },
+    {
+     "ef_search": 200,
+     "iterative_scan": "relaxed_order",
+     "max_scan_tuples": 20000,
+     "p50_ms": 15.2,
+     "p95_ms": 17.3,
+     "plan_uses_hnsw": true,
+     "recall_at_10_mean": null,
+     "recall_at_10_min": null,
+     "shortfall_lt10": 0.0,
+     "shortfall_lt50": 0.0
+    },
+    {
+     "ef_search": 400,
+     "iterative_scan": "relaxed_order",
+     "max_scan_tuples": 20000,
+     "p50_ms": 28.8,
+     "p95_ms": 33.1,
+     "plan_uses_hnsw": true,
+     "recall_at_10_mean": null,
+     "recall_at_10_min": null,
+     "shortfall_lt10": 0.0,
+     "shortfall_lt50": 0.0
+    },
+    {
+     "ef_search": 100,
+     "iterative_scan": "strict_order",
+     "max_scan_tuples": 20000,
+     "p50_ms": 8.7,
+     "p95_ms": 10.9,
+     "plan_uses_hnsw": true,
+     "recall_at_10_mean": null,
+     "recall_at_10_min": null,
+     "shortfall_lt10": 0.0,
+     "shortfall_lt50": 0.0
+    }
+   ],
+   "exact_seconds_per_query": null
+  },
+  "unfiltered": {
+   "configs": [
+    {
+     "ef_search": 100,
+     "iterative_scan": "off",
+     "max_scan_tuples": 20000,
+     "p50_ms": 6.5,
+     "p95_ms": 8.3,
+     "plan_uses_hnsw": true,
+     "recall_at_10_mean": null,
+     "recall_at_10_min": null,
+     "shortfall_lt10": 0.0,
+     "shortfall_lt50": 0.0
+    },
+    {
+     "ef_search": 100,
+     "iterative_scan": "relaxed_order",
+     "max_scan_tuples": 5000,
+     "p50_ms": 6.5,
+     "p95_ms": 8.4,
+     "plan_uses_hnsw": true,
+     "recall_at_10_mean": null,
+     "recall_at_10_min": null,
+     "shortfall_lt10": 0.0,
+     "shortfall_lt50": 0.0
+    },
+    {
+     "ef_search": 100,
+     "iterative_scan": "relaxed_order",
+     "max_scan_tuples": 20000,
+     "p50_ms": 6.4,
+     "p95_ms": 8.4,
+     "plan_uses_hnsw": true,
+     "recall_at_10_mean": null,
+     "recall_at_10_min": null,
+     "shortfall_lt10": 0.0,
+     "shortfall_lt50": 0.0
+    },
+    {
+     "ef_search": 100,
+     "iterative_scan": "relaxed_order",
+     "max_scan_tuples": 100000,
+     "p50_ms": 6.5,
+     "p95_ms": 8.1,
+     "plan_uses_hnsw": true,
+     "recall_at_10_mean": null,
+     "recall_at_10_min": null,
+     "shortfall_lt10": 0.0,
+     "shortfall_lt50": 0.0
+    },
+    {
+     "ef_search": 40,
+     "iterative_scan": "relaxed_order",
+     "max_scan_tuples": 20000,
+     "p50_ms": 5.1,
+     "p95_ms": 6.1,
+     "plan_uses_hnsw": true,
+     "recall_at_10_mean": null,
+     "recall_at_10_min": null,
+     "shortfall_lt10": 0.0,
+     "shortfall_lt50": 0.0
+    },
+    {
+     "ef_search": 200,
+     "iterative_scan": "relaxed_order",
+     "max_scan_tuples": 20000,
+     "p50_ms": 12.5,
+     "p95_ms": 15.3,
+     "plan_uses_hnsw": true,
+     "recall_at_10_mean": null,
+     "recall_at_10_min": null,
+     "shortfall_lt10": 0.0,
+     "shortfall_lt50": 0.0
+    },
+    {
+     "ef_search": 400,
+     "iterative_scan": "relaxed_order",
+     "max_scan_tuples": 20000,
+     "p50_ms": 23.9,
+     "p95_ms": 29.7,
+     "plan_uses_hnsw": true,
+     "recall_at_10_mean": null,
+     "recall_at_10_min": null,
+     "shortfall_lt10": 0.0,
+     "shortfall_lt50": 0.0
+    },
+    {
+     "ef_search": 100,
+     "iterative_scan": "strict_order",
+     "max_scan_tuples": 20000,
+     "p50_ms": 6.6,
+     "p95_ms": 8.4,
+     "plan_uses_hnsw": true,
+     "recall_at_10_mean": null,
+     "recall_at_10_min": null,
+     "shortfall_lt10": 0.0,
+     "shortfall_lt50": 0.0
+    }
+   ],
+   "exact_seconds_per_query": null
+  }
+ }
+}

@@ -1,0 +1,152 @@
+{
+ "dpi": 300,
+ "host": {
+  "cpu_pressure": "some avg10=0.19 avg60=0.09 avg300=0.24 total=8897360021\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0",
+  "loadavg": [
+   1.6787109375,
+   1.75439453125,
+   2.07763671875
+  ]
+ },
+ "measured_at": "2026-10-16T10:18:08+0000",
+ "ocrmypdf": {
+  "fake_invisible/force-ocr": {
+   "n": 6,
+   "ok": 6,
+   "s_per_page_max": 9.68,
+   "s_per_page_median": 9.27,
+   "skipped": []
+  },
+  "fake_invisible/redo-ocr": {
+   "n": 6,
+   "ok": 6,
+   "s_per_page_max": 9.86,
+   "s_per_page_median": 9.62,
+   "skipped": []
+  },
+  "fake_invisible/skip-text": {
+   "n": 6,
+   "ok": 6,
+   "s_per_page_max": 1.19,
+   "s_per_page_median": 1.17,
+   "skipped": []
+  },
+  "fake_visible/force-ocr": {
+   "n": 6,
+   "ok": 6,
+   "s_per_page_max": 9.7,
+   "s_per_page_median": 9.17,
+   "skipped": []
+  },
+  "fake_visible/redo-ocr": {
+   "n": 6,
+   "ok": 6,
+   "s_per_page_max": 10.2,
+   "s_per_page_median": 9.38,
+   "skipped": []
+  },
+  "fake_visible/skip-text": {
+   "n": 6,
+   "ok": 6,
+   "s_per_page_max": 1.19,
+   "s_per_page_median": 1.16,
+   "skipped": []
+  },
+  "mixed/redo-ocr": {
+   "n": 6,
+   "ok": 6,
+   "s_per_page_max": 6.71,
+   "s_per_page_median": 6.65,
+   "skipped": []
+  },
+  "mixed/skip-text": {
+   "n": 6,
+   "ok": 6,
+   "s_per_page_max": 6.92,
+   "s_per_page_median": 6.67,
+   "skipped": []
+  },
+  "native/no-flag": {
+   "n": 4,
+   "ok": 0,
+   "s_per_page_max": null,
+   "s_per_page_median": null,
+   "skipped": [
+    {
+     "id": "native_000002_p0",
+     "rc": 6,
+     "why": "Opened a file\nOpened a file\nPriorOcrFoundError: page already has text! - aborting (use --force-ocr to force OCR;  see also help for the arguments --skip-text and --redo-ocr\n"
+    },
+    {
+     "id": "native_000003_p0",
+     "rc": 6,
+     "why": "Opened a file\nOpened a file\nPriorOcrFoundError: page already has text! - aborting (use --force-ocr to force OCR;  see also help for the arguments --skip-text and --redo-ocr\n"
+    },
+    {
+     "id": "native_000011_p0",
+     "rc": 6,
+     "why": "Opened a file\nOpened a file\nPriorOcrFoundError: page already has text! - aborting (use --force-ocr to force OCR;  see also help for the arguments --skip-text and --redo-ocr\n"
+    },
+    {
+     "id": "native_000012_p0",
+     "rc": 6,
+     "why": "Opened a file\nOpened a file\nPriorOcrFoundError: page already has text! - aborting (use --force-ocr to force OCR;  see also help for the arguments --skip-text and --redo-ocr\n"
+    }
+   ]
+  },
+  "native/skip-text": {
+   "n": 4,
+   "ok": 4,
+   "s_per_page_max": 0.4,
+   "s_per_page_median": 0.39,
+   "skipped": []
+  },
+  "photo/image-dpi300": {
+   "n": 6,
+   "ok": 6,
+   "s_per_page_max": 7.09,
+   "s_per_page_median": 6.33,
+   "skipped": []
+  },
+  "photo/image-dpi300+deskew+rotate": {
+   "n": 6,
+   "ok": 6,
+   "s_per_page_max": 11.33,
+   "s_per_page_median": 9.43,
+   "skipped": []
+  },
+  "scanned/force-ocr": {
+   "n": 8,
+   "ok": 8,
+   "s_per_page_max": 6.21,
+   "s_per_page_median": 5.98,
+   "skipped": []
+  },
+  "scanned/force-ocr+deskew+rotate": {
+   "n": 8,
+   "ok": 8,
+   "s_per_page_max": 10.31,
+   "s_per_page_median": 9.62,
+   "skipped": []
+  }
+ },
+ "ocrmypdf_version": "14.0.1+dfsg1",
+ "omp_thread_limit": 1,
+ "raw_tesseract": {
+  "best": {
+   "pages": 14,
+   "pages_per_s_8proc": 1.525,
+   "s_per_page_1proc_max": 4.9,
+   "s_per_page_1proc_median": 4.17,
+   "s_per_page_per_core_8proc": 5.25
+  },
+  "fast": {
+   "pages": 14,
+   "pages_per_s_8proc": 2.896,
+   "s_per_page_1proc_max": 2.57,
+   "s_per_page_1proc_median": 2.29,
+   "s_per_page_per_core_8proc": 2.76
+  }
+ },
+ "tesseract_version": "tesseract 5.3.0"
+}

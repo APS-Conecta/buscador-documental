@@ -1,0 +1,20 @@
+{
+ "batch": 32,
+ "chunks": 30000,
+ "hnsw_seconds": 10.8,
+ "host": {
+  "cpu_pressure": "some avg10=10.73 avg60=16.27 avg300=16.54 total=8798591965\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0",
+  "loadavg": [
+   9.5986328125,
+   9.8203125,
+   8.3349609375
+  ]
+ },
+ "measured_at": "2026-10-16T06:36:46+0000",
+ "model": "Xenova/multilingual-e5-small int8 (dynamic)",
+ "model_sha256": "4d24e2bc01a447951524466ef533e52944bf48509e6552810bcee1a2711cb02c",
+ "seconds": 791.3,
+ "threads": 8,
+ "tokens": 6729880,
+ "tokens_per_s": 8504.8
+}

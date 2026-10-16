@@ -1,0 +1,45 @@
+{
+ "chunks": 100000,
+ "files": 1667,
+ "host": {
+  "cpu_pressure": "some avg10=6.76 avg60=4.53 avg300=1.63 total=2973721661\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0",
+  "loadavg": [
+   4.68212890625,
+   3.89111328125,
+   3.35205078125
+  ]
+ },
+ "index_build_minutes_per_100k_chunks": 0.593,
+ "indexes": {
+  "chunk_file_idx": {
+   "seconds": 0.0
+  },
+  "chunk_pkey": {
+   "seconds": 0.1
+  },
+  "chunk_tsv_gin": {
+   "seconds": 10.4
+  },
+  "chunk_vec_file_idx": {
+   "seconds": 0.0
+  },
+  "chunk_vec_hnsw": {
+   "seconds": 25.0
+  },
+  "chunk_vec_pkey": {
+   "seconds": 0.1
+  },
+  "file_acl_gin": {
+   "seconds": 0.0
+  },
+  "file_acl_pkey": {
+   "seconds": 0.0
+  }
+ },
+ "load_procs": 4,
+ "load_seconds": 8.5,
+ "maintenance_work_mem": "8GB",
+ "measured_at": "2026-10-16T02:00:35+0000",
+ "vacuum_analyze_seconds": 0.5,
+ "wal_bytes": 456068728
+}

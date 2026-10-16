@@ -1,0 +1,47 @@
+{
+ "by_kind": {
+  "fake_invisible": {
+   "files": 23,
+   "pages": 285
+  },
+  "fake_visible": {
+   "files": 25,
+   "pages": 350
+  },
+  "mixed": {
+   "files": 54,
+   "pages": 769
+  },
+  "native": {
+   "files": 180,
+   "pages": 2801
+  },
+  "photo": {
+   "files": 50,
+   "pages": 50
+  },
+  "scanned": {
+   "files": 102,
+   "pages": 1748
+  }
+ },
+ "chunk_target_tokens": 350,
+ "chunks_per_page_mean": 3.0,
+ "files": 434,
+ "host": {
+  "cpu_pressure": "some avg10=0.45 avg60=0.93 avg300=0.89 total=8869593672\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0",
+  "loadavg": [
+   2.95849609375,
+   3.4775390625,
+   3.0205078125
+  ]
+ },
+ "image_only_pages": 2808,
+ "image_only_share": 0.468,
+ "measured_at": "2026-10-16T09:39:39+0000",
+ "note": "synthetic Zipf text tokenises worse than natural Spanish; S4 re-measures with the real chunker",
+ "pages": 6003,
+ "pages_per_file": 13.8,
+ "sample_pages": 123,
+ "tokens_per_page_mean": 768.8
+}
