@@ -30,10 +30,12 @@ class ExclusionChecker {
 
 	/**
 	 * @param list<int> $fileIds
+	 * @param bool $brokenWalkIsExcluded true: a file whose ancestor walk fails or is cut short is reported as excluded
+	 *        (the caller drops that hit) instead of failing the whole batch. Tag-service failures always throw.
 	 * @return array<int, bool> file id => excluded
 	 * @throws ExclusionUnavailable
 	 */
-	public function excludedAmong(array $fileIds): array {
+	public function excludedAmong(array $fileIds, bool $brokenWalkIsExcluded = false): array {
 		if ($fileIds === []) {
 			return [];
 		}
@@ -43,15 +45,24 @@ class ExclusionChecker {
 				throw new ExclusionUnavailable('No system tag named ' . self::TAG_NAME . ' exists; refusing to decide exclusion');
 			}
 			$chains = [];
+			$out = [];
 			$all = [];
+			$parents = []; // folder memo, lives for this call only: hits in the same folders walk their ancestors once
 			foreach ($fileIds as $id) {
-				$chains[$id] = $this->chain($id);
+				try {
+					$chains[$id] = $this->chain($id, $parents);
+				} catch (ExclusionUnavailable $e) {
+					if (!$brokenWalkIsExcluded) {
+						throw $e;
+					}
+					$out[$id] = true;
+					continue;
+				}
 				foreach ($chains[$id] as $c) {
 					$all[$c] = true;
 				}
 			}
-			$tagged = $this->mapper->getTagIdsForObjects(array_map('strval', array_keys($all)), 'files');
-			$out = [];
+			$tagged = $all === [] ? [] : $this->mapper->getTagIdsForObjects(array_map('strval', array_keys($all)), 'files');
 			foreach ($chains as $id => $chain) {
 				$out[$id] = false;
 				foreach ($chain as $c) {
@@ -85,11 +96,11 @@ class ExclusionChecker {
 	}
 
 	/** @return list<int> the file id and its ancestors up to the storage root */
-	protected function chain(int $fileId): array {
+	protected function chain(int $fileId, array &$parents = []): array {
 		$chain = [$fileId];
 		$current = $fileId;
 		for ($depth = 0; $depth < self::MAX_DEPTH; $depth++) {
-			$parent = $this->parentOf($current);
+			$parent = array_key_exists($current, $parents) ? $parents[$current] : ($parents[$current] = $this->parentOf($current));
 			if ($parent === null) {
 				throw new ExclusionUnavailable("File $current has no filecache row");
 			}

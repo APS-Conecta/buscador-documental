@@ -9,7 +9,7 @@ NET := bd-s1_default
 DOCKER := docker run --rm -v "$(CURDIR)":/app -w /app $(IMG)
 DOCKER_NET := docker run --rm --network $(NET) -v "$(CURDIR)":/app -w /app -e BD_PG_HOST=db $(IMG)
 
-.PHONY: instance-reset-schema test-e2e-one test-contract build-test-image deps test-unit test-db up down clean instance-migrate
+.PHONY: instance-reset-schema test-e2e-one test-contract test-search build-test-image deps test-unit test-db up down clean instance-migrate
 
 build-test-image:
 	docker build -q -f Dockerfile.test -t $(IMG) . >/dev/null
@@ -29,6 +29,10 @@ up:
 # Needs the db service; creates and drops its own scratch databases.
 test-db: deps up
 	$(DOCKER_NET) vendor/bin/phpunit --configuration phpunit.db.xml --testdox
+
+# Retrieve against the real schema (Nextcloud's node layer is scripted); same scratch-database approach as test-db.
+test-search: deps up
+	$(DOCKER_NET) vendor/bin/phpunit --configuration phpunit.search.xml --testdox
 
 # Full instance: Nextcloud with the app enabled, migration applied through occ.
 instance-migrate:

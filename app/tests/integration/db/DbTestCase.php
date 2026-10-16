@@ -127,6 +127,9 @@ abstract class DbTestCase extends TestCase {
 			return $r;
 		});
 		$c->method('executeStatement')->willReturnCallback(static fn (string $sql, array $params = []) => $run($sql, $params)->rowCount());
+		$c->method('beginTransaction')->willReturnCallback(static fn () => $pdo->beginTransaction());
+		$c->method('commit')->willReturnCallback(static fn () => $pdo->commit());
+		$c->method('rollBack')->willReturnCallback(static fn () => $pdo->rollBack());
 		return $c;
 	}
 }
