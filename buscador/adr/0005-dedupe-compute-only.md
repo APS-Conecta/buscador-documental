@@ -1,7 +1,7 @@
 # ADR-0005 — Deduplicate compute, not chunks
 
 Status: accepted (2026-10-15)
-Affects: `content_cache`, worker
+Affects: worker, `page`, `chunk`
 
 ## Context
 Identical files in different folders have different permissions; sharing chunks would need a union ACL and complicate deletion.

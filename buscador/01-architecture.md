@@ -49,7 +49,7 @@ Migrations are expand/contract; the worker refuses an unknown schema version. **
 
 ## 4. State machine and idempotency
 Per lane: `text_state`: pending → extracting → ocr → chunking → indexed. `vec_state`: pending → embedding → embedded. Terminal/side: `skipped(reason)`, `tombstoned → purged`. `acl_dirty` is a boolean, orthogonal.
-Idempotency key, computed in this order: `(file_id, etag)` from NC → `content_hash` after fetch → `(chunker_ver, ocr_ver)` → `profile` for the vector lane. If `content_hash` hits `content_cache`, skip OCR/embedding and only write per-file rows. A tombstone with a later timestamp always beats queued work.
+Idempotency key, computed in this order: `(file_id, etag)` from NC → `content_hash` after fetch → `(chunker_ver, ocr_ver)` → `profile` for the vector lane. If `content_hash` matches an already indexed file (same versions), skip OCR/embedding and copy that file's rows to the new `file_id` (ADR-0005). A tombstone with a later timestamp always beats queued work.
 
 ## 5. Worker contract (v1, OpenAPI in S1)
 Two channels. (a) **DB**: `claim_job`, `heartbeat`, `write_result`, `fail_job` functions (above); no direct table access. (b) **App HTTP** (bytes and meta only): `GET /files/{id}/meta`, `GET /files/{id}/content` (Range; requires `If-Match: <etag>`, 412 if changed; only for files with an active claim; per-worker concurrency cap). The worker hashes the full stream and `write_result` rejects a `content_hash` that differs from the claimed one. Principals are never accepted from the worker. Versioned; contract tests on both sides. Auth: bearer + HMAC of method/path/body-hash/timestamp (replay window), secret in sensitive `IAppConfig`, rotated by `occ`.
