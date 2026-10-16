@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta Buscador Documental</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Nunito+Sans:wght@400;600;700&display=swap">
+<style>
+/* Layout concept: Nextcloud app shell as in the sibling apps (violet side menu, NcAppNavigation,
+   NcAppContent, NcAppSidebar). Palette and fonts: APS Conecta theme (documentation/desarrollo/tema.md).
+   Light theme only: the suite enforces it (enforce_theme=light); contrast boost via prefers-contrast. */
+:root{
+  --aps-primary:#7f21fe; --aps-primary-dark:#5315a8; --aps-ink:#101828; --aps-muted:#485363;
+  --aps-error:#ea003e; --aps-gold:#e06f00; --aps-gold-dark:#9a4c00;
+  --color-main-background:#fff; --color-main-text:var(--aps-ink); --color-text-maxcontrast:var(--aps-muted);
+  --color-primary-element:var(--aps-primary); --color-primary-element-text:#fff;
+  --color-primary-element-light:#f2e9ff; --color-background-hover:#f4f1f9; --color-background-dark:#ece8f3;
+  --color-border:#d9d4e3; --color-border-maxcontrast:#6b6478;
+  --color-text-error:#b3002f; --color-highlight:#ffe2b8; --color-info-bg:#f2e9ff;
+  --color-warning-bg:#fff1dc; --color-error-bg:#fde8ee; --color-skeleton:#ece8f3; --color-skeleton-2:#f7f5fb;
+  --border-radius-element:8px; --border-radius-large:16px; --default-clickable-area:44px;
+  --font-body:"Nunito Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-title:"Fraunces",Georgia,serif;
+}
+@media (prefers-contrast:more){:root{--color-border:#000;--color-text-maxcontrast:#101828}}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.5 var(--font-body);color:var(--color-main-text);background:var(--color-main-background)}
+h1,h2,h3{font-family:var(--font-title);font-weight:600;text-wrap:balance}
+h1{font-size:24px;margin:0 0 14px;color:var(--aps-primary-dark)}
+h2{font-size:18px;margin:20px 0 8px}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--aps-primary);outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.num{font-variant-numeric:tabular-nums}
+/* mockup chrome, not part of the product */
+.mockbar{background:#1f2937;color:#fff;padding:8px 16px;font-size:13px;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}
+.mockbar select{background:#fff;color:#111;border-radius:6px;padding:4px 6px;border:0}
+/* app shell */
+.ncbar{background:var(--aps-primary-dark);color:#fff;height:50px;display:flex;align-items:center;gap:16px;padding:0 16px;font-family:var(--font-title)}
+.ncbar small{font-family:var(--font-body);opacity:.8}
+.shell{display:grid;grid-template-columns:240px minmax(0,1fr) auto;min-height:calc(100vh - 96px)}
+nav.appnav{border-right:1px solid var(--color-border);background:var(--color-background-hover);padding:12px;display:flex;flex-direction:column;gap:4px}
+nav.appnav h2{font-size:15px;margin:0 8px 8px;color:var(--aps-primary-dark)}
+nav.appnav a{display:flex;align-items:center;justify-content:space-between;min-height:var(--default-clickable-area);padding:0 12px;border-radius:var(--border-radius-large);color:inherit;text-decoration:none}
+nav.appnav a:hover{background:var(--color-background-dark)}
+nav.appnav a[aria-current=page]{background:var(--color-primary-element-light);color:var(--aps-primary-dark);font-weight:700}
+nav.appnav .foot{margin-top:auto;display:grid;gap:6px}
+main{padding:20px 24px;min-width:0}
+.btn{min-height:var(--default-clickable-area);padding:0 18px;border-radius:var(--border-radius-large);border:1px solid transparent;background:transparent;cursor:pointer;font-weight:600}
+.btn.primary{background:var(--color-primary-element);color:var(--color-primary-element-text)}
+.btn.secondary{background:var(--color-main-background);border-color:var(--color-border-maxcontrast)}
+.btn.tertiary{color:var(--aps-primary-dark)}
+.btn.tertiary:hover,.btn.secondary:hover{background:var(--color-background-hover)}
+.btn[disabled]{opacity:.55;cursor:not-allowed}
+.btn.sm{min-height:36px;padding:0 12px}
+.searchrow{display:flex;gap:8px;flex-wrap:wrap}
+.searchrow input[type=search]{flex:1 1 240px;min-height:var(--default-clickable-area);padding:0 16px;border:2px solid var(--color-border-maxcontrast);border-radius:var(--border-radius-large);background:#fff}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin:12px 0}
+.seg{display:inline-flex;border:1px solid var(--color-border-maxcontrast);border-radius:var(--border-radius-large);overflow:hidden}
+.seg button{min-height:40px;padding:0 14px;border:0;background:transparent;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--color-primary-element);color:#fff;font-weight:700}
+.seg button[aria-disabled=true]{color:var(--color-text-maxcontrast);cursor:not-allowed}
+.field{display:inline-flex;flex-direction:column;gap:2px;font-size:13px;color:var(--color-text-maxcontrast)}
+.field select{min-height:40px;border:1px solid var(--color-border-maxcontrast);border-radius:var(--border-radius-element);padding:0 8px;background:#fff;color:var(--aps-ink);font-size:15px}
+.field.check{flex-direction:row;align-items:center;gap:8px;min-height:40px;font-size:15px;color:var(--aps-ink)}
+.field.check input{width:20px;height:20px;accent-color:var(--aps-primary)}
+.summary{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:end;gap:8px;color:var(--color-text-maxcontrast);margin:8px 0}
+.sumctl{display:flex;gap:12px;flex-wrap:wrap}
+.banner{padding:10px 14px;border-radius:var(--border-radius-element);margin:10px 0;border-left:4px solid}
+.banner.info{background:var(--color-info-bg);border-color:var(--aps-primary)}
+.banner.warn{background:var(--color-warning-bg);border-color:var(--aps-gold)}
+.banner.err{background:var(--color-error-bg);border-color:var(--aps-error);color:var(--aps-ink)}
+progress{width:100%;height:10px;accent-color:var(--aps-primary)}
+ul.results{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.card{border:1px solid var(--color-border);border-radius:var(--border-radius-large);padding:12px 16px;cursor:pointer}
+.card:hover{background:var(--color-background-hover)}
+.card[aria-selected=true]{border-color:var(--aps-primary);box-shadow:0 0 0 2px var(--color-primary-element-light)}
+.card h3{font-family:var(--font-body);font-size:16px;font-weight:700;margin:0}
+.card h3 a{color:var(--aps-primary-dark)}
+.meta{color:var(--color-text-maxcontrast);font-size:13px}
+.snippet{margin:6px 0}
+mark{background:var(--color-highlight);color:inherit;text-decoration:underline;text-decoration-thickness:2px;border-radius:3px;padding:0 2px}
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;border:1px solid var(--aps-gold-dark);color:var(--aps-gold-dark);border-radius:999px;padding:0 8px;margin-left:8px}
+.badge::before{content:"\26A0"}
+.cardfoot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px}
+.pager{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;margin:16px 0;padding-top:12px;border-top:1px solid var(--color-border)}
+.pager .pages{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.pager .pages button{min-width:40px}
+.pager .pages button[aria-current=page]{background:var(--color-primary-element-light);color:var(--aps-primary-dark);border-color:var(--aps-primary)}
+.empty{text-align:center;padding:40px 12px;color:var(--color-text-maxcontrast)}
+.sk{height:84px;border-radius:var(--border-radius-large);background:linear-gradient(90deg,var(--color-skeleton),var(--color-skeleton-2),var(--color-skeleton));background-size:200% 100%;animation:sh 1.2s infinite}
+@keyframes sh{to{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){.sk{animation:none}}
+aside.sidebar{width:340px;border-left:1px solid var(--color-border);padding:16px;background:#fff}
+aside.sidebar h2{margin-top:0;color:var(--aps-primary-dark)}
+aside.sidebar .actions{display:grid;gap:8px;margin-top:12px}
+.unified{border:1px solid var(--color-border);border-radius:var(--border-radius-large);box-shadow:0 4px 16px #1018281f;max-width:520px;padding:8px;background:#fff}
+.unified .row{display:block;padding:8px 10px;border-radius:var(--border-radius-element);color:inherit;text-decoration:none}
+.unified .row:hover{background:var(--color-background-hover)}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:8px;border-bottom:1px solid var(--color-border);vertical-align:top}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:10px 0}
+.kpi{border:1px solid var(--color-border);border-radius:var(--border-radius-large);padding:10px 14px}
+.kpi b{display:block;font-size:22px;font-family:var(--font-title);color:var(--aps-primary-dark)}
+.overflow{overflow-x:auto}
+[hidden]{display:none!important}
+@media (max-width:1100px){.shell{grid-template-columns:200px minmax(0,1fr)}aside.sidebar{display:none}}
+@media (max-width:720px){
+  .shell{grid-template-columns:1fr}
+  nav.appnav{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--color-border);padding:8px 12px}
+  nav.appnav h2{display:none}
+  nav.appnav a{white-space:nowrap}
+  main{padding:16px}
+}
+</style>
+</head>
+<body>
+<div class="mockbar" role="region" aria-label="Controles de la maqueta (no forman parte del producto)">
+  <strong>MAQUETA</strong>
+  <label>Vista
+    <select id="view">
+      <option value="search">Buscador (página)</option>
+      <option value="unified">Barra de búsqueda de Nextcloud</option>
+      <option value="file">Pestaña «Texto reconocido»</option>
+      <option value="admin">Administración</option>
+    </select></label>
+  <label>Estado (vista Buscador)
+    <select id="state">
+      <option value="results">Resultados</option>
+      <option value="loading">Buscando…</option>
+      <option value="empty">Sin resultados</option>
+      <option value="filtered">Vacío por permisos</option>
+      <option value="preparing">Preparando (índice 38 %)</option>
+      <option value="partial">Índice parcial</option>
+      <option value="ocr-pending">Documento pendiente de lectura</option>
+      <option value="semantic-off">Búsqueda por significado no disponible</option>
+      <option value="down">Servicio detenido</option>
+      <option value="ratelimit">Demasiadas búsquedas</option>
+    </select></label>
+</div>
+<div class="ncbar" aria-hidden="true"><strong>APS Conecta</strong><small>Barra del servidor (Nextcloud): no la dibuja la aplicación</small></div>
+<div class="shell">
+  <nav class="appnav" aria-label="Buscador Documental">
+    <h2>Buscador Documental</h2>
+    <a href="#" id="scope-all" aria-current="page">Todos los documentos</a>
+    <a href="#" id="scope-mine">Mis archivos</a>
+    <a href="#" id="scope-shared">Compartidos conmigo</a>
+    <a href="#" id="scope-low">Con lectura incierta</a>
+  </nav>
+  <main id="main" tabindex="-1"></main>
+  <aside class="sidebar" id="side" aria-label="Detalle del documento" hidden></aside>
+</div>
+
+<script>
+const $=s=>document.querySelector(s), main=$('#main'), side=$('#side');
+const MESES=['ene','feb','mar','abr','may','jun','jul','ago','sept','oct','nov','dic'];
+const fmt=d=>`${d.getDate()} ${MESES[d.getMonth()]} ${d.getFullYear()}`;
+const esc=t=>t.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+/* Example data (not real documents). 137 hits so that the three page sizes behave differently. */
+const NAMES=['Circular','Acta reunión','Protocolo','Informe REM','Escaneo','Norma técnica','Oficio','Planilla'];
+const TYPES=[['PDF','pdf'],['Documento','doc'],['Imagen','img'],['Planilla','xls']];
+const OWN=['Usted','M. Rojas','C. Soto'];
+const DATA=Array.from({length:137},(_,i)=>{
+  const t=TYPES[i%4], o=OWN[i%3], d=new Date(2026,9,14-i*2);
+  const low=t[1]==='img'&&i%8===2;
+  return {id:i,t:`${NAMES[i%8]} ${137-i} · vacunación.${t[1]==='doc'?'docx':t[1]==='xls'?'xlsx':t[1]==='img'?'jpg':'pdf'}`,type:t[1],p:['Equipo/Circulares','Dirección/Actas','Mis archivos/Escaneos'][i%3],pg:1+(i*7)%9,date:d,own:o,mine:o==='Usted',shared:o!=='Usted',low,score:137-i+(i%5),
+    s:`…campaña de <mark>vacunación</mark> ${low?'(lectura parcial del documento)':'para adultos mayores comienza el 1 de abril'}…`};
+});
+const st={view:'search',size:25,page:1,sort:'relevancia',type:'',date:'',own:'',low:false,mode:'mixta',scope:'all',sel:null};
+const SORTS={relevancia:'Relevancia','recientes':'Más recientes','antiguos':'Más antiguos','nombre-az':'Nombre (A-Z)','nombre-za':'Nombre (Z-A)'};
+function query(){
+  let r=DATA.filter(h=>(!st.type||h.type===st.type)&&(!st.own||(st.own==='mine'?h.mine:h.shared))&&(!st.low||h.low));
+  if(st.scope==='mine')r=r.filter(h=>h.mine); if(st.scope==='shared')r=r.filter(h=>h.shared); if(st.scope==='low')r=r.filter(h=>h.low);
+  if(st.date){const lim=new Date(2026,9,15);lim.setDate(lim.getDate()-({sem:7,mes:30,anio:365}[st.date]));r=r.filter(h=>h.date>=lim);}
+  const cmp={relevancia:(a,b)=>b.score-a.score,recientes:(a,b)=>b.date-a.date,antiguos:(a,b)=>a.date-b.date,'nombre-az':(a,b)=>a.t.localeCompare(b.t,'es'),'nombre-za':(a,b)=>b.t.localeCompare(a.t,'es')}[st.sort];
+  return r.sort(cmp);
+}
+function opt(list,cur){return list.map(([v,l])=>`<option value="${v}" ${cur===v?'selected':''}>${l}</option>`).join('')}
+function card(h,s){const b=(s==='ocr-pending'&&h.low)?'<span class="badge">Pendiente de lectura</span>':(h.low?'<span class="badge">Lectura incierta</span>':'');
+ return `<li class="card" data-id="${h.id}" aria-selected="${st.sel===h.id}"><h3><a href="#" data-open="${h.id}">${esc(h.t)}</a>${b}</h3>
+ <div class="meta">${esc(h.p)} · p. ${h.pg} · ${fmt(h.date)} · ${esc(h.own)}</div><p class="snippet">${h.s}</p></li>`}
+function pager(total){
+  const pages=Math.max(1,Math.ceil(total/st.size)); st.page=Math.min(st.page,pages);
+  const a=(st.page-1)*st.size+1,b=Math.min(total,st.page*st.size);
+  const nums=[]; for(let p=1;p<=pages;p++){ if(p===1||p===pages||Math.abs(p-st.page)<=1) nums.push(p); else if(nums[nums.length-1]!=='…') nums.push('…'); }
+  return {a,b,pages,html:`<nav class="pager" aria-label="Paginación de resultados">
+  <div class="pages"><button class="btn tertiary sm" data-p="${st.page-1}" ${st.page<=1?'disabled':''}>Anterior</button>
+   ${nums.map(n=>n==='…'?'<span aria-hidden="true">…</span>':`<button class="btn secondary sm num" data-p="${n}" ${n===st.page?'aria-current="page"':''}>${n}</button>`).join('')}
+   <button class="btn tertiary sm" data-p="${st.page+1}" ${st.page>=pages?'disabled':''}>Siguiente</button></div></nav>`}
+}
+function modes(off,why){const eff=off?'exacta':st.mode;const t=off?`aria-disabled="true" title="${why}"`:'';
+ return `<div class="seg" role="group" aria-label="Modo de búsqueda"><button aria-pressed="${eff==='exacta'}" data-m="exacta">Exacta</button><button aria-pressed="${eff==='semantica'}" data-m="semantica" ${t}>Por significado</button><button aria-pressed="${eff==='mixta'}" data-m="mixta" ${t}>Mixta</button></div>`}
+function searchView(s){
+  const off=s==='semantic-off'||s==='preparing';
+  const all=query(); const total=all.length; const pg=pager(total);
+  const slice=all.slice((st.page-1)*st.size,st.page*st.size);
+  let body='';
+  if(['results','semantic-off','preparing','partial','ocr-pending'].includes(s)){
+    body=`<div class="summary"><span role="status" class="num">${pg.a}–${pg.b} de ${total} documentos</span><span class="sumctl"><label class="field inl">Ordenar por<select id="sort">${opt(Object.entries(SORTS),st.sort)}</select></label><label class="field inl">Por página<select id="size">${[25,50,100].map(n=>`<option ${st.size===n?'selected':''}>${n}</option>`).join('')}</select></label></span></div>
+    <ul class="results">${slice.map(h=>card(h,s)).join('')}</ul>${pg.html}`;
+    if(!total) body=`<div class="empty" role="status"><p><strong>Sin resultados con estos filtros</strong></p><button class="btn secondary" id="clear">Quitar filtros</button></div>`;
+  }
+  if(s==='loading') body=`<p role="status" class="sr">Buscando…</p><div style="display:grid;gap:8px" aria-hidden="true"><div class="sk"></div><div class="sk"></div><div class="sk"></div></div>`;
+  if(s==='empty') body=`<div class="empty" role="status"><p><strong>Sin resultados</strong></p><p>Pruebe con menos palabras o quite filtros.</p></div>`;
+  if(s==='filtered') body=`<div class="empty" role="status"><p><strong>Sin documentos disponibles para usted</strong></p><p>Consulte con su administrador si espera ver alguno.</p></div>`;
+  if(s==='down') body=`<div class="banner err" role="alert"><strong>Búsqueda no disponible.</strong> Sus archivos están a salvo. Intente de nuevo en unos minutos.</div>`;
+  if(s==='ratelimit') body=`<div class="banner warn" role="alert">Demasiadas búsquedas. Espere <span id="cd">12</span> s.</div>`;
+  const prep=s==='preparing'?`<div class="banner info" role="status"><strong>Preparando: 38 %</strong> · búsqueda por palabras lista; por significado, pendiente.<progress max="100" value="38" aria-label="Avance de preparación"></progress></div>`:'';
+  const part=s==='partial'?`<div class="banner info" role="status"><strong>Índice parcial (62 %).</strong> Pueden faltar documentos recientes.</div>`:'';
+  const sem=s==='semantic-off'?`<div class="banner warn" role="status">Búsqueda por significado no disponible: se usan palabras exactas.</div>`:'';
+  return `<h1>Buscador Documental</h1>
+  <form class="searchrow" role="search" onsubmit="return false"><label class="sr" for="q">Buscar documentos</label>
+   <input id="q" type="search" value="vacunación invierno" placeholder="Escriba palabras o una pregunta"><button class="btn primary">Buscar</button></form>
+  ${prep}${part}${sem}
+  <div class="toolbar" role="group" aria-label="Modo, orden y filtros">
+   ${modes(off,s==='preparing'?'Disponible cuando termine la preparación':'No disponible por ahora: la búsqueda por significado no responde')}
+   <label class="field">Tipo<select id="ftype">${opt([['','Todos'],['pdf','PDF'],['doc','Documentos'],['xls','Planillas'],['img','Imágenes']],st.type)}</select></label>
+   <label class="field">Modificado<select id="fdate">${opt([['','Cualquier fecha'],['sem','Última semana'],['mes','Último mes'],['anio','Último año']],st.date)}</select></label>
+   <label class="field">Propiedad<select id="fown">${opt([['','Todos'],['mine','Mis archivos'],['shared','Compartidos conmigo']],st.own)}</select></label>
+   <label class="field check"><input type="checkbox" id="flow" ${st.low?'checked':''}> Solo con lectura incierta</label>
+  </div>
+  ${body}`;
+}
+function unifiedView(){const l=query().slice(0,5);return `<h1>Barra de búsqueda de Nextcloud</h1><p class="meta">Solo palabras exactas, 5 resultados, sin esperar al índice completo.</p>
+ <div class="unified" role="listbox" aria-label="Resultados de documentos"><strong style="padding:6px 10px;display:block">Documentos</strong>
+ ${l.map(h=>`<a class="row" href="#" role="option"><div>${esc(h.t)} <span class="meta">· p. ${h.pg}</span></div><div class="meta">${h.s.replace(/<\/?mark>/g,'')}</div></a>`).join('')}
+ <a class="row" href="#"><strong>Ver todos en Buscador Documental →</strong></a></div>`}
+function fileView(){return `<h1>Texto reconocido</h1><p class="meta">Escaneo 0098.jpg · pestaña del panel lateral de Archivos</p>
+ <div class="banner warn"><strong>Lectura incierta (62 %)</strong> Una foto más nítida mejora el resultado.</div>
+ <dl><dt class="meta">Estado</dt><dd>Listo para buscar · actualizado hoy 09:14</dd></dl>
+ <div class="card" style="white-space:pre-wrap;cursor:default">Registro de vacunación infantil
+Sector Norte — CESFAM …</div>
+ <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><button class="btn primary">Volver a leer este documento</button><button class="btn secondary">Copiar texto</button></div>`}
+function adminView(){return `<h1>Administración · Buscador Documental</h1>
+ <div class="banner info" role="status"><strong>Solo se leen las carpetas que usted incluya.</strong> Nada sale del servidor. <button class="btn secondary sm" style="margin-left:8px">Pausar lectura</button> <button class="btn secondary sm" hidden>Reanudar lectura</button></div>
+ <div class="kpis"><div class="kpi"><b>Sano</b>Servicio y base de datos</div><div class="kpi"><b class="num">38 %</b>Preparación del índice · tiempo estimado (ejemplo): 2 días<progress max="100" value="38" aria-label="Preparación 38 por ciento"></progress></div><div class="kpi"><b class="num">1 214</b>Documentos leídos</div><div class="kpi"><b class="num">27</b>Omitidos</div></div>
+ <h2>Perfil por significado</h2>
+ <p>Recomendado y en uso: <strong>Pequeño (CPU)</strong> · 8 núcleos, 31 GB, sin GPU. <button class="btn secondary sm">Cambiar</button></p>
+ <h2>Carpetas incluidas</h2>
+ <div class="overflow"><table><thead><tr><th>Carpeta</th><th>Documentos</th><th>Estado</th><th></th></tr></thead><tbody>
+ <tr><td>Equipo/Circulares</td><td class="num">412</td><td>Al día</td><td><button class="btn tertiary sm">Excluir</button></td></tr>
+ <tr><td>Dirección/Actas</td><td class="num">802</td><td>Preparando</td><td><button class="btn tertiary sm">Excluir</button></td></tr></tbody></table></div>
+ <h2>Documentos omitidos</h2><label class="field">Mostrar<select><option>Todos los motivos</option><option>Lectura incierta</option><option>Protegidos con contraseña</option></select></label>
+ <div class="overflow"><table><thead><tr><th>Archivo</th><th>Motivo</th><th></th></tr></thead><tbody>
+ <tr><td>Convenio.pdf</td><td>Protegido con contraseña</td><td></td></tr>
+ <tr><td>Escaneo 0098.jpg</td><td>Lectura incierta (62 %)</td><td><button class="btn tertiary sm">Reintentar</button></td></tr></tbody></table></div>`}
+function sidebar(){
+  const h=DATA[st.sel]; if(!h||st.view!=='search'){side.hidden=true;return;}
+  side.hidden=false;
+  side.innerHTML=`<h2>${esc(h.t)}</h2><p class="meta">${esc(h.p)}<br>${fmt(h.date)} · ${esc(h.own)}</p>
+  ${h.low?'<div class="banner warn"><strong>Lectura incierta</strong></div>':''}
+  <p class="snippet">${h.s}</p>
+  <div class="actions"><button class="btn primary">Abrir en la página ${h.pg}</button><button class="btn secondary">Copiar enlace</button>${h.low?'<button class="btn tertiary">Volver a leer este documento</button>':''}</div>`;
+}
+function render(){
+  st.view=$('#view').value; const s=$('#state').value;
+  main.innerHTML= st.view==='search'?searchView(s): st.view==='unified'?unifiedView(): st.view==='file'?fileView(): adminView();
+  sidebar();
+  document.querySelectorAll('nav.appnav a').forEach(a=>a.setAttribute('aria-current',a.id==='scope-'+st.scope?'page':'false'));
+  clearInterval(window._cd); if($('#cd')){let n=12;window._cd=setInterval(()=>{n=Math.max(0,n-1);const e=$('#cd');if(e)e.textContent=n;},1000);}
+}
+function set(k,v){st[k]=v;st.page=1;render();}
+main.addEventListener('change',e=>{const i=e.target.id;
+  if(i==='size')set('size',+e.target.value); if(i==='sort')set('sort',e.target.value); if(i==='ftype')set('type',e.target.value);
+  if(i==='fdate')set('date',e.target.value); if(i==='fown')set('own',e.target.value); if(i==='flow')set('low',e.target.checked);});
+main.addEventListener('click',e=>{const t=e.target.closest('button,a,li.card'); if(!t)return;
+  if(t.dataset.m){ if(t.getAttribute('aria-disabled')==='true')return; set('mode',t.dataset.m); return;}
+  if(t.dataset.p){st.page=+t.dataset.p;render();main.scrollTo?.(0,0);window.scrollTo(0,0);return;}
+  if(t.id==='clear'){Object.assign(st,{type:'',date:'',own:'',low:false,scope:'all',page:1});render();return;}
+  if(t.dataset.open||t.dataset.goto){e.preventDefault();st.sel=+(t.dataset.open||t.dataset.goto);render();return;}
+  if(t.classList.contains('card')){st.sel=+t.dataset.id;render();}});
+side.addEventListener('click',e=>{if(e.target.id==='closeside'){st.sel=null;render();}});
+['all','mine','shared','low'].forEach(k=>$('#scope-'+k).addEventListener('click',e=>{e.preventDefault();st.scope=k;st.page=1;render();}));
+$('#view').onchange=render; $('#state').onchange=render; render();
+</script>
+</body>
+</html>
