@@ -1,0 +1,11 @@
+# Para catalogo.yml del repositorio documentation (nombre del repo provisional)
+  - repo: buscador
+    kind: nextcloud-app
+    role: "Buscador Documental: busca por palabras o por significado, incluidos escaneos y fotografías, respetando los permisos de Nextcloud."
+    manuals:
+      - usuario/buscador-documental.md
+      - administracion/ia/buscador-documental.md
+      - desarrollo/buscador.md
+      - proyecto/novedades/buscador.md
+    depends_on: [gestion]
+    status: "En diseño"

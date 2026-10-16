@@ -1,0 +1,10 @@
+# Para glosario.yml del repositorio documentation.
+# Formato del repositorio: {en, es, source}. Estos términos son propios de la aplicación
+# (no vienen de la interfaz de Nextcloud); acordar con quien mantiene el glosario cómo
+# registrar términos sin archivo l10n antes de enviar el PR.
+  - {en: "Document Search", es: "Buscador Documental", source: "propio (nombre de la aplicación)"}
+  - {en: "Exact", es: "Exacta", source: "propio (modo de búsqueda)"}
+  - {en: "By meaning", es: "Por significado", source: "propio (modo de búsqueda)"}
+  - {en: "Mixed", es: "Mixta", source: "propio (modo de búsqueda)"}
+  - {en: "Uncertain reading", es: "Lectura incierta", source: "propio (aviso de baja confianza)"}
+  - {en: "Recognised text", es: "Texto reconocido", source: "propio (pestaña de Archivos)"}
