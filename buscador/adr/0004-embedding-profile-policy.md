@@ -1,7 +1,7 @@
 # ADR-0004 — Hardware-agnostic embedding profile: auto-recommend, admin-editable
 
 Status: accepted (2026-10-15)
-Affects: preflight, `profiles.yaml`, `embedding_profile`, `occ buscador:profile`
+Affects: preflight, `profiles.yaml`, `embedding_profile`, `occ buscador_documental:profile`
 
 ## Context
 The product runs on varied hardware (this dev box is CPU-only, others may have GPUs). Automatic switching after install could trigger a multi-day re-embed (flapping).

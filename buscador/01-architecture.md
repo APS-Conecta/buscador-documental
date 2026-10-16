@@ -25,7 +25,7 @@ Status: draft v3. Engineering doc (English). Decisions are recorded in `adr/`.
 | Table | Key columns | Notes |
 |---|---|---|
 | `file_state` | `file_id` PK, `etag`, `content_hash`, `text_state`, `vec_state`, `acl_dirty bool`, `skip_reason`, `updated_at` | per-lane states, see section 4 |
-| `job` | `id`, `lane`, `file_id`, `idem_key`, `lease_until`, `attempts`, `not_before` | claim with `FOR UPDATE SKIP LOCKED` |
+| `job` | `id`, `lane`, `file_id`, `idem_key`, `lease_until`, `lease_epoch bigint not null default 0`, `claimed_by text`, `claimed_etag text`, `claimed_hash text`, `attempts`, `not_before` | claim with `FOR UPDATE SKIP LOCKED` |
 | `page` | `file_id`, `page_no`, `text`, `ocr_conf`, `ocr_ver`, `source` (layer/ocr) | text TOASTed |
 | `chunk` | `chunk_id`, `file_id`, `page_no`, `ord`, `heading`, `text`, `tsv` (generated, `spanish_unaccent`), `chunker_ver` | GIN on `tsv`; `pg_trgm` on filename in `file_meta` |
 | `chunk_vec_<gen>` | `chunk_id`, `vec halfvec(d)` | one table per profile generation; HNSW built after bulk load |
