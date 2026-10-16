@@ -1,0 +1,101 @@
+# Worker channel v1: hand-written source of truth (not generated). Both the PHP controller and the Python client are tested
+# against the x-examples below, including golden signatures; changing a signed field without changing both sides fails CI.
+openapi: 3.0.3
+info:
+  title: Buscador Documental worker channel
+  version: "1"
+  license:
+    name: AGPL-3.0-or-later
+servers:
+  - url: /apps/buscador_documental/worker/v1
+x-auth:
+  scheme: "Authorization: Bearer <worker_id>.<hex hmac-sha256>"
+  worker_id: "[A-Za-z0-9_-]{1,64}"
+  headers: [X-BD-Timestamp, X-BD-Nonce, X-BD-Job-Id, X-BD-Lease-Epoch]
+  signed_string: "method(upper) \\n path \\n query \\n Range \\n If-Match \\n worker_id \\n sha256hex(body) \\n timestamp \\n nonce \\n job_id \\n lease_epoch"
+  path: "URL path with the Nextcloud web root removed, as sent (no normalisation)"
+  timestamp_window_seconds: 120
+  nonce_ttl_seconds: 300
+  transport: "TLS, or a single-host private network; the secret and the bytes travel in clear otherwise"
+x-example-secret: "contract-test-secret-0123456789abcdef"
+paths:
+  /files/{id}/meta:
+    get:
+      summary: Metadata of a file the caller holds an active claim on
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      responses:
+        "200":
+          description: Metadata
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Meta"}
+        "401": {description: "Authentication failed (empty body)"}
+        "403": {description: "No active claim, or the file is excluded (empty body)"}
+        "404": {description: File not found}
+        "429": {description: Worker holds more active claims than the cap}
+        "503": {description: "Exclusion could not be established (fail closed)"}
+      x-examples:
+        - name: meta-ok
+          request:
+            method: GET
+            path: /apps/buscador_documental/worker/v1/files/42/meta
+            query: ""
+            range: ""
+            if_match: ""
+            worker_id: w-contract
+            timestamp: 1760000000
+            nonce: n0nce-contract-0001
+            job_id: 7
+            lease_epoch: 3
+            signature: e842a460ce8d58f9ca9b1bdd70d4d6d697eb370fcea2dbb3746088e7862bb253
+          response:
+            status: 200
+            json: {file_id: 42, etag: etag-abc, size: 2048, mime: application/pdf, name: scan.pdf, mtime: 1759999000, encrypted: false}
+  /files/{id}/content:
+    get:
+      summary: File bytes; If-Match is mandatory
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+        - {name: If-Match, in: header, required: true, schema: {type: string}}
+        - {name: Range, in: header, required: false, schema: {type: string}}
+      responses:
+        "200": {description: Whole file}
+        "206": {description: Requested byte range}
+        "401": {description: Authentication failed}
+        "403": {description: "No active claim, or excluded"}
+        "412": {description: Etag changed}
+        "416": {description: Range not satisfiable}
+        "428": {description: If-Match missing}
+        "429": {description: Over the claim cap}
+        "503": {description: Exclusion could not be established}
+      x-examples:
+        - name: content-range-ok
+          request:
+            method: GET
+            path: /apps/buscador_documental/worker/v1/files/42/content
+            query: ""
+            range: bytes=0-1023
+            if_match: etag-abc
+            worker_id: w-contract
+            timestamp: 1760000000
+            nonce: n0nce-contract-0002
+            job_id: 7
+            lease_epoch: 3
+            signature: ff4b1d16159c2e0b3f10c6b9c3aec9f28c7781e6189e3227f93b83828ac71fbc
+          response:
+            status: 206
+            headers: {Content-Range: "bytes 0-1023/2048"}
+components:
+  schemas:
+    Meta:
+      type: object
+      required: [file_id, etag, size, mime, name, mtime, encrypted]
+      properties:
+        file_id: {type: integer}
+        etag: {type: string}
+        size: {type: integer}
+        mime: {type: string}
+        name: {type: string}
+        mtime: {type: integer}
+        encrypted: {type: boolean}

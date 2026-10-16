@@ -85,9 +85,10 @@ class WorkerFunctionsTest extends DbTestCase {
 	}
 
 	public function testWrongEtagAndHashAreRejected(): void {
-		$this->seedFile(10, 'e1', 'known-hash');
+		$this->seedFile(10, 'e1');
 		$w = $this->worker();
 		$c = $this->claim($w);
+		$this->app()->exec("UPDATE aps_search.job SET claimed_hash = 'known-hash' WHERE id = {$c['job_id']}");
 		$this->assertStringContainsString('etag_mismatch', $this->failure(fn () => $this->write($w, $c, ['etag' => 'other'])));
 		$this->assertStringContainsString('hash_mismatch', $this->failure(fn () => $this->write($w, $c, ['hash' => 'different'])));
 		$this->assertSame(0, $this->rowCount('page'));
@@ -127,6 +128,27 @@ class WorkerFunctionsTest extends DbTestCase {
 		$this->assertSame(0, (int)$s->fetchColumn());
 		$s->execute(['text', 'w2']);
 		$this->assertSame(2, (int)$s->fetchColumn());
+	}
+
+	public function testGlobalLeaseCapStopsWorkerIdRenaming(): void {
+		for ($i = 1; $i <= 20; $i++) {
+			$this->seedFile($i);
+		}
+		$w = $this->worker();
+		$got = 0;
+		for ($k = 1; $k <= 8; $k++) {
+			$s = $w->prepare('SELECT count(*) FROM aps_search.claim_job(?, 4, ?, 900)');
+			$s->execute(['text', "w$k"]);
+			$got += (int)$s->fetchColumn();
+		}
+		$this->assertSame(16, $got);
+	}
+
+	public function testClaimDoesNotPinTheStoredHashOfAnOlderVersion(): void {
+		$this->seedFile(10, 'e1', 'old-version-hash');
+		$w = $this->worker();
+		$this->write($w, $this->claim($w), ['hash' => 'new-version-hash']);
+		$this->assertSame(1, $this->rowCount('page', 10));
 	}
 
 	public function testFailJobRetryThenSkip(): void {

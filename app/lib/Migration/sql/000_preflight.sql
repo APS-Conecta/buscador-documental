@@ -7,6 +7,9 @@ BEGIN
 	IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'bd_worker') THEN
 		RAISE EXCEPTION 'buscador_documental: role bd_worker is missing. An administrator must create it (LOGIN, no table privileges); see the install documentation.';
 	END IF;
+	IF NOT has_database_privilege('bd_worker', current_database(), 'CONNECT') THEN
+		RAISE EXCEPTION 'buscador_documental: role bd_worker cannot connect to database %. An administrator must run GRANT CONNECT ON DATABASE % TO bd_worker.', current_database(), current_database();
+	END IF;
 	IF NOT pg_has_role(current_user, 'bd_owner', 'SET') THEN
 		RAISE EXCEPTION 'buscador_documental: the Nextcloud database user cannot SET ROLE bd_owner. An administrator must run GRANT bd_owner TO <that user> WITH SET TRUE.';
 	END IF;

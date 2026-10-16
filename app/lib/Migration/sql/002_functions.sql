@@ -11,6 +11,7 @@ AS $$
 #variable_conflict use_column
 DECLARE
 	v_active int;
+	v_total int;
 	v_n int;
 	r record;
 BEGIN
@@ -20,7 +21,9 @@ BEGIN
 	-- Concurrency cap derives from live claims in the table, never from a cache counter (D3).
 	SELECT count(*) INTO v_active FROM job j
 		WHERE j.claimed_by = p_worker AND j.lease_until > clock_timestamp();
-	v_n := least(coalesce(p_n, 1), 4 - v_active);
+	-- Global cap too (M1): the worker id is self-declared, so per-worker caps alone can be dodged by renaming.
+	SELECT count(*) INTO v_total FROM job j WHERE j.lease_until > clock_timestamp();
+	v_n := least(coalesce(p_n, 1), 4 - v_active, 16 - v_total);
 	IF v_n <= 0 THEN
 		RETURN;
 	END IF;
@@ -42,7 +45,7 @@ BEGIN
 			lease_until = clock_timestamp() + make_interval(secs => least(greatest(p_lease_seconds, 1), 3600)),
 			claimed_by = p_worker,
 			claimed_etag = fs.etag,
-			claimed_hash = fs.content_hash,
+			claimed_hash = NULL,   -- set only when a hash is known beforehand (S2 dedupe); S1 never pins one
 			attempts = j.attempts + 1
 		FROM file_state fs
 		WHERE j.id = r.id AND fs.file_id = j.file_id

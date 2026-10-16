@@ -53,6 +53,24 @@ services:
       retries: 30
       start_period: 60s
 
+  # One-shot: `docker compose --profile worker run --rm worker python3 main.py --once`. Not started by `up`.
+  worker:
+    profiles: ["worker"]
+    build: ./worker
+    image: bd-s1-worker
+    restart: "no"
+    mem_limit: 2g
+    depends_on:
+      db:
+        condition: service_healthy
+      nextcloud:
+        condition: service_healthy
+    environment:
+      BD_DB_DSN: postgresql://bd_worker:dev-worker@db:5432/nextcloud
+      BD_BASE_URL: http://nextcloud
+      BD_WORKER_ID: worker-1
+      BD_WORKER_SECRET: bd-s1-toy-secret-0123456789abcdef0123
+
 volumes:
   bd_pg:
   bd_nc:
