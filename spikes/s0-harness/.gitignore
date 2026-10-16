@@ -1,0 +1,4 @@
+results/
+corpus/out/
+models/
+__pycache__/
