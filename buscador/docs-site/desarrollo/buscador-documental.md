@@ -2,10 +2,10 @@
 tipo: referencia
 esqueleto: borrador
 audiencia: desarrollo
-apps: [buscador]
+apps: [buscador-documental]
 resumen: "Buscador Documental: estado del diseño, decisiones de la etapa de mediciones (S0) y cómo repetir las mediciones con el arnés."
 ---
-# buscador
+# buscador-documental
 
 ```{note}
 Borrador. Faltan el mapa de módulos, el contrato del proceso de trabajo (worker) y las pruebas, que se completan en las etapas S1 y S2 del plan. La referencia de comandos `occ`, ajustes y rutas se genera automáticamente.

@@ -7,7 +7,7 @@
 | 3 | Concurrent searchers per clinic | 5-10; S0 modelled 5, 10 and 20 | user | S0 (closed for the load model) |
 | 4 | Grace period for trash/old versions | 30 days | counsel/user | S3 |
 | 5 | Mode «Por significado» while index incomplete | shown disabled with progress | decided | U0 |
-| 6 | App id and repo name (P2 S6) | placeholder `buscador` | user | before docs PR |
+| 6 | App id (P2 S6); the repo name is fixed: `APS-Conecta/buscador-documental` | app id placeholder `buscador` | user | before the app code (S1) |
 | 7 | Counsel: Ley 21.719 date, legal basis, DPIA owner, audit retention (90 d proposed) | opt-in scope | counsel | before real-data install |
 | 8 | Does the documentation repo accept a PR for these pages now (it is in its second round)? | drafts in `docs-site/` | user | first `/bd-docs` push |
 | 9 | Unverified technical items to recheck in research: PDF.js `#page=N`, `core:image2text:ocr` in NC 34, OCRmyPDF flags, pgvector `hnsw.iterative_scan` version, Tesseract throughput | S0 verified: pgvector 0.8.7 `iterative_scan`, OCRmyPDF 14 flags, Tesseract throughput; still open: PDF.js, image2text | S2/S6 research | per slice |

@@ -2,7 +2,7 @@
 tipo: referencia
 esqueleto: borrador
 audiencia: administracion
-apps: [buscador]
+apps: [buscador-documental]
 resumen: "Requisitos, capacidad estimada, puesta en marcha, alcance, perfil de lectura por significado y respaldo del Buscador Documental."
 ---
 # App: Buscador Documental (`buscador`)

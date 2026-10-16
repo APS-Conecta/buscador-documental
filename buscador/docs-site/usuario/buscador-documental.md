@@ -1,7 +1,7 @@
 ---
 tipo: guia
 audiencia: usuario
-apps: [buscador]
+apps: [buscador-documental]
 resumen: "Buscar documentos por palabras o por significado, incluidos escaneos y fotografías, solo entre los archivos que usted ya puede ver."
 ---
 # Buscador Documental
