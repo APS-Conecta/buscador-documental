@@ -9,7 +9,7 @@ NET := bd-s1_default
 DOCKER := docker run --rm -v "$(CURDIR)":/app -w /app $(IMG)
 DOCKER_NET := docker run --rm --network $(NET) -v "$(CURDIR)":/app -w /app -e BD_PG_HOST=db $(IMG)
 
-.PHONY: instance-reset-schema test-e2e-one test-contract test-search test-canary build-test-image deps test-unit test-db up down clean instance-migrate
+.PHONY: instance-reset-schema test-e2e-formats test-e2e-one test-contract test-search test-canary build-test-image deps test-unit test-db up down clean instance-migrate
 
 build-test-image:
 	docker build -q -f Dockerfile.test -t $(IMG) . >/dev/null
@@ -57,6 +57,10 @@ clean:
 # One scanned PDF through app + worker + OCR into the index (S1 plan, phase 2).
 test-e2e-one:
 	bash tests/e2e/one.sh
+
+# Every tier-1/2 format and the hostile files, against the live stack (S2 plan, phase 2).
+test-e2e-formats:
+	bash tests/e2e/formats.sh
 
 # The permission canary against the bd-s1 stack: one scanned PDF, real worker, six scenarios (S1 plan, phase 4).
 test-canary:

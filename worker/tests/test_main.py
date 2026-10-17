@@ -114,3 +114,22 @@ def test_parser_down_abandons_the_job(monkeypatch):
         raise main.jobbox.ParserUnavailable("j")
     monkeypatch.setattr(main, "parse", down)
     assert run(FakeConn(), FakeApi()) == "abandoned"
+
+
+@pytest.mark.parametrize("mime", [
+    "application/pdf", "text/plain", "text/markdown", "image/png", "image/jpeg", "image/tiff",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.oasis.opendocument.text"])
+def test_supported_mime_types_reach_the_parser(monkeypatch, mime):
+    monkeypatch.setattr(main, "parse", lambda *a: {"status": "ok", "pages": ["texto"]})
+    api = FakeApi(meta={"mime": mime, "etag": "e", "size": 4})
+    assert run(FakeConn(), api) == "indexed"
+
+
+def test_unsupported_mime_type_is_skipped_not_parsed(monkeypatch):
+    called = []
+    monkeypatch.setattr(main, "parse", lambda *a: called.append(1))
+    assert run(FakeConn(), FakeApi(meta={"mime": "application/x-msdownload", "etag": "e", "size": 4})) == "failed:unsupported"
+    assert not called

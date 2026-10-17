@@ -45,6 +45,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - run: make -C app test-canary
       - run: make -C worker test-sandbox
+      - run: make -C app test-e2e-formats
       - name: Logs on failure
         if: failure()
         run: docker compose -f compose.yaml logs --no-color --tail=200

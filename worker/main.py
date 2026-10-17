@@ -25,6 +25,12 @@ KNOWN_REASONS = ("timeout", "ocr_failed", "unsafe", "corrupt", "encrypted", "too
 LEASE_SECONDS = int(os.environ.get("BD_LEASE_SECONDS", "900"))
 MAX_BYTES = 250 * 1024 * 1024        # buscador/02-performance.md: proposed limits, confirmed in S2
 MAX_PAGES = 300
+SUPPORTED_MIMES = {
+    "application/pdf", "text/plain", "text/markdown", "image/png", "image/jpeg", "image/tiff",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.oasis.opendocument.text"}
 SILENT_DB_ERRORS = ("stale_lease", "etag_mismatch", "hash_mismatch", "file_skipped")
 
 
@@ -57,7 +63,7 @@ class Heartbeat(threading.Thread):
 def parse(job_id, epoch, path, size):
     """Hands the file to the parser container (ADR-0011) and returns its answer."""
     timeout = min(3600, 12 * MAX_PAGES + 60)   # the plan formula 12 s x pages + 60 s at the page cap; per-size tuning is S5
-    return jobbox.submit(WORK, f"{job_id}-{epoch}", path, {"kind": "pdf"}, timeout)
+    return jobbox.submit(WORK, f"{job_id}-{epoch}", path, {"kind": "file"}, timeout)
 
 
 def process(conn, api, dsn, job_id, epoch, file_id):
@@ -68,8 +74,8 @@ def process(conn, api, dsn, job_id, epoch, file_id):
         meta = api.meta(file_id, job_id, epoch)
         if meta.get("encrypted"):
             return fail(conn, job_id, epoch, "encrypted", False)
-        if meta.get("mime") != "application/pdf":
-            return fail(conn, job_id, epoch, "unsupported", False)   # STUB(S2): other formats
+        if meta.get("mime") not in SUPPORTED_MIMES:
+            return fail(conn, job_id, epoch, "unsupported", False)
         if meta.get("size", 0) > MAX_BYTES:
             return fail(conn, job_id, epoch, "too_large", False)
         with tempfile.NamedTemporaryFile(suffix=".pdf") as tmp:

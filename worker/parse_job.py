@@ -3,17 +3,24 @@
 import json
 import sys
 
+import extract
 import ocr
+
+OCR_KINDS = (b"%PDF", b"\x89PNG", b"\xff\xd8\xff", b"II*\x00", b"MM\x00*")
 
 
 def main(req_path: str, res_path: str) -> None:
     with open(req_path) as fh:
         req = json.load(fh)
     try:
-        if req.get("kind") != "pdf":
-            out = {"status": "error", "reason": "corrupt"}      # STUB(S2 phase 2): other formats
-        else:
-            out = {"status": "ok", "pages": ocr.run(req["input"]), "ocr_ver": ocr.version()}
+        pages = extract.extract(req["input"])              # refuses hostile or unusable files before anything heavy runs
+        with open(req["input"], "rb") as fh:
+            needs_ocr = fh.read(4).startswith(OCR_KINDS)
+        if needs_ocr:
+            pages = ocr.run(req["input"])                  # STUB(S2 phase 3): per-page text-layer policy
+        out = {"status": "ok", "pages": pages, "ocr_ver": ocr.version() if needs_ocr else "extract-1"}
+    except extract.Refusal as e:
+        out = {"status": "error", "reason": e.reason, "detail": str(e)}
     except ocr.OcrTimeout:
         out = {"status": "error", "reason": "timeout"}
     except ocr.OcrFailed:
