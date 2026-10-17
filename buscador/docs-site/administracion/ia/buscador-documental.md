@@ -35,7 +35,12 @@ Para un millón de páginas:
 3. Siga el avance en **Administración · Buscador Documental**. Puede **Pausar lectura** en cualquier momento.
 
 ## Alcance y exclusiones
-Modo predeterminado: carpetas incluidas. La etiqueta `rag-excluded` en un archivo o carpeta siempre prevalece y elimina lo ya leído.
+Modo predeterminado: carpetas incluidas. La etiqueta `rag-excluded` en un archivo o carpeta siempre prevalece y elimina lo ya leído. La exclusión se aplica también cuando la etiqueta está en una carpeta superior, aunque la persona acceda al archivo por otro punto de montaje, y también si hay varias etiquetas con ese nombre. Si el servicio de etiquetas no responde, la búsqueda no devuelve resultados en lugar de arriesgar una exposición.
+
+## Permisos en cada búsqueda
+Los permisos guardados en el índice solo preseleccionan resultados; cada resultado se vuelve a comprobar contra Nextcloud en el momento de la consulta. Por eso, retirar un recurso compartido o a una persona de un grupo surte efecto de inmediato, sin esperar a una nueva lectura. Un recurso compartido vencido no da acceso. Si el recurso compartido tiene la descarga desactivada, la persona ve el documento en la lista solo con su título, sin extracto.
+
+La comprobación de 50 resultados tarda unos 380 ms en el percentil 95 en la medición de la etapa S1 (el objetivo era 300 ms); la decisión sobre ese límite está pendiente.
 
 ## Perfil de lectura por significado
 Se recomienda al instalar y no cambia solo. Para cambiarlo use la pantalla de administración o `occ buscador:profile`; el cambio prepara un índice nuevo y la búsqueda por palabras sigue funcionando.

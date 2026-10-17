@@ -46,5 +46,7 @@ Cuando se activa por primera vez, la preparación depende de la cantidad de docu
 ## Privacidad
 
 - Los documentos nunca salen del servidor de su establecimiento.
-- Usted solo ve lo que ya puede ver en Archivos; se verifica en cada búsqueda.
+- Usted solo ve lo que ya puede ver en Archivos; se verifica en cada búsqueda. Si alguien deja de compartirle un documento, deja de aparecer de inmediato.
+- Si un documento le fue compartido sin permiso de descarga, aparece en la lista solo con su nombre, sin extracto.
+- Si la búsqueda abarca demasiados resultados, se le pedirá que use palabras más específicas.
 - Para que una carpeta no se lea, pida a su administrador que la excluya, o aplique la etiqueta de exclusión (`rag-excluded`) a la carpeta.
