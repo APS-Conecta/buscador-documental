@@ -22,6 +22,13 @@ class FileTree {
 		return $r === false ? null : ['storage' => (int)$r['storage'], 'path' => (string)$r['path'], 'parent' => (int)$r['parent']];
 	}
 
+	public function isDirectory(int $fileId): bool {
+		return $this->db->executeQuery(
+			"SELECT 1 FROM *PREFIX*filecache f JOIN *PREFIX*mimetypes m ON m.id = f.mimetype WHERE f.fileid = ? AND m.mimetype = 'httpd/unix-directory'",
+			[$fileId],
+		)->fetchOne() !== false;
+	}
+
 	/**
 	 * `home` (a user's own storage), `groupfolder` (a team folder's own storage, groupfolders >= 4) or `other`
 	 * (external, object-store or shared-mount storages: no indexing guarantee in release 1).

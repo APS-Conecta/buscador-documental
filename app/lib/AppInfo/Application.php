@@ -19,6 +19,15 @@ class Application extends App implements IBootstrap {
 	}
 
 	public function register(IRegistrationContext $context): void {
+		foreach ([
+			\OCP\Files\Cache\CacheEntryInsertedEvent::class, \OCP\Files\Cache\CacheEntryUpdatedEvent::class,
+			\OCP\Files\Cache\CacheEntryRemovedEvent::class, \OCP\Files\Cache\CacheEntriesRemovedEvent::class,
+			\OCP\Share\Events\ShareCreatedEvent::class, \OCP\Share\Events\ShareDeletedEvent::class,
+			\OCP\SystemTag\TagAssignedEvent::class, \OCP\SystemTag\TagUnassignedEvent::class,
+			\OCP\SystemTag\ManagerEvent::EVENT_DELETE,
+		] as $event) {
+			$context->registerEventListener($event, \OCA\BuscadorDocumental\Listener\OutboxListener::class);
+		}
 	}
 
 	public function boot(IBootContext $context): void {
