@@ -16,9 +16,12 @@ import requests
 
 import chunk
 import client as bdclient
-import ocr
+import jobbox
 
 log = logging.getLogger("bd-worker")
+WORK = os.environ.get("BD_WORK", "/work")
+RETRYABLE = ("timeout", "ocr_failed")
+KNOWN_REASONS = ("timeout", "ocr_failed", "unsafe", "corrupt", "encrypted", "too_large")
 LEASE_SECONDS = int(os.environ.get("BD_LEASE_SECONDS", "900"))
 MAX_BYTES = 250 * 1024 * 1024        # buscador/02-performance.md: proposed limits, confirmed in S2
 MAX_PAGES = 300
@@ -51,6 +54,12 @@ class Heartbeat(threading.Thread):
             self.lost = True               # cannot extend the lease: stop trusting it
 
 
+def parse(job_id, epoch, path, size):
+    """Hands the file to the parser container (ADR-0011) and returns its answer."""
+    timeout = min(3600, 12 * MAX_PAGES + 60)   # the plan formula 12 s x pages + 60 s at the page cap; per-size tuning is S5
+    return jobbox.submit(WORK, f"{job_id}-{epoch}", path, {"kind": "pdf"}, timeout)
+
+
 def process(conn, api, dsn, job_id, epoch, file_id):
     """Returns 'indexed', 'abandoned' or 'failed:<reason>'."""
     hb = Heartbeat(dsn, job_id, epoch)
@@ -70,11 +79,16 @@ def process(conn, api, dsn, job_id, epoch, file_id):
                 log.warning("job %s: short or long body (%s of %s bytes)", job_id, n, meta.get("size"))
                 return "abandoned"
             try:
-                pages = ocr.run(tmp.name)
-            except ocr.OcrTimeout:
-                return fail(conn, job_id, epoch, "timeout", True)
-            except ocr.OcrFailed:
-                return fail(conn, job_id, epoch, "ocr_failed", True)
+                answer = parse(job_id, epoch, tmp.name, meta.get("size", 0))
+            except jobbox.ParserUnavailable:
+                log.warning("job %s: parser container did not answer, lease will expire", job_id)
+                return "abandoned"
+            if answer.get("status") != "ok":
+                if answer.get("detail"):
+                    log.warning("job %s: parser said: %s", job_id, str(answer["detail"]).replace("\n", " | ")[:300])
+                reason = answer.get("reason") if answer.get("reason") in KNOWN_REASONS else "ocr_failed"
+                return fail(conn, job_id, epoch, reason, reason in RETRYABLE)
+            pages = answer["pages"]
         if hb.lost:
             return "abandoned"
         if len(pages) > MAX_PAGES:
@@ -87,7 +101,7 @@ def process(conn, api, dsn, job_id, epoch, file_id):
         page_rows = [{"page_no": i, "text": t, "ocr_conf": None, "source": "ocr"} for i, t in enumerate(pages, start=1)]
         conn.execute("SELECT aps_search.write_result(%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s)",
                      (job_id, epoch, meta["etag"], content_hash, json.dumps(page_rows), json.dumps(chunks),
-                      ocr.version(), chunk.CHUNKER_VER))
+                      answer.get("ocr_ver", "unknown"), chunk.CHUNKER_VER))
         return "indexed"
     except (requests.RequestException, ValueError) as e:
         log.warning("job %s: worker channel error (%s), lease will expire", job_id, type(e).__name__)

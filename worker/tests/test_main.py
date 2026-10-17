@@ -66,21 +66,21 @@ def test_oversized_file_is_failed_before_download():
 
 
 def test_too_many_pages_is_failed_not_crashed(monkeypatch):
-    monkeypatch.setattr(main.ocr, "run", lambda p: ["x"] * (main.MAX_PAGES + 1))
+    monkeypatch.setattr(main, "parse", lambda *a: {"status": "ok", "pages": ["x"] * (main.MAX_PAGES + 1)})
     conn = FakeConn()
     assert run(conn, FakeApi()) == "failed:too_large"
     assert any("fail_job" in c[0] for c in conn.calls)
 
 
 def test_payload_too_large_from_the_database_is_reported(monkeypatch):
-    monkeypatch.setattr(main.ocr, "run", lambda p: ["texto"])
+    monkeypatch.setattr(main, "parse", lambda *a: {"status": "ok", "pages": ["texto"]})
     err = psycopg.errors.RaiseException("payload_too_large")
     conn = FakeConn(raise_on=("write_result", err))
     assert run(conn, FakeApi()) == "failed:too_large"
 
 
 def test_unknown_database_errors_still_surface(monkeypatch):
-    monkeypatch.setattr(main.ocr, "run", lambda p: ["texto"])
+    monkeypatch.setattr(main, "parse", lambda *a: {"status": "ok", "pages": ["texto"]})
     conn = FakeConn(raise_on=("write_result", psycopg.errors.RaiseException("boom")))
     with pytest.raises(psycopg.errors.Error):
         run(conn, FakeApi())
@@ -91,3 +91,26 @@ def test_client_rejects_unexpected_statuses_and_short_bodies():
         status_code = 400
     with pytest.raises(ValueError):
         bdclient.WorkerClient("http://x", "w", "s")._check(R())
+
+
+@pytest.mark.parametrize("reason,expected", [
+    ("timeout", "failed:timeout"), ("ocr_failed", "failed:ocr_failed"), ("unsafe", "failed:unsafe"),
+    ("corrupt", "failed:corrupt"), ("encrypted", "failed:encrypted"), ("too_large", "failed:too_large")])
+def test_parser_errors_become_the_matching_failure(monkeypatch, reason, expected):
+    monkeypatch.setattr(main, "parse", lambda *a: {"status": "error", "reason": reason})
+    conn = FakeConn()
+    assert run(conn, FakeApi()) == expected
+    retry = [c for c in conn.calls if "fail_job" in c[0]][0][1][3]
+    assert retry is (reason in ("timeout", "ocr_failed"))
+
+
+def test_unknown_parser_reason_is_failed_as_ocr_failed(monkeypatch):
+    monkeypatch.setattr(main, "parse", lambda *a: {"status": "error", "reason": "weird"})
+    assert run(FakeConn(), FakeApi()) == "failed:ocr_failed"
+
+
+def test_parser_down_abandons_the_job(monkeypatch):
+    def down(*a):
+        raise main.jobbox.ParserUnavailable("j")
+    monkeypatch.setattr(main, "parse", down)
+    assert run(FakeConn(), FakeApi()) == "abandoned"

@@ -18,6 +18,7 @@ $C exec -T --user www-data -e OC_PASS=alice-pass-123 nextcloud php occ user:add 
 # Fresh state for this file; the index is rebuilt from scratch.
 $PSQL -c "TRUNCATE aps_search.job, aps_search.page, aps_search.chunk, aps_search.file_state, aps_search.file_meta, aps_search.file_acl RESTART IDENTITY"
 $C --profile worker build worker >/dev/null
+$C --profile worker up -d --wait parser >/dev/null
 mkdir -p /tmp/bd-s1-e2e
 docker run --rm --user root -v /tmp/bd-s1-e2e:/out --entrypoint python3 bd-s1-worker make_scan.py /out/scan.pdf
 $C exec -T --user www-data nextcloud mkdir -p /var/www/html/data/alice/files
