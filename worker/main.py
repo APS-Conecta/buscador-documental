@@ -37,6 +37,19 @@ SUPPORTED_MIMES = {
 SILENT_DB_ERRORS = ("stale_lease", "etag_mismatch", "hash_mismatch", "file_skipped")
 
 
+SUPPORTED_SCHEMA = 2           # aps_search.schema_meta.schema_ver this worker was written for (S3 migration)
+
+
+def check_schema(conn):
+    """A worker on an unknown schema could write rows the app does not expect (or miss ones it must write): refuse to run."""
+    try:
+        found = conn.execute("SELECT aps_search.schema_version()").fetchone()[0]
+    except psycopg.Error as e:
+        sys.exit(f"cannot read the index schema version ({type(e).__name__}); expected {SUPPORTED_SCHEMA}")
+    if found != SUPPORTED_SCHEMA:
+        sys.exit(f"index schema version {found} is not supported by this worker (expected {SUPPORTED_SCHEMA})")
+
+
 def env(name, default=None):
     v = os.environ.get(name, default)
     if v is None:
@@ -206,6 +219,7 @@ def main():
     api = bdclient.WorkerClient(env("BD_BASE_URL"), worker_id, env("BD_WORKER_SECRET"))
     once = "--once" in sys.argv
     with psycopg.connect(dsn, autocommit=True) as conn:
+        check_schema(conn)
         while True:
             n = run_once(conn, api, dsn, worker_id)
             if once:

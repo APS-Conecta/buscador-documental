@@ -6,7 +6,9 @@ declare(strict_types=1);
 
 namespace OCA\BuscadorDocumental\Migration;
 
+use OCP\IDBConnection;
 use RuntimeException;
+use Throwable;
 
 /**
  * Splits a versioned .sql file into statements. The separator is a line holding only `-- @@`, because function
@@ -40,10 +42,34 @@ final class SqlScript {
 	/** @return list<string> the up steps in order */
 	public static function up(): array {
 		$all = [];
-		foreach (['000_preflight.sql', '001_schema.sql', '002_functions.sql', '003_roles.sql'] as $f) {
+		foreach (['000_preflight.sql', '001_schema.sql', '002_functions.sql', '003_roles.sql', '004_s3.sql'] as $f) {
 			array_push($all, ...self::load($f));
 		}
 		return $all;
+	}
+
+	/** @return list<string> what an instance at schema_ver 1 needs: the S3 step alone (it is idempotent) */
+	public static function upgradeToV2(): array {
+		return self::load('004_s3.sql');
+	}
+
+	/**
+	 * Runs the statements all-or-nothing: PostgreSQL DDL is transactional, so a failure halfway leaves no half-built
+	 * schema behind and the administrator can fix the cause and enable the app again.
+	 *
+	 * @param list<string> $statements
+	 */
+	public static function runAtomically(IDBConnection $db, array $statements): void {
+		$db->beginTransaction();
+		try {
+			foreach ($statements as $statement) {
+				$db->executeStatement($statement);
+			}
+			$db->commit();
+		} catch (Throwable $e) {
+			$db->rollBack();
+			throw $e;
+		}
 	}
 
 	private static function onlyComments(string $part): bool {
