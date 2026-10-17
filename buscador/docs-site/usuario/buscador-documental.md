@@ -29,6 +29,10 @@ Los filtros disponibles son: tipo de archivo, carpeta, fecha de modificación, p
 
 Cada resultado muestra el nombre, la carpeta, la página y un extracto con las palabras resaltadas. Use **Abrir en la página N** para ir directamente al lugar.
 
+## Qué formatos se leen
+
+El buscador lee PDF, documentos de texto (Word y de formato abierto), presentaciones, hojas de cálculo, archivos de texto y fotografías. En una hoja de cálculo cada hoja se busca por separado. Un PDF mezcla páginas con texto y páginas escaneadas: cada página se trata según corresponda.
+
 ## Documentos escaneados
 
 El buscador lee documentos escaneados y fotografías. Si la lectura no es clara, el resultado muestra **Lectura incierta**. Una foto más nítida y recta mejora el resultado. En la pestaña **Texto reconocido** del panel lateral de Archivos puede ver el texto leído y pedir que se vuelva a leer el documento.
@@ -41,7 +45,7 @@ Cuando se activa por primera vez, la preparación depende de la cantidad de docu
 
 - Solo se leen las carpetas que su administrador incluyó. Si no encuentra un documento, pregunte si su carpeta está incluida.
 - La barra de búsqueda de Nextcloud busca solo por palabras exactas; para buscar por significado use la página del Buscador.
-- Los documentos protegidos con contraseña o cifrados no se leen y aparecen en la lista de omitidos del administrador.
+- Los documentos que requieren una contraseña para abrirse no se leen y aparecen en la lista de omitidos del administrador. Tampoco se leen los archivos dañados, demasiado grandes (más de 250 MB o de 300 páginas) ni los que parecen peligrosos.
 
 ## Privacidad
 
