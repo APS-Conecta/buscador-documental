@@ -47,6 +47,7 @@ jobs:
       - run: make -C worker test-sandbox
       - run: make -C app test-e2e-formats
       - run: make -C app test-e2e-groupfolder
+      - run: make -C app test-e2e-scope
       - name: Logs on failure
         if: failure()
         run: docker compose -f compose.yaml logs --no-color --tail=200

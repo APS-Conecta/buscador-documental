@@ -18,5 +18,10 @@
     </dependencies>
     <commands>
         <command>OCA\BuscadorDocumental\Command\DropSchema</command>
+        <command>OCA\BuscadorDocumental\Command\ScopeList</command>
+        <command>OCA\BuscadorDocumental\Command\ScopeAdd</command>
+        <command>OCA\BuscadorDocumental\Command\ScopeRemove</command>
+        <command>OCA\BuscadorDocumental\Command\ScopePreview</command>
+        <command>OCA\BuscadorDocumental\Command\ScopeMode</command>
     </commands>
 </info>
