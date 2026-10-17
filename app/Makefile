@@ -9,7 +9,7 @@ NET := bd-s1_default
 DOCKER := docker run --rm -v "$(CURDIR)":/app -w /app $(IMG)
 DOCKER_NET := docker run --rm --network $(NET) -v "$(CURDIR)":/app -w /app -e BD_PG_HOST=db $(IMG)
 
-.PHONY: instance-reset-schema test-e2e-erasure test-e2e-events test-e2e-scope test-e2e-groupfolder test-e2e-formats test-e2e-one test-contract test-search test-canary build-test-image deps test-unit test-db up down clean instance-migrate
+.PHONY: instance-reset-schema bench-reconcile test-e2e-reconcile test-e2e-erasure test-e2e-events test-e2e-scope test-e2e-groupfolder test-e2e-formats test-e2e-one test-contract test-search test-canary build-test-image deps test-unit test-db up down clean instance-migrate
 
 build-test-image:
 	docker build -q -f Dockerfile.test -t $(IMG) . >/dev/null
@@ -57,6 +57,14 @@ clean:
 # One scanned PDF through app + worker + OCR into the index (S1 plan, phase 2).
 test-e2e-one:
 	bash tests/e2e/one.sh
+
+# Reconciliation at scale: N synthetic files (default 300000), real Reconciler, EXPLAIN ANALYZE (S3 plan, phase 6).
+bench-reconcile:
+	bash ../spikes/s3/bench/scale.sh
+
+# The nightly reconciliation repairs lost events, against the live stack (S3 plan, phase 6, A-OPS-3).
+test-e2e-reconcile:
+	bash tests/e2e/reconcile.sh
 
 # Erasure on tag, trash and user deletion against the live stack (S3 plan, phase 5).
 test-e2e-erasure:

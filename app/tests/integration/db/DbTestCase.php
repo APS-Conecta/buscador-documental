@@ -45,7 +45,7 @@ abstract class DbTestCase extends TestCase {
 		}
 		$this->open = [];
 		$app = self::connect('postgres', 'dev', self::$dbName);
-		$app->exec('TRUNCATE aps_search.job, aps_search.page, aps_search.chunk, aps_search.file_state, aps_search.file_meta, aps_search.file_acl, aps_search.outbox, aps_search.tombstone, aps_search.audit_log, aps_search.scope_rule, aps_search.reconcile_run, aps_search.purge_pending, aps_search.pseudonym RESTART IDENTITY; DROP TABLE IF EXISTS aps_search.chunk_vec_9; DROP TABLE IF EXISTS oc_filecache, oc_storages, oc_group_folders, oc_mimetypes; DELETE FROM aps_search.settings');
+		$app->exec('TRUNCATE aps_search.job, aps_search.page, aps_search.chunk, aps_search.file_state, aps_search.file_meta, aps_search.file_acl, aps_search.outbox, aps_search.tombstone, aps_search.audit_log, aps_search.scope_rule, aps_search.reconcile_run, aps_search.purge_pending, aps_search.pseudonym, aps_search.reconcile_node RESTART IDENTITY; DROP TABLE IF EXISTS aps_search.chunk_vec_9; DROP TABLE IF EXISTS oc_filecache, oc_storages, oc_group_folders, oc_group_folders_groups, oc_group_folders_acl, oc_mimetypes, oc_systemtag, oc_systemtag_object_mapping; DELETE FROM aps_search.settings');
 	}
 
 	protected static function admin(string $db): PDO {

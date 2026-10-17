@@ -57,6 +57,14 @@ CREATE TABLE IF NOT EXISTS reconcile_run (
 	finished_at timestamptz
 );
 -- @@
+-- The files that should be indexed in one reconciliation run, materialised once so the passes can window over them.
+-- UNLOGGED: it is rebuilt by a run that finds it empty and costs no WAL on a large instance.
+CREATE UNLOGGED TABLE IF NOT EXISTS reconcile_node (
+	run_id bigint NOT NULL,
+	file_id bigint NOT NULL,
+	PRIMARY KEY (run_id, file_id)
+);
+-- @@
 CREATE TABLE IF NOT EXISTS settings (
 	key text PRIMARY KEY,
 	value text NOT NULL

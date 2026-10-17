@@ -18,6 +18,8 @@
     </dependencies>
     <background-jobs>
         <job>OCA\BuscadorDocumental\Job\ProcessOutbox</job>
+        <job>OCA\BuscadorDocumental\Job\Reconcile</job>
+        <job>OCA\BuscadorDocumental\Job\GroupfolderPoll</job>
     </background-jobs>
     <commands>
         <command>OCA\BuscadorDocumental\Command\DropSchema</command>
