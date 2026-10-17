@@ -33,6 +33,12 @@ class Pseudonyms {
 		return (string)$rows[0]['token'];
 	}
 
+	/** The token of a user who already has one; never creates it. */
+	public function existing(string $uid): ?string {
+		$rows = $this->db->rows('SELECT token FROM aps_search.pseudonym WHERE uid = ?', [$uid]);
+		return $rows === [] ? null : (string)$rows[0]['token'];
+	}
+
 	public function forget(string $uid): void {
 		$this->db->execute('DELETE FROM aps_search.pseudonym WHERE uid = ?', [$uid]);
 	}

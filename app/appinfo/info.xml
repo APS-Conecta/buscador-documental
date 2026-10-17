@@ -30,5 +30,6 @@
         <command>OCA\BuscadorDocumental\Command\Pause</command>
         <command>OCA\BuscadorDocumental\Command\Resume</command>
         <command>OCA\BuscadorDocumental\Command\Reindex</command>
+        <command>OCA\BuscadorDocumental\Command\PurgeUser</command>
     </commands>
 </info>

@@ -26,7 +26,7 @@ class ProcessOutbox extends TimedJob {
 
 	protected function run($argument): void {
 		$this->processor->refreshDirty(500);          // permission changes first, ahead of any backfill
-		$this->runner->runBatch(200);
+		$this->runner->runFor(45, 200);                // the job fires every 60 s: use most of that to drain a backlog
 		$this->outbox->prune();
 	}
 }

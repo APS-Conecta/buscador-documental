@@ -18,7 +18,7 @@ class FileFactsSourceTest extends TestCase {
 		$db->method('executeQuery')->willReturnCallback(function (string $sql) use ($path, $shares, $gfAcl, $storageId): IResult {
 			$r = $this->createMock(IResult::class);
 			if (str_contains($sql, 'FROM *PREFIX*filecache f')) {
-				$r->method('fetch')->willReturn(['fileid' => 5, 'name' => 'a.pdf', 'path' => $path, 'etag' => 'e', 'mtime' => 1, 'parent' => 0, 'mimetype' => 'application/pdf', 'storage_id' => $storageId]);
+				$r->method('fetch')->willReturn(['fileid' => 5, 'name' => 'a.pdf', 'path' => $path, 'etag' => 'e', 'mtime' => 1, 'parent' => 0, 'mimetype' => 'application/pdf', 'storage' => 42, 'storage_id' => $storageId]);
 			} elseif (str_contains($sql, '*PREFIX*share')) {
 				$r->method('fetchAll')->willReturn($shares);
 			} elseif (str_contains($sql, 'group_folders_groups')) {
@@ -29,6 +29,10 @@ class FileFactsSourceTest extends TestCase {
 			return $r;
 		});
 		return new FileFactsSource($db);
+	}
+
+	public function testTheStorageNumericIdIsCarriedForErasure(): void {
+		$this->assertSame(42, $this->source('files/a.pdf', [])->load(5)->storageId);
 	}
 
 	public function testUserAndGroupSharesAreModelled(): void {

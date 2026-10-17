@@ -20,7 +20,7 @@ class FileFactsSource {
 
 	public function load(int $fileId): ?FileFacts {
 		$row = $this->db->executeQuery(
-			'SELECT f.fileid, f.name, f.path, f.etag, f.mtime, f.parent, m.mimetype, s.id AS storage_id
+			'SELECT f.fileid, f.name, f.path, f.etag, f.mtime, f.parent, f.storage, m.mimetype, s.id AS storage_id
 			 FROM *PREFIX*filecache f
 			 JOIN *PREFIX*storages s ON s.numeric_id = f.storage
 			 LEFT JOIN *PREFIX*mimetypes m ON m.id = f.mimetype
@@ -94,6 +94,7 @@ class FileFactsSource {
 			array_values(array_unique($groups)),
 			array_values(array_unique($gfGroups)),
 			$unmodelled,
+			(int)$row['storage'],
 		);
 	}
 }

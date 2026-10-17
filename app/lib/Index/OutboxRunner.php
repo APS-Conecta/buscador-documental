@@ -15,6 +15,27 @@ class OutboxRunner {
 	public function __construct(private IndexDb $db, private Outbox $outbox, private Processor $processor, private LoggerInterface $logger) {
 	}
 
+	/**
+	 * Keeps taking batches for up to $seconds (always at least one), so a large backlog (an initial scan can queue
+	 * hundreds of thousands of rows) drains at the pace the database allows instead of one batch a minute. It stops as
+	 * soon as a batch is not full or makes no progress (everything held by a pause, or failing), so it cannot spin.
+	 *
+	 * @return array<string, int> outcome => count
+	 */
+	public function runFor(int $seconds, int $batch): array {
+		$start = microtime(true);
+		$total = [];
+		do {
+			$counts = $this->runBatch($batch);
+			foreach ($counts as $outcome => $n) {
+				$total[$outcome] = ($total[$outcome] ?? 0) + $n;
+			}
+			$taken = array_sum($counts);
+			$progress = $taken - ($counts['held'] ?? 0) - ($counts['retry'] ?? 0);
+		} while ($taken >= $batch && $progress > 0 && microtime(true) - $start < $seconds);
+		return $total;
+	}
+
 	/** @return array<string, int> outcome => count */
 	public function runBatch(int $limit): array {
 		$counts = [];

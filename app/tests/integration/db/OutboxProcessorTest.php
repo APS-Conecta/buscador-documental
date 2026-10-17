@@ -246,4 +246,34 @@ class OutboxProcessorTest extends DbTestCase {
 		$this->assertSame(['enqueued' => 1], $runner->runBatch(50), 'the next run picks the unfinished row again');
 		$this->assertSame(1, $this->rowCount('outbox') , 'one row, now processed');
 	}
+
+	public function testOneRunKeepsTakingBatchesUntilTheQueueIsEmptyOrTheBudgetEnds(): void {
+		[$db, $rules, , $p, $outbox] = $this->build();
+		$rules->addFolder(11, 'occ');
+		$db->execute("INSERT INTO aps_search.outbox (file_id, kind) SELECT g, 'file' FROM generate_series(1000, 1449) g");      // 450 rows
+		$runner = new OutboxRunner($db, $outbox, $p, $this->createMock(LoggerInterface::class));
+		$counts = $runner->runFor(30, 200);
+		$this->assertSame(450, array_sum($counts), 'three batches in one run');
+		$this->assertSame(0, (int)$db->rows('SELECT count(*) AS n FROM aps_search.outbox WHERE processed_at IS NULL')[0]['n']);
+	}
+
+	public function testAZeroBudgetStillTakesOneBatchSoTheQueueAlwaysMoves(): void {
+		[$db, $rules, , $p, $outbox] = $this->build();
+		$rules->addFolder(11, 'occ');
+		$db->execute("INSERT INTO aps_search.outbox (file_id, kind) SELECT g, 'file' FROM generate_series(1000, 1449) g");
+		$runner = new OutboxRunner($db, $outbox, $p, $this->createMock(LoggerInterface::class));
+		$this->assertSame(200, array_sum($runner->runFor(0, 200)));
+		$this->assertSame(250, (int)$db->rows('SELECT count(*) AS n FROM aps_search.outbox WHERE processed_at IS NULL')[0]['n']);
+	}
+
+	public function testHeldRowsDoNotMakeTheRunSpinForeverWhilePaused(): void {
+		[$db, $rules, $settings, $p, $outbox] = $this->build();
+		$rules->addFolder(11, 'occ');
+		$settings->setPaused(true);
+		$db->execute("INSERT INTO aps_search.outbox (file_id, kind) SELECT g, 'file' FROM generate_series(13, 17) g WHERE g IN (13, 17)");
+		$runner = new OutboxRunner($db, $outbox, $p, $this->createMock(LoggerInterface::class));
+		$start = microtime(true);
+		$runner->runFor(30, 200);
+		$this->assertLessThan(5, microtime(true) - $start, 'a run that can make no progress ends at once');
+	}
 }

@@ -28,6 +28,9 @@ class Application extends App implements IBootstrap {
 		] as $event) {
 			$context->registerEventListener($event, \OCA\BuscadorDocumental\Listener\OutboxListener::class);
 		}
+		foreach ([\OCP\User\Events\BeforeUserDeletedEvent::class, \OCP\User\Events\UserDeletedEvent::class] as $event) {
+			$context->registerEventListener($event, \OCA\BuscadorDocumental\Listener\UserDeletionListener::class);
+		}
 	}
 
 	public function boot(IBootContext $context): void {

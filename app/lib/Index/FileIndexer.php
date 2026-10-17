@@ -12,7 +12,7 @@ use OCA\BuscadorDocumental\Acl\FileFactsSource;
 use OCA\BuscadorDocumental\Acl\PrincipalWriter;
 use OCA\BuscadorDocumental\Db\IndexDb;
 
-/** Puts one file into the index pipeline: state, metadata, principals and a text job. Listeners calling it are S3. */
+/** Puts one file into the index pipeline: state, metadata (with its storage), principals and a text job. Called by the outbox processor. */
 class FileIndexer {
 	public function __construct(
 		private IndexDb $db,
@@ -41,9 +41,10 @@ class FileIndexer {
 			[$fileId, $facts->etag],
 		);
 		$this->db->execute(
-			'INSERT INTO aps_search.file_meta (file_id, name, mime, mtime) VALUES (?, ?, ?, ?)
-			 ON CONFLICT (file_id) DO UPDATE SET name = EXCLUDED.name, mime = EXCLUDED.mime, mtime = EXCLUDED.mtime',
-			[$fileId, $facts->name, $facts->mime, $facts->mtime],
+			'INSERT INTO aps_search.file_meta (file_id, name, mime, mtime, storage_id) VALUES (?, ?, ?, ?, ?)
+			 ON CONFLICT (file_id) DO UPDATE SET name = EXCLUDED.name, mime = EXCLUDED.mime, mtime = EXCLUDED.mtime,
+				storage_id = EXCLUDED.storage_id',
+			[$fileId, $facts->name, $facts->mime, $facts->mtime, $facts->storageId],
 		);
 		$this->acl->writeFacts($facts);
 		// Unclaimed jobs for an older etag are obsolete; claimed ones fail with etag_mismatch and are reclaimed.
