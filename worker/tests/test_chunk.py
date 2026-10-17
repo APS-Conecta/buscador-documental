@@ -248,3 +248,57 @@ def test_real_laws_chunk_within_bounds_and_cover_their_articles():
         assert len(set(headers)) >= 10, f"{name}: only {len(set(headers))} distinct article headers"
         n += 1
     assert n >= 1
+
+
+# ---------- S2 review fixes ----------
+def test_page_numbers_follow_the_page_even_without_blank_lines():
+    pages = [f"Línea uno de la Pagina{n}\nLínea dos de la Pagina{n}\nLínea tres" for n in range(1, 21)]
+    out = chunk.split(pages)
+    for c in out:
+        for n in range(1, 21):
+            if re.search(rf"Pagina{n}\b", c["text"]):
+                assert c["page_no"] == n, (n, c["page_no"])
+    assert {c["page_no"] for c in out} == set(range(1, 21))
+
+
+def test_a_label_only_article_keeps_its_own_page():
+    out = chunk.split(["Texto previo sin artículo.", "Artículo 5.-"])
+    assert out[-1]["text"].startswith("Artículo 5") and out[-1]["page_no"] == 2
+
+
+def test_sections_replace_their_own_level_instead_of_piling_up():
+    out = chunk.split(["TÍTULO I\nCapítulo 1\nArtículo 1.- uno.\nCapítulo 2\nArtículo 2.- dos."])
+    heads = {c["text"].splitlines()[0][:10]: c["heading"] for c in out}
+    assert heads["Artículo 1"] == "TÍTULO I › Capítulo 1 › Artículo 1"
+    assert heads["Artículo 2"] == "TÍTULO I › Capítulo 2 › Artículo 2"
+
+
+def test_a_new_titulo_clears_the_chapter_below_it():
+    out = chunk.split(["TÍTULO I\nCapítulo 1\nArtículo 1.- uno.\nTÍTULO II\nArtículo 2.- dos."])
+    assert [c["heading"] for c in out if c["text"].startswith("Artículo 2")] == ["TÍTULO II › Artículo 2"]
+
+
+@pytest.mark.parametrize("line", ["Párrafo segundo del artículo 5 dice que los datos se tratan.",
+                                  "Capítulo anterior al presente es aplicable en todo caso.",
+                                  "Capítulo 3 del presente reglamento establece que los datos personales deben tratarse con cuidado."])
+def test_wrapped_body_lines_are_not_headings(line):
+    out = chunk.split([f"Artículo 1.- Texto inicial.\n{line}"])
+    assert len(out) == 1 and line.split()[0] in out[0]["text"] and "›" not in (out[0]["heading"] or "").replace("Artículo 1", "")
+
+
+def test_a_huge_single_table_cell_is_split_not_refused():
+    row = "palabra " * 3000 + "\t" + "b"
+    out = chunk.split([row])
+    assert out and all(chunk.tokens(c["text"]) <= chunk.MAX_TOKENS for c in out)
+    assert words_of([row]) - words_of([c["text"] for c in out]) == set()
+
+
+def test_the_chunk_cap_is_enforced_while_chunking_not_after_the_whole_unit(monkeypatch):
+    monkeypatch.setattr(chunk, "MAX_CHUNKS", 5)
+    calls = []
+    real = chunk._render
+    monkeypatch.setattr(chunk, "_render", lambda *a, **k: (calls.append(1), real(*a, **k))[1])
+    text = " ".join(f"Oración{i} con contenido suficiente para llenar." for i in range(4000))
+    with pytest.raises(chunk.TooManyChunks):
+        chunk.split([text])
+    assert len(calls) <= 7, "stopped right after crossing the cap"

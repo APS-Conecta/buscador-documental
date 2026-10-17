@@ -3,7 +3,7 @@
 
 Units are articles ("Artículo 5º.") and the text between section lines (Título, Capítulo, Párrafo, Libro, disposiciones
 transitorias); documents without structure form one unit. Inside a unit, sentences (table rows whole) are packed up to
-TARGET tokens, every chunk repeats the unit's header as its first line, and consecutive chunks of the same unit overlap by
+TARGET tokens without crossing a page, every chunk repeats the unit's header as its first line, and consecutive chunks of the same unit overlap by
 whole trailing sentences up to OVERLAP_MAX tokens. Nothing is ever split inside a whitespace-separated token except a
 single token longer than the limits. A document that cannot fit MAX_CHUNKS is refused (TooManyChunks), never truncated.
 
@@ -30,9 +30,12 @@ RE_ARTICULO = re.compile(
     r"(?:\s*(?:º|°|\.º|bis|ter|quáter|quater|quinquies|sexies|septies|octies|nonies|decies))*)"
     r"\s*[.\-–]+(?!\d))")      # not "Artículo 21.719": a number with a thousands dot is a reference, not a header
 RE_ESTRUCTURA = re.compile(
-    r"^(T[ÍI]TULO|Cap[íi]tulo|CAP[ÍI]TULO|P[áa]rrafo|P[ÁA]RRAFO|LIBRO"
-    r"|[Dd]isposiciones\s+[Tt]ransitorias|DISPOSICIONES\s+TRANSITORIAS"
-    r"|[Aa]rt[íi]culos?\s+[Tt]ransitorios?)\b")
+    r"^(?P<kw>T[ÍI]TULO|Cap[íi]tulo|CAP[ÍI]TULO|P[áa]rrafo|P[ÁA]RRAFO|LIBRO)"
+    r"\s+(?:\d+|[IVXLC]+|Preliminar|Final|[ÚU]nico)(?:\s*[º°])?"
+    r"(?=\s*$|\s*[.:\-–—]|\s+[A-ZÁÉÍÓÚÑ])"          # a numeral, then nothing, punctuation or a capital: not "Capítulo 3 del presente..."
+    r"|^(?P<tr>[Dd]isposiciones\s+[Tt]ransitorias|DISPOSICIONES\s+TRANSITORIAS|[Aa]rt[íi]culos?\s+[Tt]ransitorios?)\b")
+LEVELS = {"LIBRO": 0, "TÍTULO": 1, "TITULO": 1, "CAPÍTULO": 2, "CAPITULO": 2, "PÁRRAFO": 3, "PARRAFO": 3}
+MAX_HEADING_LINE = 100
 RE_SENTENCE = re.compile(r"(?<=[.!?;:])\s+(?=[A-ZÁÉÍÓÚÑ¿¡«\"(])")
 
 
@@ -56,8 +59,8 @@ class _Atom:
 
 
 class _Unit:
-    def __init__(self, section, label):
-        self.section, self.label, self.atoms = section, label, []
+    def __init__(self, section, label, page=1):
+        self.section, self.label, self.page, self.atoms = section, label, page, []
 
 
 def _pieces(text: str, limit: int) -> list:
@@ -81,7 +84,8 @@ def _pieces(text: str, limit: int) -> list:
 
 
 def _units(pages: list) -> list:
-    units, section, pending = [], None, []
+    units, levels, pending = [], {}, []
+    section = None
     cur = None
     para = []                                    # buffered lines of the current paragraph, with the page of the first one
 
@@ -95,7 +99,7 @@ def _units(pages: list) -> list:
         if not text:
             return
         if cur is None:
-            cur = _Unit(section, None)
+            cur = _Unit(section, None, page)
             cur.atoms.extend(pending)
             pending.clear()
             units.append(cur)
@@ -103,6 +107,7 @@ def _units(pages: list) -> list:
             cur.atoms.append(_Atom(page, s, para=(i == 0)))
 
     for page_no, text in enumerate(pages, start=1):
+        flush()                                  # a paragraph never runs across a page, so every atom has its own page
         for raw in clean(text).split("\n"):
             line = raw.strip()
             if not line:
@@ -111,7 +116,7 @@ def _units(pages: list) -> list:
             m = RE_ARTICULO.match(line)
             if m:
                 flush()
-                cur = _Unit(section, " ".join(m.group(1).split()))   # label keeps its own punctuation: every input token survives
+                cur = _Unit(section, " ".join(m.group(1).split()), page_no)   # label keeps its own punctuation: every input token survives
                 cur.atoms.extend(pending)
                 pending.clear()
                 units.append(cur)
@@ -119,16 +124,20 @@ def _units(pages: list) -> list:
                 if rest:
                     para = [(page_no, rest)]
                 continue
-            if RE_ESTRUCTURA.match(line):
+            hm = RE_ESTRUCTURA.match(line) if len(line) <= MAX_HEADING_LINE else None
+            if hm:
                 flush()
                 cur = None
-                section = (section + " › " + line) if section and not re.match(r"(?i)^(t[ií]tulo|libro)", line) else line
+                level = LEVELS.get((hm.group("kw") or "").upper(), 1)      # transitory provisions sit at title level
+                levels = {k: v for k, v in levels.items() if k < level}
+                levels[level] = line
+                section = " › ".join(levels[k] for k in sorted(levels))
                 pending.append(_Atom(page_no, line, para=True))
                 continue
             if "\t" in raw:
                 flush()
                 if cur is None:
-                    cur = _Unit(section, None)
+                    cur = _Unit(section, None, page_no)
                     cur.atoms.extend(pending)
                     pending.clear()
                     units.append(cur)
@@ -137,7 +146,7 @@ def _units(pages: list) -> list:
             para.append((page_no, line))
     flush()
     if pending:                                   # section lines with nothing after them
-        u = _Unit(section, None)
+        u = _Unit(section, None, pending[0].page)
         u.atoms.extend(pending)
         units.append(u)
     return units
@@ -171,7 +180,10 @@ def _chunks_for(u: _Unit, base_ord: int) -> list:
                 cells = a.text.split("\t")
                 if len(cells) > 1:
                     group, size = [], 0
+                    expanded = []
                     for c in cells:
+                        expanded.extend(_pieces(c, limit) if tokens(c) > limit else [c])
+                    for c in expanded:
                         if group and size + tokens(c) > limit:
                             atoms.append(_Atom(a.page, "\t".join(group), row=True, para=True))
                             group, size = [], 0
@@ -184,7 +196,7 @@ def _chunks_for(u: _Unit, base_ord: int) -> list:
         else:
             atoms.append(a)
     if not atoms:
-        return [{"page_no": 1, "ord": base_ord, "heading": _heading(u), "text": prefix}] if prefix else []
+        return [{"page_no": u.page, "ord": base_ord, "heading": _heading(u), "text": prefix}] if prefix else []
 
     out, i = [], 0
     while i < len(atoms):
@@ -193,15 +205,18 @@ def _chunks_for(u: _Unit, base_ord: int) -> list:
         used = p
         while i < len(atoms):
             t = tokens(atoms[i].text) + 1
-            if batch and used + t > TARGET:
-                break
+            if batch and (used + t > TARGET or atoms[i].page != batch[0].page):
+                break                         # chunks never cross a page: "open at page N" must land on the text
             batch.append(atoms[i])
             used += t
             i += 1
         text = _render(prefix, batch)
         out.append({"page_no": batch[0].page, "ord": base_ord + len(out), "heading": _heading(u), "text": text})
-        if i < len(atoms):
+        if base_ord + len(out) > MAX_CHUNKS:
+            raise TooManyChunks(base_ord + len(out))
+        if i < len(atoms) and atoms[i].page == batch[-1].page:
             # overlap: step back over whole trailing sentences that fit the budget, but never to the chunk start
+            # (and not across a page break, where the next chunk starts clean)
             back, budget = 0, OVERLAP_MAX
             for a in reversed(batch[1:]):
                 t = tokens(a.text) + 1
