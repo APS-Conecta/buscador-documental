@@ -5,8 +5,14 @@ import sys
 
 import extract
 import ocr
+import pdfocr
 
 OCR_KINDS = (b"%PDF", b"\x89PNG", b"\xff\xd8\xff", b"II*\x00", b"MM\x00*")
+
+
+def req_is_pdf(path):
+    with open(path, "rb") as fh:
+        return fh.read(4) == b"%PDF"
 
 
 def main(req_path: str, res_path: str) -> None:
@@ -17,8 +23,10 @@ def main(req_path: str, res_path: str) -> None:
         with open(req["input"], "rb") as fh:
             needs_ocr = fh.read(4).startswith(OCR_KINDS)
         if needs_ocr:
-            pages = ocr.run(req["input"])                  # STUB(S2 phase 3): per-page text-layer policy
-        out = {"status": "ok", "pages": pages, "ocr_ver": ocr.version() if needs_ocr else "extract-1"}
+            out = {"status": "ok", **pdfocr.run(req["input"], layer=pages if pages and req_is_pdf(req["input"]) else None),
+                   "ocr_ver": pdfocr.version()}
+        else:
+            out = {"status": "ok", "pages": pages, "ocr_ver": "extract-1"}
     except extract.Refusal as e:
         out = {"status": "error", "reason": e.reason, "detail": str(e)}
     except ocr.OcrTimeout:

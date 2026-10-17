@@ -133,3 +133,24 @@ def test_unsupported_mime_type_is_skipped_not_parsed(monkeypatch):
     monkeypatch.setattr(main, "parse", lambda *a: called.append(1))
     assert run(FakeConn(), FakeApi(meta={"mime": "application/x-msdownload", "etag": "e", "size": 4})) == "failed:unsupported"
     assert not called
+
+
+def test_confidence_and_source_reach_write_result(monkeypatch):
+    import json
+    monkeypatch.setattr(main, "parse", lambda *a: {"status": "ok", "pages": ["uno", "dos"], "conf": [None, 91.5],
+                                                    "source": ["layer", "ocr"], "ocr_ver": "ver-x"})
+    conn = FakeConn()
+    assert run(conn, FakeApi()) == "indexed"
+    call = [c for c in conn.calls if "write_result" in c[0]][0][1]
+    rows = json.loads(call[4])
+    assert [(r["source"], r["ocr_conf"]) for r in rows] == [("layer", None), ("ocr", 91.5)]
+    assert call[6] == "ver-x"
+
+
+def test_answers_without_confidence_still_index(monkeypatch):
+    import json
+    monkeypatch.setattr(main, "parse", lambda *a: {"status": "ok", "pages": ["uno"]})
+    conn = FakeConn()
+    assert run(conn, FakeApi()) == "indexed"
+    rows = json.loads([c for c in conn.calls if "write_result" in c[0]][0][1][4])
+    assert rows == [{"page_no": 1, "text": "uno", "ocr_conf": None, "source": "ocr"}]

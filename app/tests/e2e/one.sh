@@ -38,6 +38,8 @@ STATE=$($PSQL -c "select text_state from aps_search.file_state where file_id=$FI
 CHUNKS=$($PSQL -c "select count(*) from aps_search.chunk where file_id=$FID")
 HIT=$($PSQL -c "select count(*) from aps_search.chunk where file_id=$FID and tsv @@ websearch_to_tsquery('aps_search.spanish_unaccent','hemoglobina glicosilada nutrición')")
 JOBS=$($PSQL -c "select count(*) from aps_search.job where file_id=$FID")
+CONF=$($PSQL -c "select count(*) from aps_search.page where file_id=$FID and source='ocr' and ocr_conf between 1 and 100")
+[ "$CONF" -ge 1 ] || { echo "no OCR confidence stored"; exit 1; }
 echo "state=$STATE chunks=$CHUNKS hit=$HIT jobs_left=$JOBS"
 [ "$STATE" = indexed ] && [ "$CHUNKS" -gt 0 ] && [ "$HIT" -ge 1 ] && [ "$JOBS" = 0 ]
 # The channel refuses unauthenticated and badly signed callers with an empty body.

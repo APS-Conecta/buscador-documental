@@ -32,13 +32,15 @@ fx.pptx(o/'good.pptx', [['Diapositiva sobre hipertensión']])
 fx.odt(o/'good.odt', ['Acta de reunión del comité'])
 fx.txt(o/'good.txt', 'Nota sobre nutrición infantil')
 fx.pdf_text(o/'good.pdf', text='Receta de hemoglobina glicosilada')
+fx.scan_pdf(o/'rotated.pdf', rotate=90)
+fx.scan_pdf(o/'fakelayer.pdf', garbage_layer=True)
 fx.zip_bomb_docx(o/'bomb.docx')
 fx.truncated_zip(o/'broken.docx')
 fx.pdf_text(o/'locked.pdf', encrypt=('o', 'user-secret'))
 fx.pixel_bomb_png(o/'pixels.png')
 "
 $C exec -T --user www-data nextcloud mkdir -p "$DATA"
-declare -A WANT=( [good.docx]=indexed [good.xlsx]=indexed [good.pptx]=indexed [good.odt]=indexed [good.txt]=indexed [good.pdf]=indexed
+declare -A WANT=( [good.docx]=indexed [good.xlsx]=indexed [good.pptx]=indexed [good.odt]=indexed [good.txt]=indexed [good.pdf]=indexed [rotated.pdf]=indexed [fakelayer.pdf]=indexed
                   [bomb.docx]=skipped:unsafe [broken.docx]=skipped:corrupt [locked.pdf]=skipped:encrypted [pixels.png]=skipped:unsafe )
 declare -A SHA
 for f in "${!WANT[@]}"; do
@@ -70,6 +72,8 @@ for pair in "good.docx:vacunacion invierno" "good.xlsx:glicemia" "good.pptx:hipe
   n=$(hit "${pair%%:*}" "${pair#*:}")
   [ "$n" -ge 1 ] || { echo "FAIL ${pair%%:*}: no hit for '${pair#*:}'"; fail=1; }
 done
+[ "$($PSQL -c "select count(*) from aps_search.page p join aps_search.file_meta m using (file_id) where m.name in ('rotated.pdf','fakelayer.pdf') and p.source='ocr' and p.ocr_conf > 0")" = 2 ] || { echo "FAIL: OCR'd pages lack confidence"; fail=1; }
+[ "$($PSQL -c "select count(*) from aps_search.page p join aps_search.file_meta m using (file_id) where m.name='good.pdf' and p.source='layer' and p.ocr_conf is null")" = 1 ] || { echo "FAIL: native page should keep its text layer"; fail=1; }
 [ "$($PSQL -c "select count(*) from aps_search.job")" = 0 ] || { echo "FAIL jobs left behind"; fail=1; }
 [ "$fail" = 0 ] && echo "formats OK (${#WANT[@]} files)"
 exit $fail

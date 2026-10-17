@@ -4,6 +4,7 @@ import json
 import fixtures as fx
 import ocr
 import parse_job
+import pdfocr
 
 
 def run(tmp_path, path, **extra):
@@ -14,19 +15,19 @@ def run(tmp_path, path, **extra):
 
 
 def test_born_digital_documents_are_extracted_without_ocr(tmp_path, monkeypatch):
-    monkeypatch.setattr(ocr, "run", lambda p: (_ for _ in ()).throw(AssertionError("no OCR for a docx")))
+    monkeypatch.setattr(pdfocr, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no OCR for a docx")))
     out = run(tmp_path, fx.docx(tmp_path / "a.docx", ["Hola"]))
     assert out["status"] == "ok" and out["pages"] == ["Hola"] and "ocr_ver" in out
 
 
 def test_pdfs_and_images_go_through_ocr_after_the_safety_checks(tmp_path, monkeypatch):
-    monkeypatch.setattr(ocr, "run", lambda p: ["texto reconocido"])
+    monkeypatch.setattr(pdfocr, "run", lambda path, layer=None: {"pages": ["texto reconocido"], "conf": [88.0], "source": ["ocr"]})
     out = run(tmp_path, fx.pdf_text(tmp_path / "a.pdf"))
-    assert out["status"] == "ok" and out["pages"] == ["texto reconocido"]
+    assert out["status"] == "ok" and out["pages"] == ["texto reconocido"] and out["conf"] == [88.0] and out["source"] == ["ocr"]
 
 
 def test_refusals_carry_the_database_reason(tmp_path, monkeypatch):
-    monkeypatch.setattr(ocr, "run", lambda p: ["no"])
+    monkeypatch.setattr(pdfocr, "run", lambda *a, **k: {"pages": ["no"], "conf": [None], "source": ["layer"]})
     assert run(tmp_path, fx.zip_bomb_docx(tmp_path / "b.docx"))["reason"] == "unsafe"
     assert run(tmp_path, fx.pdf_text(tmp_path / "e.pdf", encrypt=("o", "u")))["reason"] == "encrypted"
     assert run(tmp_path, fx.truncated_zip(tmp_path / "t.docx"))["reason"] == "corrupt"

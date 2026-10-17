@@ -103,8 +103,10 @@ def process(conn, api, dsn, job_id, epoch, file_id):
             chunks = chunk.split(pages)
         except chunk.TooManyChunks:
             return fail(conn, job_id, epoch, "too_large", False)
-        pages = [chunk.clean(t) for t in pages]
-        page_rows = [{"page_no": i, "text": t, "ocr_conf": None, "source": "ocr"} for i, t in enumerate(pages, start=1)]
+        confs = answer.get("conf") or [None] * len(pages)
+        sources = answer.get("source") or ["ocr"] * len(pages)
+        page_rows = [{"page_no": i, "text": chunk.clean(t), "ocr_conf": confs[i - 1], "source": sources[i - 1]}
+                     for i, t in enumerate(pages, start=1)]
         conn.execute("SELECT aps_search.write_result(%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s)",
                      (job_id, epoch, meta["etag"], content_hash, json.dumps(page_rows), json.dumps(chunks),
                       answer.get("ocr_ver", "unknown"), chunk.CHUNKER_VER))
