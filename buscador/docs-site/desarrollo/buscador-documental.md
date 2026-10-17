@@ -46,7 +46,7 @@ La etapa S1 entrega el recorrido completo mínimo: una aplicación de Nextcloud 
 - **Extractores.** Texto, Word, presentaciones, formato abierto, hojas de cálculo y PDF, con topes de tamaño, expansión de archivos comprimidos (100 a 1 y 1 GB), profundidad XML, entidades XML, píxeles (50 MP), páginas (300) y celdas (1 000 000). Todo rechazo termina en un motivo de omisión (`unsafe`, `corrupt`, `encrypted`, `too_large`).
 - **Reconocimiento (ADR-0012).** Cada página de un PDF se clasifica: texto nativo (se conserva), solo imagen (se lee) o texto no fiable (se descarta y se lee). Una página con una imagen del tamaño de un escaneo se lee siempre desde la imagen. Se guarda la confianza media de Tesseract de las páginas leídas.
 - **Fragmentación.** Los artículos y las secciones son las unidades; cada fragmento repite su encabezado; el solapamiento ocurre solo dentro de una unidad; las filas de tabla no se parten; un documento que no cabe se rechaza en lugar de truncarse.
-- **Criterio A-QUAL-1.** Con 406 páginas sintéticas: CER 0,24 %, WER 0,53 %. La primera política falló (CER 4,80 %) y se reemplazó; el motivo está en la ADR-0012. El corpus es sintético, por lo que el resultado es provisional hasta contar con documentos reales.
+- **Criterio A-QUAL-1.** Con 406 páginas sintéticas: CER 0,25 %, WER 0,57 %. La primera política falló (CER 4,80 %) y se reemplazó; el motivo está en la ADR-0012. El corpus es sintético, por lo que el resultado es provisional hasta contar con documentos reales.
 
 ## Pruebas
 

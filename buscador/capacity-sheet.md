@@ -38,6 +38,6 @@ Status: **indicative**. Measured by the S0 harness on a synthetic Spanish corpus
 
 ## S2 additions (2026-10-17)
 - **OCR through the shipped pipeline** (`policy=perpage-2`: classify per page, one-page ocrmypdf, Tesseract TSV for confidence, pages with a scan-sized image always read from the image): 406-page synthetic corpus in 2 463 s on the shared 8-core box, one page at a time. About 193 pages are read from an image (23 fake-layer + 4 photo + 105 scanned + roughly half of the 122 mixed pages, whose exact split the summary does not record), so roughly 13 s per OCR'd page including the confidence pass; load average was not recorded and the box is shared. S0 measured 6.0 s/page through ocrmypdf alone: the extra Ghostscript rasterise and Tesseract TSV pass (decision C in the S2 blueprint) and one ocrmypdf start per page account for the difference, unmeasured separately.
-- **Accuracy:** pooled CER 0.24 %, WER 0.53 % (A-QUAL-1 gate: 2 % / 5 %); see `acceptance.md` and ADR-0012.
+- **Accuracy:** pooled CER 0.25 %, WER 0.57 % on the final code after the S2 review fixes (A-QUAL-1 gate: 2 % / 5 %); see `acceptance.md` and ADR-0012.
 - **Re-OCR cost of decision 6:** a well-OCR'd scan from a scanner is read again; the saving of trusting such layers needs an OCR-sample comparison and is left to S5.
 - **Chunks:** the six real laws give 20 to 190 chunks each, mean 135-219 tokens, max 350 (target 350, limit 500).
