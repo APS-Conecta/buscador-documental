@@ -7,6 +7,7 @@ declare(strict_types=1);
 namespace OCA\BuscadorDocumental\Reconcile;
 
 use OCA\BuscadorDocumental\Acl\ExclusionChecker;
+use OCA\BuscadorDocumental\Audit\Pseudonyms;
 use OCA\BuscadorDocumental\Db\IndexDb;
 use OCA\BuscadorDocumental\Index\Outbox;
 use OCA\BuscadorDocumental\Scope\ScopeRules;
@@ -35,11 +36,14 @@ class Reconciler {
 	public const ACL_EVERY_DAYS = 7;
 	private const REASONS = "'excluded', 'out_of_scope', 'trashed', 'user_deleted'";
 
-	public function __construct(private IndexDb $db, private ScopeRules $rules, private int $window = 5000) {
+	public function __construct(private IndexDb $db, private ScopeRules $rules, private int $window = 5000, private ?\OCP\IUserManager $users = null) {
 	}
 
 	/** Inside the window, and either a run is open or none finished on this local date. */
 	public function due(\DateTimeImmutable $now, string $window): bool {
+		if ((new Settings($this->db))->get('reconcile_now') === '1') {
+			return true;                                  // the scope rules or the mode changed: do not wait for tonight
+		}
 		if (!ReconcileWindow::contains($window, $now)) {
 			return false;
 		}
@@ -69,6 +73,7 @@ class Reconciler {
 				$counts['queued_today'] = 0;
 			}
 			if ($run['phase'] === 'forward' && (int)($counts['queued_today'] ?? 0) >= $this->cap()) {
+				$counts += $this->houseIfDue();               // a long backfill must not keep the ledger and the audit from being pruned
 				$this->save($run['id'], $run['phase'], $run['cursor'], $counts);
 				return ['finished' => false, 'suspended' => true, 'phase' => $run['phase'], 'counts' => $counts];
 			}
@@ -78,6 +83,7 @@ class Reconciler {
 				$this->db->execute('UPDATE aps_search.reconcile_run SET phase = ?, cursor_file_id = ?, counts = ?::jsonb, finished_at = now() WHERE run_id = ?',
 					[$phase, $cursor, json_encode($counts), $run['id']]);
 				$this->db->execute('DELETE FROM aps_search.reconcile_node WHERE run_id = ?', [$run['id']]);
+				$this->db->execute("DELETE FROM aps_search.settings WHERE key = 'reconcile_now'");       // a full evaluation has now seen the changed rules
 				return ['finished' => true, 'phase' => $phase, 'counts' => $counts];
 			}
 			$this->save($run['id'], $phase, $cursor, $counts);
@@ -230,14 +236,51 @@ class Reconciler {
 		return $v === null ? self::DEFAULT_CAP : max(1, (int)$v);
 	}
 
+	/** Rows indexed before S3 carry no storage id; learn it from the file cache, a batch a night. */
+	private function backfillStorage(): int {
+		return $this->db->execute(
+			'UPDATE aps_search.file_meta fm SET storage_id = f.storage FROM *PREFIX*filecache f
+			 WHERE f.fileid = fm.file_id AND fm.storage_id IS NULL
+			   AND fm.file_id IN (SELECT file_id FROM aps_search.file_meta WHERE storage_id IS NULL ORDER BY file_id LIMIT 50000)',
+		);
+	}
+
+	/** A uid mapped to an audit token must disappear with its user, also when the erasure step itself failed. */
+	private function forgetVanishedUsers(): int {
+		if ($this->users === null) {
+			return 0;
+		}
+		$n = 0;
+		foreach ($this->db->rows('SELECT uid FROM aps_search.pseudonym') as $r) {
+			$uid = (string)$r['uid'];
+			if (!in_array($uid, Pseudonyms::NON_PEOPLE, true) && !$this->users->userExists($uid)) {
+				(new Pseudonyms($this->db))->forget($uid);
+				$n++;
+			}
+		}
+		return $n;
+	}
+
+	/** Housekeeping at most once a day outside the normal end of a run. @return array<string, int> */
+	private function houseIfDue(): array {
+		$last = (new Settings($this->db))->get('last_house_at');
+		if ($last !== null && strtotime($last) > time() - 20 * 3600) {
+			return [];
+		}
+		return $this->housekeeping();
+	}
+
 	/** @return array<string, int> */
 	private function housekeeping(): array {
 		$settings = new Settings($this->db);
+		$settings->set('last_house_at', gmdate('Y-m-d\TH:i:s\Z'));
 		$days = (int)($settings->get('audit_retention_days') ?? 90);
 		$out = [
 			'tombstones_purged' => $this->db->execute('DELETE FROM aps_search.tombstone WHERE purge_after IS NOT NULL AND purge_after < now()'),
 			'audit_pruned' => $this->db->execute('DELETE FROM aps_search.audit_log WHERE at < now() - make_interval(days => ?)', [$days]),
 			'outbox_pruned' => (new Outbox($this->db))->prune(),
+			'storage_backfilled' => $this->backfillStorage(),
+			'pseudonyms_forgotten' => $this->forgetVanishedUsers(),
 		];
 		$this->db->execute('DELETE FROM aps_search.reconcile_run WHERE finished_at IS NOT NULL AND run_id NOT IN (SELECT run_id FROM aps_search.reconcile_run ORDER BY run_id DESC LIMIT 30)');
 		return $out;

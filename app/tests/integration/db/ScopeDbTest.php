@@ -211,4 +211,24 @@ class ScopeDbTest extends DbTestCase {
 		$this->assertNull($t->node(999));
 		$this->assertSame(['storage' => 1, 'path' => 'files/top', 'parent' => 10], $t->node(11));
 	}
+
+	/** @dataProvider lookalikes */
+	public function testOnlyLocalStoragesInsideTheDataDirectoryCountAsTeamFolders(string $storageId, string $expected): void {
+		$admin = self::connect('postgres', 'dev', self::$dbName);
+		$admin->exec('DROP TABLE IF EXISTS oc_storages');
+		$admin->exec('CREATE TABLE oc_storages (numeric_id bigint primary key, id text)');
+		$admin->prepare('INSERT INTO oc_storages VALUES (50, ?)')->execute([$storageId]);
+		$admin->exec('GRANT SELECT ON oc_storages TO nextcloud');
+		$this->assertSame($expected, (new FileTree($this->connection($this->app())))->storageKind(50));
+	}
+
+	public static function lookalikes(): array {
+		return [
+			'a real team folder' => ['local::/var/www/html/data/__groupfolders/3/', 'groupfolder'],
+			'without the slash' => ['local::/var/www/html/data/__groupfolders/3', 'groupfolder'],
+			'an external mount that merely ends alike' => ['smb::fileserver//share/__groupfolders/3/', 'other'],
+			'no local prefix' => ['__groupfolders/3/', 'other'],
+			'another object store' => ['object::store:bucket__groupfolders/3', 'other'],
+		];
+	}
 }

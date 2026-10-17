@@ -49,6 +49,7 @@ class ScopeRules {
 			return false;
 		}
 		$this->audit->record($actorUid, 'scope.remove', null, ['rule_id' => $id, 'kind' => (string)$rows[0]['kind']]);
+		(new Settings($this->db))->requestEvaluation();
 		return true;
 	}
 
@@ -71,6 +72,7 @@ class ScopeRules {
 			$kind, $fileId, (new \OCA\BuscadorDocumental\Audit\Pseudonyms($this->db))->tokenFor($actorUid),
 		])[0]['id'];
 		$this->audit->record($actorUid, 'scope.add', null, ['rule_id' => $id, 'kind' => $kind]);
+		(new Settings($this->db))->requestEvaluation();
 		return $id;
 	}
 }

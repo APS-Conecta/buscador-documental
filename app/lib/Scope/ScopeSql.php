@@ -14,7 +14,7 @@ use OCA\BuscadorDocumental\Db\IndexDb;
  * It must return exactly the files ScopePredicate accepts (tested against the same fixture).
  */
 final class ScopeSql {
-	private const STORAGE_OK = "(s.id LIKE 'home::%' OR s.id ~ '__groupfolders/[0-9]+/?$')";
+	private const STORAGE_OK = "(s.id LIKE 'home::%' OR s.id ~ '^local::/.+/__groupfolders/[0-9]+/?$')";
 
 	/** @return array{0: string, 1: list<string>} SQL returning one column, file_id, of indexable non-directory files */
 	public static function eligible(ScopeSet $set): array {
@@ -28,7 +28,7 @@ final class ScopeSql {
 				$params[] = '{' . implode(',', array_map('intval', $set->folderIds)) . '}';
 			}
 			if ($set->allGroupfolders) {
-				$parts[] = "SELECT c.fileid FROM *PREFIX*filecache c JOIN *PREFIX*storages s ON s.numeric_id = c.storage WHERE s.id ~ '__groupfolders/[0-9]+/?\$'";
+				$parts[] = "SELECT c.fileid FROM *PREFIX*filecache c JOIN *PREFIX*storages s ON s.numeric_id = c.storage WHERE s.id ~ '^local::/.+/__groupfolders/[0-9]+/?\$'";
 			}
 		}
 		if ($parts === []) {

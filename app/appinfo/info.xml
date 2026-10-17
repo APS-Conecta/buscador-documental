@@ -16,6 +16,11 @@
         <database min-version="18">pgsql</database>
         <nextcloud min-version="34" max-version="34"/>
     </dependencies>
+    <repair-steps>
+        <post-migration>
+            <step>OCA\BuscadorDocumental\Migration\EnsureExclusionTag</step>
+        </post-migration>
+    </repair-steps>
     <background-jobs>
         <job>OCA\BuscadorDocumental\Job\ProcessOutbox</job>
         <job>OCA\BuscadorDocumental\Job\Reconcile</job>

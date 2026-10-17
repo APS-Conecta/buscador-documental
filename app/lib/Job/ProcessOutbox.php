@@ -24,7 +24,7 @@ class ProcessOutbox extends TimedJob {
 	}
 
 	protected function run($argument): void {
-		$this->runner->cycle(45, 200, 500);            // permission changes first, then the outbox (up to 45 s of the 60 s interval)
+		$this->runner->cycle(25, 200, 500);            // permission changes first, then the outbox; short, because AJAX cron holds a web worker
 		$this->outbox->prune();
 	}
 }

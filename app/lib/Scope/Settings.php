@@ -42,6 +42,12 @@ class Settings {
 			throw new ScopeLocked('all_readable needs counsel confirmation and a recorded DPIA first (ADR-0006).');
 		}
 		$this->set('scope_mode', $mode);
+		$this->requestEvaluation();
+	}
+
+	/** The rules or the mode changed: the reconciliation should look at everything soon, not at the next window. */
+	public function requestEvaluation(): void {
+		$this->set('reconcile_now', '1');
 	}
 
 	public function isPaused(): bool {

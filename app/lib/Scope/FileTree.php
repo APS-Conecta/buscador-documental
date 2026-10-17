@@ -39,7 +39,7 @@ class FileTree {
 		}
 		$id = $this->db->executeQuery('SELECT id FROM *PREFIX*storages WHERE numeric_id = ?', [$storage])->fetchOne();
 		$id = $id === false ? '' : (string)$id;
-		$kind = str_starts_with($id, 'home::') ? 'home' : (preg_match('#__groupfolders/\d+/?$#', $id) === 1 ? 'groupfolder' : 'other');
+		$kind = str_starts_with($id, 'home::') ? 'home' : (preg_match('#^local::/.+/__groupfolders/\d+/?$#', $id) === 1 ? 'groupfolder' : 'other');
 		return $this->kinds[$storage] = $kind;
 	}
 }

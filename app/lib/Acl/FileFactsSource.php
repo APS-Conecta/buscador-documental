@@ -63,7 +63,7 @@ class FileFactsSource {
 		// Groupfolders >= 4 give every folder its own storage (`local::<datadir>/__groupfolders/<id>/`) and its files are
 		// `files/...` on it, so the folder id is in the storage id. Older layouts put `__groupfolders/<id>/` in the path.
 		$folderId = null;
-		if (preg_match('#__groupfolders/(\d+)/?$#', (string)$row['storage_id'], $m) === 1
+		if (preg_match('#^local::/.+/__groupfolders/(\d+)/?$#', (string)$row['storage_id'], $m) === 1
 			|| preg_match('#^__groupfolders/(\d+)/#', (string)$row['path'], $m) === 1) {
 			$folderId = (int)$m[1];
 		}

@@ -32,8 +32,9 @@ class PurgeUser extends Command {
 			$output->writeln('<error>Give a user id or --storage-id</error>');
 			return 1;
 		}
-		$n = $storage !== null ? $this->purger->purgeStorage((int)$storage) : $this->purger->purgeUser((string)$uid);
+		$n = $storage !== null ? $this->purger->purgeStorageAudited((int)$storage) : $this->purger->purgeUser((string)$uid);
 		$output->writeln("erased: $n");
+		$output->writeln('Files that are still in scope will be read again at the next reconciliation: remove the rule or tag them rag-excluded to keep them out.');
 		return 0;
 	}
 }

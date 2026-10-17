@@ -46,7 +46,7 @@ class ReconcileTest extends DbTestCase {
 		$a->prepare("INSERT INTO aps_search.file_meta (file_id, name, storage_id) VALUES (?, 'f', ?)")->execute([$id, $storage]);
 	}
 
-	private function reconciler(array $folderRules = [11], bool $groupfolders = false, int $window = 4): array {
+	private function reconciler(array $folderRules = [11], bool $groupfolders = false, int $window = 4, ?\OCP\IUserManager $users = null): array {
 		$this->fixture();
 		$conn = $this->connection($this->app());
 		$counting = $this->createMock(\OCP\IDBConnection::class);
@@ -64,7 +64,8 @@ class ReconcileTest extends DbTestCase {
 		if ($groupfolders) {
 			$rules->addGroupfolders('occ');
 		}
-		return [new Reconciler($db, $rules, window: $window), $db];
+		$db->execute("DELETE FROM aps_search.settings WHERE key = 'reconcile_now'");        // setting up the rules is not a change to react to
+		return [new Reconciler($db, $rules, window: $window, users: $users), $db, $rules];
 	}
 
 	/** @return list<int> */
@@ -308,5 +309,66 @@ class ReconcileTest extends DbTestCase {
 		$done = $this->finish($r);
 		$this->assertSame(5, $done['counts']['reverse']);
 		$this->assertSame(3, $done['counts']['queued_today'], 'only the three additions are counted, not the five removals');
+	}
+
+	// ---- S3 review fixes ----
+	private function outsideTheWindow(): \DateTimeImmutable {
+		return new \DateTimeImmutable('2026-10-17 12:00:00');
+	}
+
+	public function testChangingTheRulesMakesTheNextEvaluationDueAtOnce(): void {
+		[$r, $db, $rules] = $this->reconciler();
+		$this->finish($r);
+		$this->assertFalse($r->due($this->outsideTheWindow(), '01:00-05:00'), 'finished today, outside the window');
+		$id = $rules->addFolder(14, 'occ');
+		$this->assertTrue($r->due($this->outsideTheWindow(), '01:00-05:00'), 'adding a rule: do not wait for tonight');
+		$this->finish($r);
+		$this->assertFalse($r->due($this->outsideTheWindow(), '01:00-05:00'), 'evaluated: due again only tonight');
+		$rules->remove($id, 'occ');
+		$this->assertTrue($r->due($this->outsideTheWindow(), '01:00-05:00'), 'removing a rule: what it covered must go soon');
+	}
+
+	public function testSwitchingTheModeAlsoTriggersAnEvaluation(): void {
+		[$r, $db] = $this->reconciler();
+		$this->finish($r);
+		$settings = new \OCA\BuscadorDocumental\Scope\Settings($db);
+		$settings->set('counsel_confirmed_at', '2026-11-01');
+		$settings->set('dpia_ref', 'DPIA-1');
+		$settings->setScopeMode('all_readable');
+		$this->assertTrue($r->due($this->outsideTheWindow(), '01:00-05:00'));
+	}
+
+	public function testHousekeepingStillRunsWhileTheAdditionsCapSuspendsTheRun(): void {
+		[$r, $db] = $this->reconciler();
+		$db->execute("INSERT INTO aps_search.settings (key, value) VALUES ('reconcile_cap', '1')");
+		$db->execute("INSERT INTO aps_search.tombstone (file_id, reason, purge_after) VALUES (1, 'trashed', now() - interval '1 day')");
+		$db->execute("INSERT INTO aps_search.audit_log (at, actor, action) VALUES (now() - interval '91 days', 'x', 'scope.add')");
+		for ($i = 0; $i < 20; $i++) {
+			if ($r->runOnce(30, '2026-10-17')['suspended'] ?? false) {
+				break;
+			}
+		}
+		$this->assertSame(0, (int)$db->rows('SELECT count(*) AS n FROM aps_search.tombstone')[0]['n'], 'a long backfill cannot keep the ledger from being pruned');
+		$this->assertSame(0, (int)$db->rows("SELECT count(*) AS n FROM aps_search.audit_log WHERE at < now() - interval '90 days'")[0]['n']);
+	}
+
+	public function testPseudonymsOfUsersWhoNoLongerExistAreForgotten(): void {
+		$users = $this->createMock(\OCP\IUserManager::class);
+		$users->method('userExists')->willReturnCallback(static fn (string $uid): bool => $uid === 'alice');
+		[$r, $db] = $this->reconciler(users: $users);
+		foreach (['alice', 'ghost', 'system', 'occ'] as $uid) {
+			(new Pseudonyms($db))->tokenFor($uid);
+		}
+		$this->finish($r);
+		$left = array_column($db->rows('SELECT uid FROM aps_search.pseudonym ORDER BY uid'), 'uid');
+		$this->assertSame(['alice'], $left, 'ghost is gone; system and occ were never people');
+	}
+
+	public function testOlderFileMetaRowsGetTheirStorageIdBackfilled(): void {
+		[$r, $db] = $this->reconciler();
+		$db->execute("INSERT INTO aps_search.file_meta (file_id, name, storage_id) VALUES (13, 'f', NULL), (15, 'f', NULL), (99, 'f', NULL)");
+		$this->finish($r);
+		$rows = $db->rows('SELECT file_id, storage_id FROM aps_search.file_meta ORDER BY file_id');
+		$this->assertSame([[13, 1], [15, 1], [99, null]], array_map(static fn (array $x): array => [(int)$x['file_id'], $x['storage_id'] === null ? null : (int)$x['storage_id']], $rows), 'known files learn their storage; an unknown one stays NULL');
 	}
 }

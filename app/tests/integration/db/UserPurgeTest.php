@@ -22,7 +22,9 @@ class UserPurgeTest extends DbTestCase {
 		$admin->exec('DROP TABLE IF EXISTS oc_storages');
 		$admin->exec('CREATE TABLE oc_storages (numeric_id bigint primary key, id text)');
 		$admin->exec("INSERT INTO oc_storages VALUES (7, 'home::alice'), (8, 'home::bob')");
-		$admin->exec('GRANT SELECT ON oc_storages TO nextcloud');
+		$admin->exec('DROP TABLE IF EXISTS oc_filecache');
+		$admin->exec('CREATE TABLE oc_filecache (fileid bigint primary key, storage bigint)');
+		$admin->exec('GRANT SELECT ON oc_storages, oc_filecache TO nextcloud');
 		return [new UserPurger($db, $conn, new AuditLog($db, $p), $p), $db, $p];
 	}
 
@@ -96,5 +98,44 @@ class UserPurgeTest extends DbTestCase {
 		[$purger] = $this->purger();
 		$this->indexed(1, 77);
 		$this->assertSame(1, $purger->purgeStorage(77));
+	}
+
+	public function testRecordingThePendingDeletionBackfillsOlderRowsSoTheyAreFound(): void {
+		[$purger, $db] = $this->purger();
+		$admin = self::connect('postgres', 'dev', self::$dbName);
+		$admin->exec('INSERT INTO oc_filecache VALUES (1, 7), (2, 7), (3, 8)');
+		foreach ([1, 2, 3] as $id) {
+			$this->indexed($id, 0);
+			$db->execute('UPDATE aps_search.file_meta SET storage_id = NULL WHERE file_id = ?', [$id]);            // indexed before S3
+		}
+		$purger->recordPending('alice');                                  // core has not cleared the file cache yet
+		$this->assertSame(2, $purger->purgePending('alice'), 'the two files of alice, found although they carried no storage id');
+		$this->assertSame(1, $this->rowCount('chunk', 3), "bob's file is untouched");
+	}
+
+	public function testTheUidMappingIsForgottenEvenWhenThePurgeFails(): void {
+		[, $db, $p] = $this->purger();
+		$conn = $this->connection($this->app());
+		$failing = new class($db, $conn, new AuditLog($db, $p), $p) extends UserPurger {
+			public function purgeStorage(int $storageId): int {
+				throw new \RuntimeException('database hiccup');
+			}
+		};
+		$failing->recordPending('alice');
+		try {
+			$failing->purgePending('alice');
+			$this->fail('the failure still reaches the caller');
+		} catch (\RuntimeException) {
+			$this->addToAssertionCount(1);
+		}
+		$this->assertSame(0, (int)$db->rows("SELECT count(*) AS n FROM aps_search.pseudonym WHERE uid = 'alice'")[0]['n'], 'the uid must not stay linkable to the audit rows');
+	}
+
+	public function testPurgingByStorageIdIsAuditedToo(): void {
+		[$purger, $db] = $this->purger();
+		$this->indexed(1, 77);
+		$this->assertSame(1, $purger->purgeStorageAudited(77));
+		$row = $db->rows("SELECT detail FROM aps_search.audit_log WHERE action = 'purge_user'")[0];
+		$this->assertSame(['count' => 1, 'reason' => 'admin_purge', 'storage_id' => 77], json_decode($row['detail'], true));
 	}
 }
