@@ -79,9 +79,32 @@ services:
       BD_WORKER_ID: worker-1
       BD_WORKER_SECRET: bd-s1-toy-secret-0123456789abcdef0123
       BD_WORK: /work
+      BD_EMBED_URL: http://embedstub:11434      # the vector lane runs only when this is set (ADR-0014); the stub is for tests
       PYTHONDONTWRITEBYTECODE: "1"
     volumes:
       - bd_work:/work
+
+  # Deterministic stand-in for the Ollama endpoint (tests and CI only): hashed bags of words, no model, no text kept.
+  embedstub:
+    profiles: ["worker"]
+    build: ./worker
+    image: bd-s1-worker
+    command: ["python3", "embedstub.py", "11434"]
+    restart: "no"
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 64
+    mem_limit: 256m
+    environment:
+      BD_STUB_DIM: "64"
+      PYTHONDONTWRITEBYTECODE: "1"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:11434/api/tags', timeout=2)"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
 
   # Parsing and OCR run here (ADR-0011): no network, no secrets, read-only rootfs, no capabilities.
   parser:
