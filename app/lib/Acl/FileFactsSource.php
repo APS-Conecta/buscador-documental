@@ -95,6 +95,7 @@ class FileFactsSource {
 			array_values(array_unique($gfGroups)),
 			$unmodelled,
 			(int)$row['storage'],
+			array_slice($ids, 1),
 		);
 	}
 }
