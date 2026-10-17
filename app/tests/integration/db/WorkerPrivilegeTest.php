@@ -6,7 +6,7 @@ declare(strict_types=1);
 
 namespace OCA\BuscadorDocumental\Tests\integration\db;
 
-/** A-SEC-4, part 1: the worker role has no direct DML, and reaches the index only through five functions. */
+/** A-SEC-4, part 1: the worker role has no direct DML, and reaches the index only through eight functions. */
 class WorkerPrivilegeTest extends DbTestCase {
 	public function testWorkerHoldsNoPrivilegeOnAnyTable(): void {
 		$admin = self::connect('postgres', 'dev', self::$dbName);
@@ -31,7 +31,7 @@ class WorkerPrivilegeTest extends DbTestCase {
 		$this->assertStringContainsString('permission denied', $this->failure(static fn () => $w->exec('CREATE FUNCTION aps_search.evil() RETURNS int LANGUAGE sql AS $$ SELECT 1 $$')));
 	}
 
-	public function testWorkerExecutesExactlyFiveFunctions(): void {
+	public function testWorkerExecutesExactlyTheEightWorkerFunctions(): void {
 		$admin = self::connect('postgres', 'dev', self::$dbName);
 		$rows = $admin->query("SELECT p.proname, p.prosecdef, has_function_privilege('bd_worker', p.oid, 'EXECUTE') AS can, pg_get_userbyid(p.proowner) AS owner, p.proconfig::text AS cfg
 			FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'aps_search' ORDER BY 1")->fetchAll(\PDO::FETCH_ASSOC);
@@ -44,7 +44,7 @@ class WorkerPrivilegeTest extends DbTestCase {
 				$can[] = $r['proname'];
 			}
 		}
-		$this->assertSame(['claim_job', 'fail_job', 'heartbeat', 'schema_version', 'write_result'], $can);
+		$this->assertSame(['claim_job', 'fail_job', 'heartbeat', 'schema_version', 'vec_chunks', 'vec_profile', 'write_result', 'write_vectors'], $can);
 		$this->assertStringContainsString('permission denied', $this->failure(fn () => $this->worker()->exec("SELECT aps_search.erase_file(1, 'x')")));
 		$this->assertStringContainsString('permission denied', $this->failure(fn () => $this->worker()->exec("SELECT aps_search.erase_files(ARRAY[1]::bigint[], 'excluded')")));
 		$this->assertStringContainsString('permission denied', $this->failure(fn () => $this->worker()->exec("SELECT aps_search.purge_files(ARRAY[1]::bigint[])")));

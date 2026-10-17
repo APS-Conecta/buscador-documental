@@ -26,7 +26,7 @@ abstract class DbTestCase extends TestCase {
 	public static function setUpBeforeClass(): void {
 		self::$dbName = 'bd_t_' . bin2hex(random_bytes(4));
 		self::admin('nextcloud')->exec('CREATE DATABASE ' . self::$dbName . ' OWNER nextcloud');
-		self::connect('postgres', 'dev', self::$dbName)->exec('CREATE EXTENSION unaccent');
+		self::connect('postgres', 'dev', self::$dbName)->exec('CREATE EXTENSION unaccent; CREATE EXTENSION vector');
 		$app = self::connect('nextcloud', 'dev', self::$dbName);
 		foreach (SqlScript::up() as $st) {
 			$app->exec($st);
@@ -45,7 +45,15 @@ abstract class DbTestCase extends TestCase {
 		}
 		$this->open = [];
 		$app = self::connect('postgres', 'dev', self::$dbName);
-		$app->exec('TRUNCATE aps_search.job, aps_search.page, aps_search.chunk, aps_search.file_state, aps_search.file_meta, aps_search.file_acl, aps_search.outbox, aps_search.tombstone, aps_search.audit_log, aps_search.scope_rule, aps_search.reconcile_run, aps_search.purge_pending, aps_search.pseudonym, aps_search.reconcile_node RESTART IDENTITY; DROP TABLE IF EXISTS aps_search.chunk_vec_9; DROP TABLE IF EXISTS oc_filecache, oc_storages, oc_group_folders, oc_group_folders_groups, oc_group_folders_acl, oc_mimetypes, oc_systemtag, oc_systemtag_object_mapping; DELETE FROM aps_search.settings');
+		$app->exec(<<<'SQL'
+DO $$ DECLARE t text; BEGIN
+	FOR t IN SELECT relname FROM pg_class WHERE relnamespace = 'aps_search'::regnamespace AND relkind = 'r' AND relname ~ '^chunk_vec_[0-9]+$' LOOP
+		EXECUTE format('DROP TABLE aps_search.%I', t);
+	END LOOP;
+END $$;
+SQL);
+		$app->exec('TRUNCATE aps_search.job, aps_search.page, aps_search.chunk, aps_search.file_state, aps_search.file_meta, aps_search.file_acl, aps_search.outbox, aps_search.tombstone, aps_search.audit_log, aps_search.scope_rule, aps_search.reconcile_run, aps_search.purge_pending, aps_search.pseudonym, aps_search.reconcile_node RESTART IDENTITY; DROP TABLE IF EXISTS oc_filecache, oc_storages, oc_group_folders, oc_group_folders_groups, oc_group_folders_acl, oc_mimetypes, oc_systemtag, oc_systemtag_object_mapping; DELETE FROM aps_search.settings');
+		$app->exec('DELETE FROM aps_search.embedding_profile; TRUNCATE aps_search.search_snapshot');
 	}
 
 	protected static function admin(string $db): PDO {

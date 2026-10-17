@@ -42,7 +42,7 @@ final class SqlScript {
 	/** @return list<string> the up steps in order */
 	public static function up(): array {
 		$all = [];
-		foreach (['000_preflight.sql', '001_schema.sql', '002_functions.sql', '003_roles.sql', '004_s3.sql'] as $f) {
+		foreach (['000_preflight.sql', '001_schema.sql', '002_functions.sql', '003_roles.sql', '004_s3.sql', '005_s4.sql'] as $f) {
 			array_push($all, ...self::load($f));
 		}
 		return $all;
@@ -51,6 +51,11 @@ final class SqlScript {
 	/** @return list<string> what an instance at schema_ver 1 needs: the S3 step alone (it is idempotent) */
 	public static function upgradeToV2(): array {
 		return self::load('004_s3.sql');
+	}
+
+	/** @return list<string> what an instance at schema_ver 2 needs: the S4 step alone (it is idempotent) */
+	public static function upgradeToV3(): array {
+		return self::load('005_s4.sql');
 	}
 
 	/**
