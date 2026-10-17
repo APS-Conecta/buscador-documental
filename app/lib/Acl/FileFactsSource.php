@@ -44,14 +44,18 @@ class FileFactsSource {
 		$groups = [];
 		$in = implode(',', array_fill(0, count($ids), '?'));
 		$shares = $this->db->executeQuery(
-			"SELECT share_type, share_with FROM *PREFIX*share WHERE share_type IN (0, 1) AND file_source IN ($in)",
+			"SELECT share_type, share_with FROM *PREFIX*share WHERE share_type IN (0, 1, 4, 6, 7, 10, 12) AND file_source IN ($in)",
 			$ids,
 		)->fetchAll();
+		$unmodelled = false;
 		foreach ($shares as $share) {
-			if ((int)$share['share_type'] === 0) {
+			$type = (int)$share['share_type'];
+			if ($type === 0) {
 				$users[] = (string)$share['share_with'];
-			} else {
+			} elseif ($type === 1) {
 				$groups[] = (string)$share['share_with'];
+			} else {
+				$unmodelled = true; // mail, federated, circle, Talk room, Deck
 			}
 		}
 
@@ -63,6 +67,12 @@ class FileFactsSource {
 			)->fetchAll();
 			foreach ($rows as $r) {
 				$gfGroups[] = (string)$r['group_id'];
+			}
+			try {
+				$acl = $this->db->executeQuery('SELECT acl FROM *PREFIX*group_folders WHERE folder_id = ?', [(int)$m[1]])->fetchOne();
+				$unmodelled = $unmodelled || (int)$acl > 0; // advanced ACL rules can deny or grant per path
+			} catch (\Throwable) {
+				$unmodelled = true; // schema drift in groupfolders: let the live recheck decide
 			}
 		}
 
@@ -76,6 +86,7 @@ class FileFactsSource {
 			array_values(array_unique($users)),
 			array_values(array_unique($groups)),
 			array_values(array_unique($gfGroups)),
+			$unmodelled,
 		);
 	}
 }

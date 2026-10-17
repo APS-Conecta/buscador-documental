@@ -32,7 +32,12 @@ class PrincipalWriterTest extends TestCase {
 		$this->assertSame(['g:med'], PrincipalWriter::principalsFor($this->facts(null, [], ['med'])));
 	}
 
-	public function testRecheckMarkerIsNeverStored(): void {
+	public function testFullyModelledFileDoesNotCarryTheRecheckMarker(): void {
 		$this->assertNotContains('x:recheck', PrincipalWriter::principalsFor($this->facts('alice', ['bob'], ['g'])));
+	}
+
+	public function testUnmodelledAccessStoresTheRecheckMarker(): void {
+		$f = new FileFacts(7, 'a.pdf', 'application/pdf', 1, 'etag', 'alice', [], [], [], true);
+		$this->assertSame(['u:alice', 'x:recheck'], PrincipalWriter::principalsFor($f));
 	}
 }

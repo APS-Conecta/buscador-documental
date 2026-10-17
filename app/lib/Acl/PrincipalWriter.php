@@ -11,7 +11,8 @@ use OCA\BuscadorDocumental\Db\IndexDb;
 /**
  * Writes file_acl.principals for one file, synchronously (S1; the outbox and acl_dirty processing are S3).
  * Models owner, direct user shares, group shares and groupfolder group grants. Anything else (advanced ACL deny,
- * circles, Talk/Deck) is not modelled: the prefilter may then over- or under-match, and the recheck decides.
+ * circles, Talk/Deck) is not modelled: such a file also carries `x:recheck`, which every caller's set contains, so the
+ * prefilter never drops it and the live recheck decides.
  */
 class PrincipalWriter {
 	public function __construct(private IndexDb $db, private FileFactsSource $facts) {
@@ -28,6 +29,9 @@ class PrincipalWriter {
 		}
 		foreach (array_merge($f->shareGroupIds, $f->groupfolderGroupIds) as $gid) {
 			$p[] = 'g:' . $gid;
+		}
+		if ($f->unmodelledAccess) {
+			$p[] = PrincipalResolver::RECHECK; // stored, so the caller-side marker matches and the live recheck decides
 		}
 		$p = array_values(array_unique($p));
 		sort($p);

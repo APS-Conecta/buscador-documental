@@ -1,6 +1,6 @@
-# ADR-0010 — Recheck budget: A-PERF-3 not met, waiver proposed with the measured number
+# ADR-0010 — Recheck budget: A-PERF-3 not met, waiver accepted with the measured number
 
-Status: proposed (2026-10-16; the waiver of an acceptance criterion needs the human gate)
+Status: accepted (2026-10-17, waiver approved at the human gate)
 Affects: `Recheck`, `ExclusionChecker`, A-PERF-3, `02-performance.md`
 
 ## Context

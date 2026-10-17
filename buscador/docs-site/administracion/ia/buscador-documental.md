@@ -40,7 +40,7 @@ Modo predeterminado: carpetas incluidas. La etiqueta `rag-excluded` en un archiv
 ## Permisos en cada búsqueda
 Los permisos guardados en el índice solo preseleccionan resultados; cada resultado se vuelve a comprobar contra Nextcloud en el momento de la consulta. Por eso, retirar un recurso compartido o a una persona de un grupo surte efecto de inmediato, sin esperar a una nueva lectura. Un recurso compartido vencido no da acceso. Si el recurso compartido tiene la descarga desactivada, la persona ve el documento en la lista solo con su título, sin extracto.
 
-La comprobación de 50 resultados tarda unos 380 ms en el percentil 95 en la medición de la etapa S1 (el objetivo era 300 ms); la decisión sobre ese límite está pendiente.
+La comprobación de 50 resultados tarda unos 380 ms en el percentil 95 en la medición de la etapa S1 (el objetivo era 300 ms); la ADR-0010 acepta ese resultado.
 
 ## Perfil de lectura por significado
 Se recomienda al instalar y no cambia solo. Para cambiarlo use la pantalla de administración o `occ buscador:profile`; el cambio prepara un índice nuevo y la búsqueda por palabras sigue funcionando.
