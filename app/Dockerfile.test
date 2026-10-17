@@ -1,0 +1,6 @@
+# Local test image: PHP 8.2 CLI + composer + pdo_pgsql (the DB suite talks to the bd-s1 Postgres).
+FROM php:8.2-cli
+COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/bin/
+RUN install-php-extensions zip intl pdo_pgsql
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+WORKDIR /app

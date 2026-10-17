@@ -1,0 +1,41 @@
+# Throwaway: S0's m10 head-term query on PostgreSQL 18 (S1 phase 4, step 5 / D6). Project `bd-s1pg`, loopback only.
+# Same tuning as the S0 stack (shared_buffers 4GB, maintenance_work_mem 2GB) so 17.11 and 18 are comparable.
+name: bd-s1pg
+
+services:
+  db:
+    image: pgvector/pgvector:0.8.7-pg18-bookworm@sha256:2358fcba361ed2233a5ed81b5fe4ca779ccb304120ce531a3bf51c0ed7e2bc11
+    restart: "no"
+    shm_size: 10g
+    volumes:
+      - bd_pg18:/var/lib/postgresql
+    environment:
+      POSTGRES_DB: nextcloud
+      POSTGRES_USER: nextcloud
+      POSTGRES_PASSWORD: dev
+    command: >
+      postgres -c shared_buffers=4GB -c effective_cache_size=16GB -c maintenance_work_mem=2GB -c max_wal_size=8GB
+      -c max_parallel_maintenance_workers=4
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nextcloud -d nextcloud"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  py:
+    profiles: ["tools"]
+    build: .
+    image: bd-s1pg-py
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      BD_DSN: host=db dbname=nextcloud user=nextcloud password=dev
+      BD_RESULTS: /out
+    volumes:
+      - ../../s0-harness:/work:ro
+      - ../results-s1/headterm:/out
+
+volumes:
+  bd_pg18:

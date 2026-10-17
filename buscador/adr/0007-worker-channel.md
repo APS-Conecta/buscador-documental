@@ -1,6 +1,6 @@
 # ADR-0007 — Worker channel: pull, HMAC, app-served bytes
 
-Status: proposed (confirmed in S1)
+Status: accepted (2026-10-16); values fixed in S1 design section 4: timestamp window ±120 s; nonce replay cache 5 min (TTL >= 2x window); per-worker concurrency derived from active claims in the DB, max 4
 Affects: worker, app endpoints, OpenAPI contract
 
 ## Context

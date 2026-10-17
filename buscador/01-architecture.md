@@ -25,7 +25,7 @@ Status: draft v3. Engineering doc (English). Decisions are recorded in `adr/`.
 | Table | Key columns | Notes |
 |---|---|---|
 | `file_state` | `file_id` PK, `etag`, `content_hash`, `text_state`, `vec_state`, `acl_dirty bool`, `skip_reason`, `updated_at` | per-lane states, see section 4 |
-| `job` | `id`, `lane`, `file_id`, `idem_key`, `lease_until`, `attempts`, `not_before` | claim with `FOR UPDATE SKIP LOCKED` |
+| `job` | `id`, `lane`, `file_id`, `idem_key`, `lease_until`, `lease_epoch bigint not null default 0`, `claimed_by text`, `claimed_etag text`, `claimed_hash text`, `attempts`, `not_before` | claim with `FOR UPDATE SKIP LOCKED` |
 | `page` | `file_id`, `page_no`, `text`, `ocr_conf`, `ocr_ver`, `source` (layer/ocr) | text TOASTed |
 | `chunk` | `chunk_id`, `file_id`, `page_no`, `ord`, `heading`, `text`, `tsv` (generated, `spanish_unaccent`), `chunker_ver` | GIN on `tsv`; `pg_trgm` on filename in `file_meta` |
 | `chunk_vec_<gen>` | `chunk_id`, `vec halfvec(d)` | one table per profile generation; HNSW built after bulk load |
@@ -49,7 +49,7 @@ Migrations are expand/contract; the worker refuses an unknown schema version. **
 
 ## 4. State machine and idempotency
 Per lane: `text_state`: pending → extracting → ocr → chunking → indexed. `vec_state`: pending → embedding → embedded. Terminal/side: `skipped(reason)`, `tombstoned → purged`. `acl_dirty` is a boolean, orthogonal.
-Idempotency key, computed in this order: `(file_id, etag)` from NC → `content_hash` after fetch → `(chunker_ver, ocr_ver)` → `profile` for the vector lane. If `content_hash` hits `content_cache`, skip OCR/embedding and only write per-file rows. A tombstone with a later timestamp always beats queued work.
+Idempotency key, computed in this order: `(file_id, etag)` from NC → `content_hash` after fetch → `(chunker_ver, ocr_ver)` → `profile` for the vector lane. If `content_hash` matches an already indexed file (same versions), skip OCR/embedding and copy that file's rows to the new `file_id` (ADR-0005). A tombstone with a later timestamp always beats queued work.
 
 ## 5. Worker contract (v1, OpenAPI in S1)
 Two channels. (a) **DB**: `claim_job`, `heartbeat`, `write_result`, `fail_job` functions (above); no direct table access. (b) **App HTTP** (bytes and meta only): `GET /files/{id}/meta`, `GET /files/{id}/content` (Range; requires `If-Match: <etag>`, 412 if changed; only for files with an active claim; per-worker concurrency cap). The worker hashes the full stream and `write_result` rejects a `content_hash` that differs from the claimed one. Principals are never accepted from the worker. Versioned; contract tests on both sides. Auth: bearer + HMAC of method/path/body-hash/timestamp (replay window), secret in sensitive `IAppConfig`, rotated by `occ`.

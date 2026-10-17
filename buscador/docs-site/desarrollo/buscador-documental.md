@@ -3,12 +3,12 @@ tipo: referencia
 esqueleto: borrador
 audiencia: desarrollo
 apps: [buscador-documental]
-resumen: "Buscador Documental: estado del diseño, decisiones de la etapa de mediciones (S0) y cómo repetir las mediciones con el arnés."
+resumen: "Buscador Documental: estado del diseño, decisiones de las etapas S0 y S1, comprobación de permisos, pruebas y cómo repetir las mediciones con el arnés."
 ---
 # buscador-documental
 
 ```{note}
-Borrador. Faltan el mapa de módulos, el contrato del proceso de trabajo (worker) y las pruebas, que se completan en las etapas S1 y S2 del plan. La referencia de comandos `occ`, ajustes y rutas se genera automáticamente.
+Borrador. Falta el mapa de módulos completo, que se cierra con las etapas siguientes del plan. La referencia de comandos `occ`, ajustes y rutas se genera automáticamente.
 ```
 
 ## Propósito y diseño
@@ -21,11 +21,39 @@ La etapa S0 mide, con un arnés desechable, los números que condicionan el dise
 
 - **ADR-0001, confirmada de forma condicional.** PostgreSQL se mantiene, pero la búsqueda exacta necesita un límite previo de candidatos para los términos muy frecuentes: sin él, el percentil 95 supera varios segundos. La etapa S4 debe comprobar con texto real que el límite no empeora la relevancia; si la empeora y no hay alternativa, la ADR se reabre y se evalúa OpenSearch.
 - **Búsqueda por significado.** El recorrido iterativo del índice vectorial (`hnsw.iterative_scan = relaxed_order`, con reordenación posterior) es obligatorio cuando la persona solo puede leer una parte pequeña de los archivos; sin él, la mayoría de las consultas devuelven menos resultados de los pedidos. Para quien puede leer muy pocos archivos, la búsqueda exacta es más rápida.
-- **Comprobación de permisos de 50 resultados.** Por ahora no cumple el límite de 300 ms (330 a 405 ms con una caché por solicitud). La etapa S1 debe diseñar una verificación que lo cumpla antes de terminar.
+- **Comprobación de permisos de 50 resultados.** En S0 no cumplía el límite de 300 ms (330 a 405 ms con una caché por solicitud). El resultado de S1 está en la sección siguiente.
 - **Límites propuestos** de tamaño, páginas, píxeles y tiempo por archivo: figuran en `02-performance.md` y se comprueban en la etapa S2.
 - **Reconocimiento de texto.** Una capa de texto falsa o corrupta se conserva si el procesamiento omite las páginas con texto; hay que rehacer el reconocimiento en esas páginas. Las fotografías necesitan enderezado y giro automáticos.
 
 Las cifras medidas (almacenamiento, tiempos de índice, latencias, reconocimiento, horas de carga inicial) están en la hoja de capacidad `capacity-sheet.md` del mismo repositorio de planificación.
+
+## Decisiones de la etapa S1 (esqueleto con canario de permisos)
+
+La etapa S1 entrega el recorrido completo mínimo: una aplicación de Nextcloud (`OCA\BuscadorDocumental`, identificador `buscador_documental`) con su esquema `aps_search` en PostgreSQL, un canal de trabajo con autenticación HMAC, un proceso de lectura en Python (OCR) y la consulta con verificación de permisos en vivo.
+
+- **El permiso lo decide la verificación en vivo.** Los permisos guardados en el índice (`u:` y `g:`) solo sirven de prefiltro. El conjunto de la persona que consulta incluye siempre `x:recheck` (que también se guarda en los archivos con acceso no modelado: círculos, Talk, Deck, correo, federados o carpetas de equipo con ACL avanzada), y cada resultado pasa por `Recheck` antes de mostrar el extracto. Un resultado que falla se descarta; si falla la comprobación de exclusión o el servicio de etiquetas, falla toda la consulta sin devolver resultados.
+- **Reglas de `Recheck`.** Cuenta como legible cualquier nodo legible por cualquier montaje; un recurso compartido vencido no cuenta; si el recurso compartido tiene la descarga desactivada, el resultado se devuelve solo con el título, sin encabezado, página ni extracto (ADR-0009).
+- **Etiqueta `rag-excluded`.** Se revisa en el archivo y en cada carpeta superior hasta la raíz del almacenamiento. Cuenta cualquier etiqueta con ese nombre, aunque esté duplicada. El borrado de lo ya leído deja cero filas en `page` y `chunk`.
+- **Consulta.** `websearch_to_tsquery` con la configuración `aps_search.spanish_unaccent`, un límite previo de 10 000 candidatos, el mejor fragmento por archivo, tiempo máximo de 5 s (si se agota, la respuesta pide afinar la búsqueda) y extractos con marcas aleatorias por solicitud y escape de HTML.
+- **Canal de trabajo.** El proceso de lectura no escribe directamente en las tablas: usa los puntos de acceso de la aplicación con firma HMAC, ventana de ±120 s y caché de nonces de 5 min (ADR-0007). `write_result` fuerza el archivo reclamado y un trabajador con el arrendamiento vencido no puede sobrescribir (prueba del trabajador zombi).
+- **A-PERF-3 no se cumple.** Con una sonda corregida (50 resultados, 3 personas, 30 repeticiones, 5 variantes intercaladas), la variante entregada tiene un percentil 95 de 377 ms en la persona más desfavorable y la mejor variante, 308,5 ms, frente a 300 ms, sin contar la preparación del sistema de archivos (105 a 176 ms). Las cinco variantes decidieron igual los 50 resultados en las 450 ejecuciones. La ADR-0010, aceptada el 17 de octubre de 2026, acepta el resultado con un presupuesto de 150 ms para unos 20 documentos.
+- **Búsqueda exacta en PostgreSQL 18.** Con el mismo flujo de texto de S0 (3 000 000 de fragmentos, solo texto) los resultados coinciden con los de PostgreSQL 17.11 dentro del ruido (p95 con límite previo: 205 frente a 179 ms en estrés), de modo que el límite previo sigue siendo obligatorio.
+- **Sin verificar.** La semántica de descarga con varios nodos (M7) no se puede comprobar en un solo nodo; queda para S3 y S5.
+
+## Pruebas
+
+Todo corre en Docker, en el proyecto de compose `bd-s1`, solo en `127.0.0.1`. Desde el directorio `app/`:
+
+| Objetivo | Qué comprueba |
+|---|---|
+| `make test-unit` | Escritura de permisos, autenticación HMAC, controladores, `Retrieve` y `Recheck` con dobles. |
+| `make test-contract` | El controlador PHP y el cliente Python frente a los ejemplos de `worker-v1.yaml`. |
+| `make test-db` | Privilegios del rol de trabajo y trabajador zombi. |
+| `make test-search` | Consulta contra el esquema real: prefiltro obsoleto, contador de descartes, resultado sin extracto con descarga desactivada. |
+| `make test-e2e-one` | Un PDF escaneado de punta a punta por la aplicación, el trabajador y el OCR. |
+| `make test-canary` | Veinte comprobaciones con Nextcloud 34 y el trabajador reales: línea base, recurso revocado, descarga desactivada, grupo retirado, etiqueta en carpeta superior, etiqueta duplicada, borrado y rechazo al encolar. |
+
+`make clean` elimina únicamente los recursos de `bd-s1`. Las pruebas de trabajo en Python se ejecutan con `make -C worker test`. La integración continua (`.github/workflows/ci.yml`: `php`, `worker` y `smoke`) está escrita pero aún no se ha ejecutado en GitHub.
 
 ## Repetir las mediciones
 

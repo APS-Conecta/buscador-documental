@@ -51,4 +51,4 @@ Encrypted content is skipped with a visible reason.
 | `occ` surface | kept to `status, reindex, pause, resume, purge-user, doctor, profile, rotate-secret` |
 
 ## Carried assumptions
-~5-10 concurrent searchers per clinic; 30-day grace period; synthetic Spanish corpus until a de-identified real folder exists; app id/repo name pending (P2 S6), placeholder `buscador`.
+~5-10 concurrent searchers per clinic; 30-day grace period; synthetic Spanish corpus until a de-identified real folder exists; app id `buscador_documental` (FRD).

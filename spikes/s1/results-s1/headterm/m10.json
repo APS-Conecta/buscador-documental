@@ -1,0 +1,73 @@
+{
+ "host": {
+  "cpu_pressure": "some avg10=2.26 avg60=5.35 avg300=4.62 total=152079890\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0",
+  "loadavg": [
+   5.509765625,
+   5.13818359375,
+   3.7734375
+  ]
+ },
+ "measured_at": "2026-10-16T22:37:57+0000",
+ "variants": [
+  {
+   "class": "stress_head",
+   "n": 24,
+   "p50_ms": 5708.1,
+   "p95_admin_ms": 8858.2,
+   "p95_ms": 8858.2,
+   "p95_narrow_ms": 9342.7,
+   "top10_overlap_with_baseline": 1.0,
+   "variant": "baseline"
+  },
+  {
+   "class": "stress_head",
+   "n": 24,
+   "p50_ms": 23.8,
+   "p95_admin_ms": 23.9,
+   "p95_ms": 614.3,
+   "p95_narrow_ms": 731.9,
+   "top10_overlap_with_baseline": 0.025,
+   "variant": "prelimit_2000"
+  },
+  {
+   "class": "stress_head",
+   "n": 24,
+   "p50_ms": 89.8,
+   "p95_admin_ms": 90.7,
+   "p95_ms": 178.6,
+   "p95_narrow_ms": 185.9,
+   "top10_overlap_with_baseline": 0.163,
+   "variant": "prelimit_10000"
+  },
+  {
+   "class": "realistic_head",
+   "n": 24,
+   "p50_ms": 3556.7,
+   "p95_admin_ms": 5314.9,
+   "p95_ms": 5314.9,
+   "p95_narrow_ms": 3690.1,
+   "top10_overlap_with_baseline": 0.958,
+   "variant": "baseline"
+  },
+  {
+   "class": "realistic_head",
+   "n": 24,
+   "p50_ms": 45.2,
+   "p95_admin_ms": 45.2,
+   "p95_ms": 138.1,
+   "p95_narrow_ms": 138.1,
+   "top10_overlap_with_baseline": 0.108,
+   "variant": "prelimit_2000"
+  },
+  {
+   "class": "realistic_head",
+   "n": 24,
+   "p50_ms": 145.4,
+   "p95_admin_ms": 201.2,
+   "p95_ms": 201.2,
+   "p95_narrow_ms": 154.5,
+   "top10_overlap_with_baseline": 0.246,
+   "variant": "prelimit_10000"
+  }
+ ]
+}

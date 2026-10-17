@@ -1,0 +1,76 @@
+# S1 stack: Postgres 18 + pgvector, Nextcloud 34, the app mounted from ./app. Project `bd-s1`, loopback only,
+# CI-sized limits. `make clean` (app/Makefile) removes only this project. Passwords are toys on purpose.
+# Images are pinned by digest (S1 design D6; digests verified with `docker buildx imagetools inspect` on 2026-10-16).
+# PG 18 images keep data under /var/lib/postgresql (PGDATA=/var/lib/postgresql/18/docker): mount the parent.
+name: bd-s1
+
+services:
+  db:
+    image: pgvector/pgvector:0.8.7-pg18-bookworm@sha256:2358fcba361ed2233a5ed81b5fe4ca779ccb304120ce531a3bf51c0ed7e2bc11
+    restart: "no"
+    mem_limit: 2g
+    shm_size: 256m
+    ports:
+      - "127.0.0.1:5442:5432"
+    volumes:
+      - bd_pg:/var/lib/postgresql
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    environment:
+      POSTGRES_DB: nextcloud
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: dev
+    command: postgres -c log_statement=none -c shared_buffers=256MB
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d nextcloud"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  nextcloud:
+    image: nextcloud:34.0.4-apache@sha256:0e5688ba0988b9112cf03f9c6bab53eccb466d278435f6596f16c1f25acacf74
+    restart: "no"
+    mem_limit: 2g
+    ports:
+      - "127.0.0.1:8191:80"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - bd_nc:/var/www/html
+      - ./app:/var/www/html/custom_apps/buscador_documental
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: nextcloud
+      POSTGRES_USER: nextcloud
+      POSTGRES_PASSWORD: dev
+      NEXTCLOUD_ADMIN_USER: admin
+      NEXTCLOUD_ADMIN_PASSWORD: admin
+      NEXTCLOUD_TRUSTED_DOMAINS: localhost
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost/status.php || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  # One-shot: `docker compose --profile worker run --rm worker python3 main.py --once`. Not started by `up`.
+  worker:
+    profiles: ["worker"]
+    build: ./worker
+    image: bd-s1-worker
+    restart: "no"
+    mem_limit: 2g
+    depends_on:
+      db:
+        condition: service_healthy
+      nextcloud:
+        condition: service_healthy
+    environment:
+      BD_DB_DSN: postgresql://bd_worker:dev-worker@db:5432/nextcloud
+      BD_BASE_URL: http://nextcloud
+      BD_WORKER_ID: worker-1
+      BD_WORKER_SECRET: bd-s1-toy-secret-0123456789abcdef0123
+
+volumes:
+  bd_pg:
+  bd_nc:
