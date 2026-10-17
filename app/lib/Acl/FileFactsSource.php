@@ -60,16 +60,23 @@ class FileFactsSource {
 		}
 
 		$gfGroups = [];
-		if (preg_match('#^__groupfolders/(\d+)/#', (string)$row['path'], $m) === 1) {
+		// Groupfolders >= 4 give every folder its own storage (`local::<datadir>/__groupfolders/<id>/`) and its files are
+		// `files/...` on it, so the folder id is in the storage id. Older layouts put `__groupfolders/<id>/` in the path.
+		$folderId = null;
+		if (preg_match('#__groupfolders/(\d+)/?$#', (string)$row['storage_id'], $m) === 1
+			|| preg_match('#^__groupfolders/(\d+)/#', (string)$row['path'], $m) === 1) {
+			$folderId = (int)$m[1];
+		}
+		if ($folderId !== null) {
 			$rows = $this->db->executeQuery(
 				'SELECT group_id FROM *PREFIX*group_folders_groups WHERE folder_id = ? AND permissions > 0',
-				[(int)$m[1]],
+				[$folderId],
 			)->fetchAll();
 			foreach ($rows as $r) {
 				$gfGroups[] = (string)$r['group_id'];
 			}
 			try {
-				$acl = $this->db->executeQuery('SELECT acl FROM *PREFIX*group_folders WHERE folder_id = ?', [(int)$m[1]])->fetchOne();
+				$acl = $this->db->executeQuery('SELECT acl FROM *PREFIX*group_folders WHERE folder_id = ?', [$folderId])->fetchOne();
 				$unmodelled = $unmodelled || (int)$acl > 0; // advanced ACL rules can deny or grant per path
 			} catch (\Throwable) {
 				$unmodelled = true; // schema drift in groupfolders: let the live recheck decide

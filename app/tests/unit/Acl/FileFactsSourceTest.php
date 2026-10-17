@@ -13,12 +13,12 @@ use PHPUnit\Framework\TestCase;
 
 class FileFactsSourceTest extends TestCase {
 	/** @param list<array<string, mixed>> $shares */
-	private function source(string $path, array $shares, int|false $gfAcl = false): FileFactsSource {
+	private function source(string $path, array $shares, int|false $gfAcl = false, string $storageId = 'home::alice'): FileFactsSource {
 		$db = $this->createMock(IDBConnection::class);
-		$db->method('executeQuery')->willReturnCallback(function (string $sql) use ($path, $shares, $gfAcl): IResult {
+		$db->method('executeQuery')->willReturnCallback(function (string $sql) use ($path, $shares, $gfAcl, $storageId): IResult {
 			$r = $this->createMock(IResult::class);
 			if (str_contains($sql, 'FROM *PREFIX*filecache f')) {
-				$r->method('fetch')->willReturn(['fileid' => 5, 'name' => 'a.pdf', 'path' => $path, 'etag' => 'e', 'mtime' => 1, 'parent' => 0, 'mimetype' => 'application/pdf', 'storage_id' => 'home::alice']);
+				$r->method('fetch')->willReturn(['fileid' => 5, 'name' => 'a.pdf', 'path' => $path, 'etag' => 'e', 'mtime' => 1, 'parent' => 0, 'mimetype' => 'application/pdf', 'storage_id' => $storageId]);
 			} elseif (str_contains($sql, '*PREFIX*share')) {
 				$r->method('fetchAll')->willReturn($shares);
 			} elseif (str_contains($sql, 'group_folders_groups')) {
@@ -66,6 +66,25 @@ class FileFactsSourceTest extends TestCase {
 		$f = $this->source('__groupfolders/3/x/a.pdf', [], 1)->load(5);
 		$this->assertSame(['med'], $f->groupfolderGroupIds);
 		$this->assertTrue($f->unmodelledAccess);
+	}
+
+	/** NC 34 + groupfolders 22: the folder has its own storage and its files are `files/...`; the id is in the storage id. */
+	public function testFilesInAGroupfolderAreRecognisedByTheirStorage(): void {
+		$f = $this->source('files/sub/a.pdf', [], 0, 'local::/var/www/html/data/__groupfolders/3/')->load(5);
+		$this->assertSame(['med'], $f->groupfolderGroupIds);
+		$this->assertNull($f->ownerUid, 'a team folder has no owner');
+		$this->assertFalse($f->unmodelledAccess);
+	}
+
+	public function testAGroupfolderWithAdvancedAclOnItsOwnStorageIsUnmodelled(): void {
+		$f = $this->source('files/a.pdf', [], 1, 'local::/var/www/html/data/__groupfolders/12/')->load(5);
+		$this->assertTrue($f->unmodelledAccess);
+	}
+
+	public function testAHomeStorageFileIsNotMistakenForAGroupfolder(): void {
+		$f = $this->source('files/a.pdf', [], 0, 'home::alice')->load(5);
+		$this->assertSame([], $f->groupfolderGroupIds);
+		$this->assertSame('alice', $f->ownerUid);
 	}
 
 	public function testGroupfolderWithoutAdvancedAclIsModelled(): void {
