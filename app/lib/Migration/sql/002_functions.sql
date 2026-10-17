@@ -134,7 +134,7 @@ AS $$
 DECLARE
 	j job%ROWTYPE;
 BEGIN
-	IF p_reason IS NULL OR p_reason NOT IN ('encrypted', 'too_large', 'corrupt', 'unsupported', 'ocr_failed', 'timeout', 'internal') THEN
+	IF p_reason IS NULL OR p_reason NOT IN ('encrypted', 'too_large', 'corrupt', 'unsupported', 'ocr_failed', 'timeout', 'internal', 'unsafe') THEN
 		RAISE EXCEPTION 'invalid reason' USING ERRCODE = 'BD001';
 	END IF;
 	SELECT * INTO j FROM job WHERE id = p_job_id FOR UPDATE;

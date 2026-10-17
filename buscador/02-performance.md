@@ -50,6 +50,8 @@ Max file size, max pages, max pixels, zip expansion ratio, per-file timeout, xls
 | Lease length | per-file timeout + 60 s, renewed after each page | checkpoint per page |
 | Zip expansion ratio | 100:1 and 1 GB total uncompressed | policy default, **not measured in S0** (no archive corpus); S2 proves it with the zip-bomb tests |
 | xlsx rows/cells | 1 000 000 cells | policy default, **not measured in S0**; S2 measures extraction time |
+| Chunks per file | 2000 (database cap) | a document that cannot fit is skipped `too_large`, never truncated (S1 review) |
+| XML nesting depth | 100 | policy default for docx/pptx/odt/xlsx parsers; S2 proves it with a nesting-bomb test |
 A file over a cap ends `skipped(reason)` with the reason visible to the administrator (A-SAFE-3).
 
 ## Known risk: head terms (confirmed by S0)

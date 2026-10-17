@@ -26,8 +26,11 @@ Para un millón de páginas:
 - **Espacio en disco:** unos 15 GB en la base de datos (alrededor de 5 kB por fragmento de texto, con tres fragmentos por página). Durante la primera carga el registro de escritura puede ocupar otros 14 GB de forma transitoria. Al cambiar de perfil de lectura por significado, reserve además el doble del espacio de los vectores.
 - **Memoria:** los índices y los vectores que se consultan a diario suman unos 7 GB; conviene que quepan en la memoria del servidor.
 - **Primera lectura:** unas 71 horas con los 8 núcleos dedicados, es decir, unas 9 noches de 8 horas si se limita a una ventana nocturna. La búsqueda por palabras queda disponible antes, tras unas 45 horas, y la búsqueda por significado se completa después.
-- **Reconocimiento de texto:** entre 2 y 3 segundos por página en una página escaneada limpia; las fotografías y los escaneos torcidos tardan más.
+- **Reconocimiento de texto:** entre 2 y 3 segundos por página con el motor solo; en la medición de la etapa S2, con la comprobación de confianza y una página a la vez, unos 13 segundos por página leída desde imagen. Las páginas con una imagen del tamaño de un escaneo se leen siempre desde la imagen, aunque tengan texto; las fotografías y los escaneos torcidos tardan más.
 - **Perfil de lectura por significado:** en un servidor sin GPU se recomienda el perfil pequeño; el perfil grande no es apto para ese equipo.
+
+## Archivos que no se leen
+Cada archivo omitido queda con un motivo visible: **protegido con contraseña** (se necesita una contraseña para abrirlo; los PDF que solo tienen contraseña de edición sí se leen), **dañado**, **demasiado grande** (más de 250 MB, 300 páginas o 1 000 000 de celdas, o más fragmentos de los que admite el índice), **peligroso** (por ejemplo, un archivo comprimido que se expande de forma desmedida o una imagen de tamaño desproporcionado) y **formato no admitido**. Los archivos peligrosos se leen en un contenedor aislado, sin red, sin acceso a la base de datos ni a las claves del servicio y con memoria y procesos limitados. La lectura de cada archivo tiene un tiempo máximo; si se agota, el trabajo se reintenta y, tras cinco intentos, se omite con el motivo «interno».
 
 ## Primera puesta en marcha
 1. Lea el aviso inicial: por defecto solo se leen las carpetas que usted incluya.

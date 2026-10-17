@@ -40,6 +40,14 @@ La etapa S1 entrega el recorrido completo mínimo: una aplicación de Nextcloud 
 - **Búsqueda exacta en PostgreSQL 18.** Con el mismo flujo de texto de S0 (3 000 000 de fragmentos, solo texto) los resultados coinciden con los de PostgreSQL 17.11 dentro del ruido (p95 con límite previo: 205 frente a 179 ms en estrés), de modo que el límite previo sigue siendo obligatorio.
 - **Sin verificar.** La semántica de descarga con varios nodos (M7) no se puede comprobar en un solo nodo; queda para S3 y S5.
 
+## Decisiones de la etapa S2 (lectura, reconocimiento y fragmentación)
+
+- **Aislamiento (ADR-0011).** El análisis de archivos corre en un contenedor aparte (`parser`) sin red, sin secretos, con sistema de archivos de solo lectura, sin capacidades y con límites de procesos y memoria. Se descartó `unshare -n` dentro del proceso de trabajo porque falla con el perfil de seccomp predeterminado de Docker. El proceso de trabajo (con la base de datos y la clave HMAC) entrega el archivo por un volumen compartido en memoria y mata el grupo de procesos si se agota el tiempo. `make -C worker test-sandbox` comprueba nueve propiedades de aislamiento dentro del contenedor.
+- **Extractores.** Texto, Word, presentaciones, formato abierto, hojas de cálculo y PDF, con topes de tamaño, expansión de archivos comprimidos (100 a 1 y 1 GB), profundidad XML, entidades XML, píxeles (50 MP), páginas (300) y celdas (1 000 000). Todo rechazo termina en un motivo de omisión (`unsafe`, `corrupt`, `encrypted`, `too_large`).
+- **Reconocimiento (ADR-0012).** Cada página de un PDF se clasifica: texto nativo (se conserva), solo imagen (se lee) o texto no fiable (se descarta y se lee). Una página con una imagen del tamaño de un escaneo se lee siempre desde la imagen. Se guarda la confianza media de Tesseract de las páginas leídas.
+- **Fragmentación.** Los artículos y las secciones son las unidades; cada fragmento repite su encabezado; el solapamiento ocurre solo dentro de una unidad; las filas de tabla no se parten; un documento que no cabe se rechaza en lugar de truncarse.
+- **Criterio A-QUAL-1.** Con 406 páginas sintéticas: CER 0,25 %, WER 0,57 %. La primera política falló (CER 4,80 %) y se reemplazó; el motivo está en la ADR-0012. El corpus es sintético, por lo que el resultado es provisional hasta contar con documentos reales.
+
 ## Pruebas
 
 Todo corre en Docker, en el proyecto de compose `bd-s1`, solo en `127.0.0.1`. Desde el directorio `app/`:
@@ -51,6 +59,8 @@ Todo corre en Docker, en el proyecto de compose `bd-s1`, solo en `127.0.0.1`. De
 | `make test-db` | Privilegios del rol de trabajo y trabajador zombi. |
 | `make test-search` | Consulta contra el esquema real: prefiltro obsoleto, contador de descartes, resultado sin extracto con descarga desactivada. |
 | `make test-e2e-one` | Un PDF escaneado de punta a punta por la aplicación, el trabajador y el OCR. |
+| `make test-e2e-formats` | Seis formatos admitidos, una foto girada, una página con capa de texto falsa y cuatro archivos hostiles contra la instancia real; comprueba el estado final y que los originales no cambian ni un byte. |
+| `make -C worker test` | Extractores, política de reconocimiento, fragmentador (con propiedades de Hypothesis) y protocolo entre el proceso de trabajo y el contenedor aislado. `make -C worker test-sandbox`, `test-laws` y `eval-ocr` son comprobaciones aparte. |
 | `make test-canary` | Veinte comprobaciones con Nextcloud 34 y el trabajador reales: línea base, recurso revocado, descarga desactivada, grupo retirado, etiqueta en carpeta superior, etiqueta duplicada, borrado y rechazo al encolar. |
 
 `make clean` elimina únicamente los recursos de `bd-s1`. Las pruebas de trabajo en Python se ejecutan con `make -C worker test`. La integración continua (`.github/workflows/ci.yml`: `php`, `worker` y `smoke`) está escrita pero aún no se ha ejecutado en GitHub.

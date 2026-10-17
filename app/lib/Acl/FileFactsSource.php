@@ -44,7 +44,7 @@ class FileFactsSource {
 		$groups = [];
 		$in = implode(',', array_fill(0, count($ids), '?'));
 		$shares = $this->db->executeQuery(
-			"SELECT share_type, share_with FROM *PREFIX*share WHERE share_type IN (0, 1, 4, 6, 7, 10, 12) AND file_source IN ($in)",
+			"SELECT share_type, share_with FROM *PREFIX*share WHERE share_type NOT IN (2, 3) AND file_source IN ($in)",
 			$ids,
 		)->fetchAll();
 		$unmodelled = false;
@@ -54,8 +54,8 @@ class FileFactsSource {
 				$users[] = (string)$share['share_with'];
 			} elseif ($type === 1) {
 				$groups[] = (string)$share['share_with'];
-			} else {
-				$unmodelled = true; // mail, federated, circle, Talk room, Deck
+			} elseif ($type !== 2 && $type !== 3) {
+				$unmodelled = true; // anything but user, group, the per-member group rows (2) and anonymous link (3): mail, guest, federated, circle, Talk, Deck, ...
 			}
 		}
 

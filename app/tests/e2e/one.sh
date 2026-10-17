@@ -18,6 +18,7 @@ $C exec -T --user www-data -e OC_PASS=alice-pass-123 nextcloud php occ user:add 
 # Fresh state for this file; the index is rebuilt from scratch.
 $PSQL -c "TRUNCATE aps_search.job, aps_search.page, aps_search.chunk, aps_search.file_state, aps_search.file_meta, aps_search.file_acl RESTART IDENTITY"
 $C --profile worker build worker >/dev/null
+$C --profile worker up -d --wait parser >/dev/null
 mkdir -p /tmp/bd-s1-e2e
 docker run --rm --user root -v /tmp/bd-s1-e2e:/out --entrypoint python3 bd-s1-worker make_scan.py /out/scan.pdf
 $C exec -T --user www-data nextcloud mkdir -p /var/www/html/data/alice/files
@@ -37,6 +38,8 @@ STATE=$($PSQL -c "select text_state from aps_search.file_state where file_id=$FI
 CHUNKS=$($PSQL -c "select count(*) from aps_search.chunk where file_id=$FID")
 HIT=$($PSQL -c "select count(*) from aps_search.chunk where file_id=$FID and tsv @@ websearch_to_tsquery('aps_search.spanish_unaccent','hemoglobina glicosilada nutrición')")
 JOBS=$($PSQL -c "select count(*) from aps_search.job where file_id=$FID")
+CONF=$($PSQL -c "select count(*) from aps_search.page where file_id=$FID and source='ocr' and ocr_conf between 1 and 100")
+[ "$CONF" -ge 1 ] || { echo "no OCR confidence stored"; exit 1; }
 echo "state=$STATE chunks=$CHUNKS hit=$HIT jobs_left=$JOBS"
 [ "$STATE" = indexed ] && [ "$CHUNKS" -gt 0 ] && [ "$HIT" -ge 1 ] && [ "$JOBS" = 0 ]
 # The channel refuses unauthenticated and badly signed callers with an empty body.
