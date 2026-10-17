@@ -1,0 +1,259 @@
+{
+ "threshold_ms": 300.0,
+ "hits": 50,
+ "per_variant_worst_user": {
+  "V0": {
+   "p95_check_ms": 644.3,
+   "p95_setup_ms": 176,
+   "semantics_ok": true
+  },
+  "V1": {
+   "p95_check_ms": 466.2,
+   "p95_setup_ms": 155.7,
+   "semantics_ok": true
+  },
+  "V2": {
+   "p95_check_ms": 381,
+   "p95_setup_ms": 167.8,
+   "semantics_ok": true
+  },
+  "V3": {
+   "p95_check_ms": 308.5,
+   "p95_setup_ms": 163,
+   "semantics_ok": true
+  },
+  "prod": {
+   "p95_check_ms": 377.4,
+   "p95_setup_ms": 167.5,
+   "semantics_ok": true
+  }
+ },
+ "winner": "V3",
+ "per_user": {
+  "u_admin200/V0": {
+   "runs": 30,
+   "agrees_with_V0": true,
+   "setup_ms_p50": 138.6,
+   "setup_ms_p95": 176,
+   "check_ms_p50": 502.9,
+   "check_ms_p95": 644.3,
+   "total_ms_p50": 640.5,
+   "total_ms_p95": 820.3,
+   "outcome": {
+    "ok": 40,
+    "snippet_off": 0,
+    "denied_or_excluded": 10
+   }
+  },
+  "u_admin200/V1": {
+   "runs": 30,
+   "agrees_with_V0": true,
+   "setup_ms_p50": 135,
+   "setup_ms_p95": 155.7,
+   "check_ms_p50": 387.9,
+   "check_ms_p95": 466.2,
+   "total_ms_p50": 519,
+   "total_ms_p95": 617.7,
+   "outcome": {
+    "ok": 40,
+    "snippet_off": 0,
+    "denied_or_excluded": 10
+   }
+  },
+  "u_admin200/V2": {
+   "runs": 30,
+   "agrees_with_V0": true,
+   "setup_ms_p50": 139.3,
+   "setup_ms_p95": 167.8,
+   "check_ms_p50": 330.2,
+   "check_ms_p95": 381,
+   "total_ms_p50": 469.3,
+   "total_ms_p95": 537.3,
+   "outcome": {
+    "ok": 40,
+    "snippet_off": 0,
+    "denied_or_excluded": 10
+   }
+  },
+  "u_admin200/V3": {
+   "runs": 30,
+   "agrees_with_V0": true,
+   "setup_ms_p50": 139.8,
+   "setup_ms_p95": 163,
+   "check_ms_p50": 265,
+   "check_ms_p95": 308.5,
+   "total_ms_p50": 400.5,
+   "total_ms_p95": 471.5,
+   "outcome": {
+    "ok": 40,
+    "snippet_off": 0,
+    "denied_or_excluded": 10
+   }
+  },
+  "u_admin200/prod": {
+   "runs": 30,
+   "agrees_with_V0": true,
+   "setup_ms_p50": 136.6,
+   "setup_ms_p95": 167.5,
+   "check_ms_p50": 325.3,
+   "check_ms_p95": 377.4,
+   "total_ms_p50": 458.8,
+   "total_ms_p95": 525.4,
+   "outcome": {
+    "ok": 40,
+    "snippet_off": 0,
+    "denied_or_excluded": 10
+   }
+  },
+  "u_narrow/V0": {
+   "runs": 30,
+   "agrees_with_V0": true,
+   "setup_ms_p50": 101,
+   "setup_ms_p95": 116.9,
+   "check_ms_p50": 364.2,
+   "check_ms_p95": 466.1,
+   "total_ms_p50": 470.9,
+   "total_ms_p95": 583,
+   "outcome": {
+    "ok": 35,
+    "snippet_off": 0,
+    "denied_or_excluded": 15
+   }
+  },
+  "u_narrow/V1": {
+   "runs": 30,
+   "agrees_with_V0": true,
+   "setup_ms_p50": 99.5,
+   "setup_ms_p95": 118.6,
+   "check_ms_p50": 264.2,
+   "check_ms_p95": 306.3,
+   "total_ms_p50": 359.9,
+   "total_ms_p95": 424.1,
+   "outcome": {
+    "ok": 35,
+    "snippet_off": 0,
+    "denied_or_excluded": 15
+   }
+  },
+  "u_narrow/V2": {
+   "runs": 30,
+   "agrees_with_V0": true,
+   "setup_ms_p50": 100.5,
+   "setup_ms_p95": 115.3,
+   "check_ms_p50": 209,
+   "check_ms_p95": 267.9,
+   "total_ms_p50": 307.1,
+   "total_ms_p95": 376.6,
+   "outcome": {
+    "ok": 35,
+    "snippet_off": 0,
+    "denied_or_excluded": 15
+   }
+  },
+  "u_narrow/V3": {
+   "runs": 30,
+   "agrees_with_V0": true,
+   "setup_ms_p50": 96.5,
+   "setup_ms_p95": 122.7,
+   "check_ms_p50": 132.5,
+   "check_ms_p95": 164.6,
+   "total_ms_p50": 232,
+   "total_ms_p95": 287.2,
+   "outcome": {
+    "ok": 35,
+    "snippet_off": 0,
+    "denied_or_excluded": 15
+   }
+  },
+  "u_narrow/prod": {
+   "runs": 30,
+   "agrees_with_V0": true,
+   "setup_ms_p50": 99.6,
+   "setup_ms_p95": 123.4,
+   "check_ms_p50": 209.4,
+   "check_ms_p95": 287.9,
+   "total_ms_p50": 309.4,
+   "total_ms_p95": 411.3,
+   "outcome": {
+    "ok": 35,
+    "snippet_off": 0,
+    "denied_or_excluded": 15
+   }
+  },
+  "u_shared/V0": {
+   "runs": 30,
+   "agrees_with_V0": true,
+   "setup_ms_p50": 90.9,
+   "setup_ms_p95": 107.2,
+   "check_ms_p50": 245.6,
+   "check_ms_p95": 272.2,
+   "total_ms_p50": 339.7,
+   "total_ms_p95": 371.1,
+   "outcome": {
+    "ok": 10,
+    "snippet_off": 10,
+    "denied_or_excluded": 40
+   }
+  },
+  "u_shared/V1": {
+   "runs": 30,
+   "agrees_with_V0": true,
+   "setup_ms_p50": 94.4,
+   "setup_ms_p95": 103.4,
+   "check_ms_p50": 212.7,
+   "check_ms_p95": 235.5,
+   "total_ms_p50": 311.8,
+   "total_ms_p95": 333.3,
+   "outcome": {
+    "ok": 10,
+    "snippet_off": 10,
+    "denied_or_excluded": 40
+   }
+  },
+  "u_shared/V2": {
+   "runs": 30,
+   "agrees_with_V0": true,
+   "setup_ms_p50": 90.4,
+   "setup_ms_p95": 104.6,
+   "check_ms_p50": 207.6,
+   "check_ms_p95": 258.7,
+   "total_ms_p50": 298.3,
+   "total_ms_p95": 360.1,
+   "outcome": {
+    "ok": 10,
+    "snippet_off": 10,
+    "denied_or_excluded": 40
+   }
+  },
+  "u_shared/V3": {
+   "runs": 30,
+   "agrees_with_V0": true,
+   "setup_ms_p50": 90.1,
+   "setup_ms_p95": 102.7,
+   "check_ms_p50": 134.2,
+   "check_ms_p95": 155.5,
+   "total_ms_p50": 223.7,
+   "total_ms_p95": 258.2,
+   "outcome": {
+    "ok": 10,
+    "snippet_off": 10,
+    "denied_or_excluded": 40
+   }
+  },
+  "u_shared/prod": {
+   "runs": 30,
+   "agrees_with_V0": true,
+   "setup_ms_p50": 91.2,
+   "setup_ms_p95": 104.2,
+   "check_ms_p50": 209.5,
+   "check_ms_p95": 237.6,
+   "total_ms_p50": 299.5,
+   "total_ms_p95": 335.5,
+   "outcome": {
+    "ok": 10,
+    "snippet_off": 10,
+    "denied_or_excluded": 40
+   }
+  }
+ }
+}

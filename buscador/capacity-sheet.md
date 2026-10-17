@@ -5,7 +5,7 @@ Status: **indicative**. Measured by the S0 harness on a synthetic Spanish corpus
 | Field | Value |
 |---|---|
 | Box | 8 cores, 31 GB RAM, 328 GB free disk, no GPU; shared with other containers (load average 4-7 during the m6/m7 latency runs, 1.5-3 during m8 and m9) |
-| Software | PostgreSQL 17.11, pgvector 0.8.7, Nextcloud 34.0.4, Tesseract 5.3.0 (`spa+eng`), ocrmypdf 14.0.1, multilingual-e5-small int8 (ONNX) |
+| Software | PostgreSQL 17.11 (S0; S1 re-ran the head-term query on 18, see below), pgvector 0.8.7, Nextcloud 34.0.4, Tesseract 5.3.0 (`spa+eng`), ocrmypdf 14.0.1, multilingual-e5-small int8 (ONNX) |
 | Corpus (functional) | 6 003 pages, 434 files, 13.8 pages/file, 46.8 % image-only pages, 3.0 chunks/page; 769 tokens/page of page text, ~285 tokens per chunk in the embedding sample (350-token target, overlap included) |
 | Corpus (scale) | 3 000 000 chunks = 1M-page equivalent; 50 000 files; 200-group admin and 1.6 %-of-files narrow user |
 | OCR s/page | 2.3 s (1 process), 2.8 s/page/core with 8 processes, `tessdata_fast`; `tessdata_best` 4.2 / 5.3 s. Through `ocrmypdf` 6.0 s, 9.6 s with deskew+rotate |
@@ -16,7 +16,7 @@ Status: **indicative**. Measured by the S0 harness on a synthetic Spanish corpus
 | FTS p50 / p95 | with the head-term pre-limit: p50 2 ms, p95 0.22 s (1 searcher), 0.22 s (5), 0.27 s (10), 0.54 s (20). Without it: p50 44 ms, p95 6.8 s (1), 12 s (5), 22 s (10), 38 s (20) |
 | Hybrid p50 / p95 | p50 0.09 s; p95 with `relaxed_order` + re-sort 0.32 s (1 searcher), 0.33 (5), 0.42 (10), 0.82 (20); `strict_order` 0.31 / 0.34 / 0.43 / 0.89 |
 | Page 50 / 100 | keyword p95 0.22 s, hybrid p95 0.35 s at 5 searchers (SQL stage only) |
-| `isReadable` x50 p95 | 760-820 ms naive per hit; 330-405 ms with a per-request folder cache for the two groupfolder users (share-only user: 425 ms naive, 233 ms cached) (check only; FS setup +100-160 ms). Target 300 ms: **not met, design needed** (see `02-performance.md`) |
+| `isReadable` x50 p95 | **S1 (corrected probe, 3 users x 30 reps, 5 variants)**: worst-user check p95 **308.5 ms** for the best variant (search-constrained, `Folder::search`; not adopted) and **377.4 ms** for the shipped design (`Recheck` + `ExclusionChecker`: one FS setup, per-hit `getById`, folder memo, bulk tag lookup); naive 644 ms, memo 466 ms, memo + bulk tags 381 ms; FS setup 105-176 ms apart. All variants decided every hit like the naive reference. Target 300 ms: **A-PERF-3 not met**, waiver proposed in `adr/0010-recheck-budget.md`. S0's 330-405 ms is superseded (its probe missed download-disabled hits, expiry, multi-mount and the ancestors above the mount) |
 | recall@10 (K, S, H) | not measurable in S0 (needs the S4 gold set on real text); ANN vs exact recall: 30k real chunks 0.959 / 0.987 / 0.994 at `ef_search` 100 / 200 / 400; 3M clustered synthetic 0.78 / 0.85 / 0.89 (relative figure) |
 | Filtered recall | 200-group admin = unfiltered by construction (gap 0). Narrow user on the ANN path: 0.81 at 3M clustered (4 points below unfiltered at `ef_search` 200, 8 below at 400); on the exact path 1.0. So the 5-point rule holds with the exact-scan switch below ~2 000 readable files. Without iterative scan: 0.14 and every query short; `strict_order` 0.57 |
 | Backfill hours (1M pages, 8 cores) | ~71 h box dedicated (OCR 359 core-h + embedding 208 core-h); ~9 nights of 8 h; keyword lane alone ~45 h. Indicative: best case |
@@ -31,3 +31,7 @@ Status: **indicative**. Measured by the S0 harness on a synthetic Spanish corpus
 - The per-request folder cache in the recheck measurement is a best case (all 50 hits in one folder tree); the conclusion that a recheck design is needed is robust because even that best case misses 300 ms.
 - The hybrid page-100 run fuses two 50-row legs (at most 100 chunks), so its cost is understated.
 - Concurrency levels 5/10/20 were driven from one load generator on the same host as the database.
+
+## S1 additions (2026-10-16)
+- **PostgreSQL 17.11 vs 18 (head-term query, same 3M-chunk text stream and seed, same tuning; `spikes/s1/results-s1/headterm/`):** the two runs agree within noise. Stress head terms with the 10 000-candidate pre-limit: p50 88.8 ms (17.11) vs 89.8 ms (18), p95 204.8 vs 178.6 ms. Realistic head terms with the same pre-limit: p50 145.6 vs 145.4 ms, p95 192.3 vs 201.2 ms. Uncapped baselines: 9.7 s vs 8.9 s (stress p95), 5.3 s vs 5.3 s (realistic p95). The pre-limit stays mandatory and PostgreSQL 18 is confirmed as the S1 image (the vectors were not reloaded: the query reads `chunk.tsv` and `file_acl` only, so HNSW sizes and recall are S0's PG 17 figures).
+- **Recheck, the figures behind the row above** (worst user = the 200-group one; check p95 in ms, setup p95 apart): naive 644 (176), folder memo 466 (156), memo + bulk tags 381 (168), search-constrained 308.5 (163), shipped 377.4 (168). The 1-group user is 165-288 and the share-only user 156-259. Box: 8 cores, load average 2.3 before and after the run (the shared VPS usually sits at 4-7, so quieter than S0, not idle). The fixture is 50 hits: 20 bulk, 3 multi-mount, 10 behind a download-disabled share, 2 behind an expired share, 5 ACL-denied, 10 tagged.

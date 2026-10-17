@@ -1,0 +1,21 @@
+{
+ "chunks": 3000000,
+ "host": {
+  "cpu_pressure": "some avg10=3.47 avg60=5.51 avg300=3.57 total=129584164\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0",
+  "loadavg": [
+   5.8212890625,
+   4.23583984375,
+   2.80615234375
+  ]
+ },
+ "index_seconds": {
+  "chunk_file_idx": 0.9,
+  "chunk_pkey": 3.6,
+  "chunk_tsv_gin": 42.4,
+  "file_acl_gin": 0.1,
+  "file_acl_pkey": 0.0
+ },
+ "load_seconds": 186.9,
+ "measured_at": "2026-10-16T22:30:27+0000",
+ "server": "PostgreSQL 18.6 (Debian 18.6-1.pgdg12+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit"
+}

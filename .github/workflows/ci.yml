@@ -1,0 +1,51 @@
+# Buscador Documental CI. Everything runs in Docker (images pinned by digest in compose.yaml); nothing needs PHP,
+# Tesseract or Postgres on the runner. Actions are pinned by major tag; pin to commit SHAs before the first release.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  php:
+    name: php (unit, contract, db, search)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: make -C app test-unit
+      - run: make -C app test-contract
+      - run: make -C app test-db
+      - run: make -C app test-search
+      - run: make -C app clean
+        if: always()
+
+  worker:
+    name: worker (python)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: make -C worker test
+
+  smoke:
+    name: smoke (permission canary)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    needs: [php, worker]
+    steps:
+      - uses: actions/checkout@v4
+      - run: make -C app test-canary
+      - name: Logs on failure
+        if: failure()
+        run: docker compose -f compose.yaml logs --no-color --tail=200
+      - run: make -C app clean
+        if: always()
