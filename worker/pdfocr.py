@@ -4,10 +4,12 @@
 Each PDF page is classified from its own text layer:
   native      plausible text: kept as is (source "layer", no confidence)
   image-only  no usable text: OCR (ocrmypdf --skip-text) (source "ocr")
-  untrusted   text that fails the plausibility tests: OCR with --force-ocr, the layer is thrown away
+  untrusted   text that fails the plausibility tests, or any text on a page with a scan-sized image: OCR with
+              --force-ocr, the layer is thrown away
 OCR runs on one-page PDFs, so a timeout or failure is attributed to a page and nothing depends on how ocrmypdf lays out
 its sidecar for a whole document. Confidence is the mean Tesseract word confidence (0-100) of the OCR'd page.
-Known limit: an invisible layer that looks like real prose passes the cheap tests and is kept."""
+A page carrying a scan-sized image is always OCR'd, whatever its text layer says. Known limit: a born-digital page whose
+layer is wrong but has no large image passes if the layer looks like prose."""
 import csv
 import io
 import os
@@ -19,13 +21,14 @@ from functools import lru_cache
 import ocr
 from ocr import LANGS, OcrFailed, OcrTimeout
 
-POLICY = "perpage-1"
+POLICY = "perpage-2"
 ROTATE_THRESHOLD = "2.0"       # ocrmypdf default 14 ignores sparse pages (OSD confidence ~4.5 on a four-line page)
 PAGE_TIMEOUT = int(os.environ.get("BD_PAGE_TIMEOUT", "300"))
 TESSERACT_TIMEOUT = 180
 MIN_CHARS = 5
 MAX_BAD_SHARE = 0.02          # U+FFFD, private-use and control characters
 MIN_LETTER_SHARE = 0.5
+SCAN_PIXELS = 1_000_000       # an image this large on a page makes the page a scan: its text layer is not trusted
 STOPWORD_CHECK_FROM = 30      # letters; shorter snippets ("Página 3 de 10") are not judged by vocabulary
 
 STOPWORDS = set("""
@@ -36,10 +39,15 @@ will would can has had were been one all there when what so if out about into th
 """.split())
 
 
-def classify(text: str) -> str:
+def classify(text: str, image_heavy: bool = False) -> str:
+    """image_heavy: the page carries a scan-sized image. Whatever text rides on top of a scan cannot be checked without
+    reading the image, which costs as much as OCR, so such a page is always OCR'd (S2 evaluation: a short layer of wrong
+    words passes every text-only test)."""
     chars = [c for c in text if not c.isspace()]
     if len(chars) < MIN_CHARS:
         return "image-only"
+    if image_heavy:
+        return "untrusted"
     bad = sum(1 for c in chars if c == "�" or 0xE000 <= ord(c) <= 0xF8FF or (ord(c) < 32) or 0x7F <= ord(c) < 0xA0)
     letters = sum(1 for c in chars if c.isalpha())
     if bad / len(chars) > MAX_BAD_SHARE or letters / len(chars) < MIN_LETTER_SHARE:
@@ -111,6 +119,17 @@ def _layer_texts(path: str) -> list:
     return extract.extract(path)
 
 
+def _image_heavy(path: str) -> list:
+    import pikepdf
+    out = []
+    with pikepdf.open(path) as pdf:
+        for page in pdf.pages:
+            xobjects = (page.get("/Resources") or {}).get("/XObject") or {}
+            out.append(any(xo.get("/Subtype") == "/Image" and int(xo.get("/Width", 0)) * int(xo.get("/Height", 0)) >= SCAN_PIXELS
+                           for xo in xobjects.values()))
+    return out
+
+
 def _single_page(src: str, index: int, dst: str) -> None:
     import pikepdf
     with pikepdf.open(src) as pdf, pikepdf.new() as one:
@@ -131,8 +150,9 @@ def run(path: str, layer: list = None) -> dict:
             text, out = ocr_page(path, False, tmp, image=True)
             return {"pages": [text], "conf": [page_confidence(out, tmp)], "source": ["ocr"]}
         layer = layer if layer is not None else _layer_texts(path)
+        heavy = _image_heavy(path)
         for i, text in enumerate(layer):
-            kind = classify(text)
+            kind = classify(text, heavy[i] if i < len(heavy) else False)
             if kind == "native":
                 pages.append(text)
                 conf.append(None)

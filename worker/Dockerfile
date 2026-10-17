@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir "psycopg[binary]==3.2.*" requests==2.34.2 PyYAML==6.0.3 pypdf==6.21.0 \
       openpyxl==3.1.5 defusedxml==0.7.1 pikepdf==10.17.0 \
-      pytest==9.1.1 pillow==13.0.0 reportlab==5.0.1 rapidfuzz==3.14.6 hypothesis==6.170.1   # the last five are test/eval-only
+      pytest==9.1.1 pillow==13.0.0 reportlab==5.0.1 rapidfuzz==3.14.6 hypothesis==6.170.1 numpy==2.5.4   # the last five are test/eval-only
 ENV OMP_THREAD_LIMIT=1 PYTHONUNBUFFERED=1
 WORKDIR /worker
 COPY . /worker

@@ -12,9 +12,9 @@
 | A-SEC-6 | Erasure on user deletion; `occ purge-user` | S3 | test + audit pseudonymisation |
 | A-SEC-7 | Legal gate recorded before real-data install (counsel, DPIA, notice, pause) | S7 (release gate; blocks real-data install from day one) | ADR-0006 supersession note present |
 | A-SEC-8 | STRIDE review closed for worker channel | S7 | review artifact with no open high |
-| A-SAFE-1 | User files unchanged by indexing | S2 | hash test |
-| A-SAFE-2 | Sandbox: zip bomb and malicious PDF end `skipped` | S2 | sandbox tests |
-| A-SAFE-3 | Encrypted files skipped with visible reason | S2 | skipped-files table test |
+| A-SAFE-1 | User files unchanged by indexing | S2 | hash test: `worker/tests/test_extract.py::test_extraction_never_modifies_the_input` and, live, `make -C app test-e2e-formats` (SHA-256 of 12 sources before and after). **S2: met** |
+| A-SAFE-2 | Sandbox: zip bomb and malicious PDF end `skipped` | S2 | `make -C worker test-sandbox` (9 isolation properties inside the parser container, ADR-0011) + hostile-file tests (`test_extract.py`, live in `test-e2e-formats`: zip/entity/nesting bombs, pixel bombs, truncated zip, password PDF, over-page-cap PDF, 1.2 M-cell xlsx). **S2: met** |
+| A-SAFE-3 | Encrypted files skipped with visible reason | S2 | `file_state.skip_reason` = `encrypted` (user-password PDF) asserted in `test-e2e-formats`; owner-password-only PDFs are read (ADR-0012). The administrator-facing skipped-files table is S3/S6. **S2: met for the reason, UI pending** |
 | A-PERF-1 | Keyword p95 < 1 s at 1M-page equivalent `[M0 = 1 s]` | S0, S7 | load test report. **S0 (indicative, 3M chunks, 200-query gold set): 0.22 s at 1-10 searchers, 0.54 s at 20, only with the head-term pre-limit; 6.8-38 s without it.** `capacity-sheet.md` |
 | A-PERF-2 | Hybrid p95 < 2 s `[M0 = 2 s]` | S4, S7 | load test report. S0 indicative: 0.31 s at 1 searcher, 0.82 s at 20 |
 | A-PERF-3 | `isReadable` for 50 hits p95 < 300 ms `[M0 = 300 ms]` else cache design | S0 | measurement in capacity sheet. **S0: not met** (naive 760-820 ms, per-request folder cache 330-405 ms); recheck design delivered in S1. **S1: not met** with the corrected probe (50 hits, worst user: shipped design 377 ms, best variant 308 ms, FS setup apart); waiver accepted in ADR-0010 (2026-10-17) (`02-performance.md`, `capacity-sheet.md`) |

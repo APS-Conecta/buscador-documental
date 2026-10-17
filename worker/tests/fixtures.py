@@ -138,8 +138,9 @@ def scan_image(lines=LINES, rotate=0):
     return img.rotate(rotate, expand=True) if rotate else img
 
 
-def scan_pdf(path, lines=LINES, rotate=0, garbage_layer=False):
-    """An image-only page, optionally rotated, optionally with an invisible garbage text layer on top."""
+def scan_pdf(path, lines=LINES, rotate=0, garbage_layer=False, layer_text=None, visible=False):
+    """An image-only page, optionally rotated, optionally with a text layer on top (garbage, or `layer_text`)."""
+    garbage_layer = garbage_layer or layer_text is not None
     if not garbage_layer:
         scan_image(lines, rotate).save(path, "PDF", resolution=200.0)
         return str(path)
@@ -150,8 +151,8 @@ def scan_pdf(path, lines=LINES, rotate=0, garbage_layer=False):
     c = canvas.Canvas(str(path), pagesize=(w * 72 / 200, h * 72 / 200))
     c.drawImage(ImageReader(img), 0, 0, width=w * 72 / 200, height=h * 72 / 200)
     t = c.beginText(40, 400)
-    t.setTextRenderMode(3)                       # invisible
-    t.textLine("#@!$%^&*()_+{}|:<>?~" * 6)
+    t.setTextRenderMode(0 if visible else 3)     # 3 = invisible
+    t.textLine(layer_text if layer_text is not None else "#@!$%^&*()_+{}|:<>?~" * 6)
     c.drawText(t)
     c.save()
     return str(path)
@@ -163,4 +164,15 @@ def merge_pdfs(path, parts):
         with pikepdf.open(p) as src:
             out.pages.extend(src.pages)
     out.save(path)
+    return str(path)
+
+
+def native_with_logo(path, text="La paciente fue derivada a nutricion y control en tres meses"):
+    """A born-digital page that carries a small logo image: it must stay a text-layer page."""
+    from reportlab.lib.utils import ImageReader
+    from reportlab.pdfgen import canvas
+    c = canvas.Canvas(str(path), pagesize=(595, 842))
+    c.drawString(60, 700, text)
+    c.drawImage(ImageReader(Image.new("RGB", (120, 60), (200, 30, 30))), 60, 760, width=120, height=60)
+    c.save()
     return str(path)

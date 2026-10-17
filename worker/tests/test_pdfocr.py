@@ -32,6 +32,14 @@ def test_short_but_real_text_is_native():
     assert pdfocr.classify("Página 3 de 10") == "native"
 
 
+# ---- image-dominated pages ----
+def test_plausible_text_on_an_image_dominated_page_is_not_trusted():
+    prose = "La paciente fue derivada a nutricion y control en tres meses. Se indica dieta y ejercicio."
+    assert pdfocr.classify(prose) == "native"
+    assert pdfocr.classify(prose, image_heavy=True) == "untrusted"
+    assert pdfocr.classify("", image_heavy=True) == "image-only"
+
+
 # ---- pipeline ----
 def test_native_pages_are_kept_without_ocr(tmp_path, monkeypatch):
     monkeypatch.setattr(pdfocr, "ocr_page", lambda *a, **k: pytest.fail("no OCR for a native page"))
@@ -85,7 +93,7 @@ def test_a_page_that_times_out_fails_the_job_as_a_timeout(tmp_path, monkeypatch)
 
 def test_ocr_version_changes_with_the_policy(monkeypatch):
     a = pdfocr.version()
-    monkeypatch.setattr(pdfocr, "POLICY", "perpage-2")
+    monkeypatch.setattr(pdfocr, "POLICY", "perpage-test-policy")
     pdfocr.version.cache_clear()
     assert pdfocr.version() != a
     pdfocr.version.cache_clear()
@@ -96,3 +104,21 @@ def test_images_are_ocrd_as_one_page(tmp_path):
     fx.scan_image().save(p)
     out = pdfocr.run(str(p))
     assert out["source"] == ["ocr"] and has(out["pages"][0])
+
+
+REVERSED = " ".join(w[::-1] for w in "la paciente fue derivada a nutricion y control en tres meses de la unidad".split())
+
+
+@pytest.mark.parametrize("visible", [False, True], ids=["invisible", "visible"])
+def test_a_plausible_looking_wrong_layer_under_a_scan_is_replaced(tmp_path, visible):
+    """The S0 'fake layer' kinds: a short line of reversed words that passes the vocabulary test."""
+    out = pdfocr.run(fx.scan_pdf(tmp_path / "f.pdf", layer_text=REVERSED, visible=visible))
+    assert out["source"] == ["ocr"] and has(out["pages"][0])
+    if not visible:
+        assert "etneicap" not in out["pages"][0]
+
+
+def test_a_small_logo_does_not_turn_a_born_digital_page_into_a_scan(tmp_path, monkeypatch):
+    monkeypatch.setattr(pdfocr, "ocr_page", lambda *a, **k: pytest.fail("a logo is not a scan"))
+    out = pdfocr.run(fx.native_with_logo(tmp_path / "l.pdf"))
+    assert out["source"] == ["layer"] and "derivada" in out["pages"][0]

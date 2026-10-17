@@ -1,0 +1,50 @@
+{
+ "summary": {
+  "mixed": {
+   "pages": 29,
+   "cer": 0.0003502127218013905,
+   "wer": 0.002496994358642375,
+   "catastrophic": 0
+  },
+  "native": {
+   "pages": 23,
+   "cer": 0.0,
+   "wer": 0.0,
+   "catastrophic": 0
+  },
+  "photo": {
+   "pages": 1,
+   "cer": 0.0014760147601476014,
+   "wer": 0.010582010582010581,
+   "catastrophic": 0
+  },
+  "scanned": {
+   "pages": 67,
+   "cer": 0.0011374396960850783,
+   "wer": 0.008073586118251928,
+   "catastrophic": 0
+  },
+  "all": {
+   "pages": 120,
+   "cer": 0.0007306654676258993,
+   "wer": 0.005186095898066391,
+   "catastrophic": 0
+  }
+ },
+ "gate": {
+  "pass": true,
+  "cer": 0.0007306654676258993,
+  "wer": 0.005186095898066391,
+  "criterion": {
+   "cer": 0.02,
+   "wer": 0.05
+  }
+ },
+ "seconds": 994.9,
+ "ocr_ver": "ocrmypdf 14.0.1+dfsg1; tesseract 5.3.0; langs=spa+eng; policy=perpage-1",
+ "limits": [
+  "synthetic clean DejaVu Sans text from a Zipf word model",
+  "photos tilted +-4 degrees only (no 90/180/270 photos)",
+  "fake_invisible layers are garbage text, not plausible prose"
+ ]
+}
