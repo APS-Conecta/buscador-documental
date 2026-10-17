@@ -9,7 +9,7 @@ NET := bd-s1_default
 DOCKER := docker run --rm -v "$(CURDIR)":/app -w /app $(IMG)
 DOCKER_NET := docker run --rm --network $(NET) -v "$(CURDIR)":/app -w /app -e BD_PG_HOST=db $(IMG)
 
-.PHONY: instance-reset-schema test-e2e-formats test-e2e-one test-contract test-search test-canary build-test-image deps test-unit test-db up down clean instance-migrate
+.PHONY: instance-reset-schema test-e2e-rbac test-e2e-logs bench-reconcile test-e2e-reconcile test-e2e-erasure test-e2e-events test-e2e-scope test-e2e-groupfolder test-e2e-formats test-e2e-one test-contract test-search test-canary build-test-image deps test-unit test-db up down clean instance-migrate
 
 build-test-image:
 	docker build -q -f Dockerfile.test -t $(IMG) . >/dev/null
@@ -57,6 +57,38 @@ clean:
 # One scanned PDF through app + worker + OCR into the index (S1 plan, phase 2).
 test-e2e-one:
 	bash tests/e2e/one.sh
+
+# The adversarial permission matrix with the real mechanisms (circles, team-folder ACL, expiry, moves, multi-mount, deletion).
+test-e2e-rbac:
+	bash tests/e2e/rbac.sh
+
+# A-SEC-5: sentinels through the whole pipeline, then every log sink, with positive controls (S3 plan, phase 7).
+test-e2e-logs:
+	bash tests/e2e/logs.sh
+
+# Reconciliation at scale: N synthetic files (default 300000), real Reconciler, EXPLAIN ANALYZE (S3 plan, phase 6).
+bench-reconcile:
+	bash ../spikes/s3/bench/scale.sh
+
+# The nightly reconciliation repairs lost events, against the live stack (S3 plan, phase 6, A-OPS-3).
+test-e2e-reconcile:
+	bash tests/e2e/reconcile.sh
+
+# Erasure on tag, trash and user deletion against the live stack (S3 plan, phase 5).
+test-e2e-erasure:
+	bash tests/e2e/erasure.sh
+
+# Real Nextcloud events drive the index through the outbox (S3 plan, phase 4).
+test-e2e-events:
+	bash tests/e2e/events.sh
+
+# The occ scope commands against the live stack (S3 plan, phase 2).
+test-e2e-scope:
+	bash tests/e2e/scope.sh
+
+# A team folder (groupfolders >= 4, own storage): members find its files, outsiders do not (needs network once).
+test-e2e-groupfolder:
+	bash tests/e2e/groupfolder.sh
 
 # Every tier-1/2 format and the hostile files, against the live stack (S2 plan, phase 2).
 test-e2e-formats:

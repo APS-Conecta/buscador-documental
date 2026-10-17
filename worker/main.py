@@ -12,6 +12,7 @@ import sys
 import tempfile
 import threading
 import time
+import traceback
 
 import psycopg
 import requests
@@ -35,6 +36,19 @@ SUPPORTED_MIMES = {
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "application/vnd.oasis.opendocument.text"}
 SILENT_DB_ERRORS = ("stale_lease", "etag_mismatch", "hash_mismatch", "file_skipped")
+
+
+SUPPORTED_SCHEMA = 2           # aps_search.schema_meta.schema_ver this worker was written for (S3 migration)
+
+
+def check_schema(conn):
+    """A worker on an unknown schema could write rows the app does not expect (or miss ones it must write): refuse to run."""
+    try:
+        found = conn.execute("SELECT aps_search.schema_version()").fetchone()[0]
+    except psycopg.Error as e:
+        sys.exit(f"cannot read the index schema version ({type(e).__name__}); expected {SUPPORTED_SCHEMA}")
+    if found != SUPPORTED_SCHEMA:
+        sys.exit(f"index schema version {found} is not supported by this worker (expected {SUPPORTED_SCHEMA})")
 
 
 def env(name, default=None):
@@ -131,9 +145,10 @@ def process(conn, api, dsn, job_id, epoch, file_id):
                 log.error("job %s: the parser returned a malformed answer (%s)", job_id, e)
                 return fail(conn, job_id, epoch, "internal", False)
             if answer.get("status") != "ok":
-                if answer.get("detail"):
-                    log.warning("job %s: parser said: %s", job_id, clean_detail(answer["detail"]))
                 reason = answer.get("reason") if answer.get("reason") in KNOWN_REASONS else "ocr_failed"
+                log.warning("job %s: parser refused the file (%s)", job_id, reason)      # the reason code, never its detail (A-SEC-5)
+                if answer.get("detail") and os.environ.get("BD_DEBUG_PARSER") == "1":
+                    log.warning("job %s: parser detail (debug only, may hold document text): %s", job_id, clean_detail(answer["detail"]))
                 return fail(conn, job_id, epoch, reason, reason in RETRYABLE)
             pages = answer["pages"]
             if sum(len(p) for p in pages) > MAX_TEXT_CHARS:
@@ -175,10 +190,30 @@ def process(conn, api, dsn, job_id, epoch, file_id):
             return fail(conn, job_id, epoch, "too_large", False)
         raise
     except Exception:
-        log.exception("job %s: unexpected error, lease will expire", job_id)
+        log.error("job %s: unexpected error (%s), lease will expire", job_id, where(sys.exc_info()))
         return "abandoned"                 # the attempts cap in claim_job bounds a deterministic bug
     finally:
         hb.stop.set()
+
+
+def where(exc_info):
+    """Exception class and the place it was raised: enough to debug, and no message (messages can hold document text)."""
+    kind, _value, tb = exc_info
+    frames = traceback.extract_tb(tb) if tb else []
+    place = f"{os.path.basename(frames[-1].filename)}:{frames[-1].lineno}" if frames else "?"
+    return f"{kind.__name__} at {place}"
+
+
+def run_guarded():
+    """Entry point: an uncaught error ends the worker with a one-line, message-free note instead of a traceback (a
+    database error's message can carry the offending row, i.e. document text)."""
+    try:
+        main()
+    except SystemExit:
+        raise
+    except Exception:
+        print(f"bd-worker stopped: {where(sys.exc_info())}", file=sys.stderr, flush=True)
+        sys.exit(1)
 
 
 def fail(conn, job_id, epoch, reason, retryable):
@@ -206,6 +241,7 @@ def main():
     api = bdclient.WorkerClient(env("BD_BASE_URL"), worker_id, env("BD_WORKER_SECRET"))
     once = "--once" in sys.argv
     with psycopg.connect(dsn, autocommit=True) as conn:
+        check_schema(conn)
         while True:
             n = run_once(conn, api, dsn, worker_id)
             if once:
@@ -215,4 +251,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    run_guarded()

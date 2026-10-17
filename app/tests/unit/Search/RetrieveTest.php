@@ -48,6 +48,19 @@ class RetrieveTest extends TestCase {
 		return TreeChecker::make([10 => 1, 11 => 1, 1 => -1], [[3, 'rag-excluded']], []);
 	}
 
+	public function testSnippetOfAChangedFileIsNotServed(): void {
+		$n = $this->createMock(Node::class);
+		$n->method('isReadable')->willReturn(true);
+		$n->method('getName')->willReturn('a.pdf');
+		$n->method('getEtag')->willReturn('new');
+		$recheck = ScriptedRecheck::make([10 => [$n]], $this->checker());
+		$db = $this->db([['file_id' => 10, 'chunk_id' => 7, 'etag' => 'old']], [['chunk_id' => 7, 'page_no' => 2, 'heading' => 'H', 'snippet' => 'texto viejo']]);
+
+		$out = $this->retrieve($db, $recheck)->run('b', 'texto', 10);
+
+		$this->assertSame([['file_id' => 10, 'title' => 'a.pdf']], $out['hits']);
+	}
+
 	public function testDownloadDisabledHitIsTitleOnlyInFull(): void {
 		$n = $this->node('contrato.pdf');
 		$recheck = ScriptedRecheck::make([10 => [$n]], $this->checker());
@@ -167,5 +180,28 @@ class RetrieveTest extends TestCase {
 		$out = $this->retrieve($db, ScriptedRecheck::make([10 => [$this->node('a.pdf')]], $this->checker()))->run('b', 'x', 10);
 		$this->assertSame('ok', $out['status']);
 		$this->assertSame(2, $timed, 'candidates and headline are both bounded');
+	}
+
+	public function testNothingFromTheQueryOrTheErrorMessageReachesTheLog(): void {
+		$sentinel = 'SENTINEL-contrato-Juan-Perez';
+		$logged = [];
+		$logger = $this->createMock(LoggerInterface::class);
+		foreach (['warning', 'error', 'info', 'debug', 'notice'] as $level) {
+			$logger->method($level)->willReturnCallback(function (string $m, array $ctx = []) use (&$logged): void {
+				$logged[] = $m . ' ' . json_encode($ctx);
+			});
+		}
+		$recheck = ScriptedRecheck::make([10 => [$this->node('a.pdf')]], $this->checker());
+		// the exclusion check fails with a message that (wrongly) carries text
+		$db = $this->db([['file_id' => 10, 'chunk_id' => 500]]);
+		$principals = $this->createMock(PrincipalResolver::class);
+		$principals->method('forUser')->willReturn(['u:b']);
+		$failing = $this->createMock(\OCA\BuscadorDocumental\Search\Recheck::class);
+		$failing->method('filter')->willThrowException(new \OCA\BuscadorDocumental\Acl\ExclusionUnavailable("tag lookup failed for $sentinel"));
+		$out = (new Retrieve($db, $principals, $failing, $logger))->run('b', $sentinel, 10);
+		$this->assertSame('unavailable', $out['status']);
+		$this->assertNotEmpty($logged, 'the control: the failure is logged');
+		$this->assertStringNotContainsString($sentinel, implode(' ', $logged));
+		$this->assertStringNotContainsString($sentinel, json_encode($out), 'and the response does not echo the query');
 	}
 }

@@ -34,7 +34,7 @@ def main(req_path: str, res_path: str) -> None:
     except ocr.OcrFailed:
         out = {"status": "error", "reason": "ocr_failed"}
     except Exception as e:                                 # a bug or a hostile shape we did not foresee: terminal, not retried
-        out = {"status": "error", "reason": "internal", "detail": f"{type(e).__name__}: {str(e)[:120]}"}
+        out = {"status": "error", "reason": "internal", "detail": type(e).__name__}      # never the message: it can hold document text
     with open(res_path, "w") as fh:
         json.dump(out, fh)
 

@@ -19,7 +19,7 @@ def main():
         try:
             jobbox.serve_once(WORK, wait=1.0)
         except Exception as e:                     # a full disk or a vanished directory must not end the parser
-            print(f"parserd: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
+            print(f"parserd: {type(e).__name__} at {os.path.basename(e.__traceback__.tb_frame.f_code.co_filename) if e.__traceback__ else '?'}", file=sys.stderr, flush=True)      # class only: messages can hold document text
             time.sleep(1)
 
 

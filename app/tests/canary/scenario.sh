@@ -42,9 +42,10 @@ $OCC app:enable buscador_documental >/dev/null
 $OCC config:system:set trusted_domains 2 --value=nextcloud >/dev/null
 $OCC config:app:set buscador_documental worker_secret --value="$SECRET" --sensitive >/dev/null
 for u in canary_a canary_b canary_c; do $OCC user:delete "$u" >/dev/null 2>&1 || true; done
+# A public tag left by another suite (the events suite creates one) must go BEFORE setup reuses or creates the restricted one.
+$PSQL -c "delete from oc_systemtag where name='rag-excluded' and visibility=1" >/dev/null   # leftover duplicate from an aborted run
 $CTL setup
 $PSQL -c "TRUNCATE aps_search.job, aps_search.page, aps_search.chunk, aps_search.file_state, aps_search.file_meta, aps_search.file_acl RESTART IDENTITY"
-$PSQL -c "delete from oc_systemtag where name='rag-excluded' and visibility=1" >/dev/null   # leftover duplicate from an aborted run
 $C --profile worker build worker >/dev/null
 $C --profile worker up -d --wait parser >/dev/null
 OUT=$(mktemp -d /tmp/bd-s1-canary.XXXXXX)

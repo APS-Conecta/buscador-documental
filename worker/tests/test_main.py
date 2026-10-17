@@ -199,8 +199,37 @@ def test_the_parser_timeout_scales_with_the_file_size():
 
 
 def test_parser_detail_is_logged_without_control_characters(monkeypatch, caplog):
+    monkeypatch.setenv("BD_DEBUG_PARSER", "1")                  # only in debug mode is the detail logged at all
     monkeypatch.setattr(main, "parse", lambda *a: {"status": "error", "reason": "ocr_failed", "detail": "a\rb\x1b[31mc\x0bd e"})
     with caplog.at_level("WARNING", logger="bd-worker"):
         run(FakeConn(), FakeApi())
-    msg = [r.getMessage() for r in caplog.records if "parser said" in r.getMessage()][0]
+    msg = [r.getMessage() for r in caplog.records if "parser detail" in r.getMessage()][0]
     assert not any(ch in msg for ch in "\r\x1b\x0b ")
+
+
+# ---------- S3: the worker refuses a schema it does not know ----------
+class VersionConn:
+    def __init__(self, version=None, error=None):
+        self.version, self.error = version, error
+
+    def execute(self, sql, params=()):
+        if self.error:
+            raise self.error
+        assert "schema_version" in sql
+        return type("R", (), {"fetchone": lambda s: (self.version,)})()
+
+
+def test_the_supported_schema_passes():
+    main.check_schema(VersionConn(main.SUPPORTED_SCHEMA))
+
+
+@pytest.mark.parametrize("version", [1, 3, 99])
+def test_an_unknown_schema_stops_the_worker_with_a_clear_message(version):
+    with pytest.raises(SystemExit) as e:
+        main.check_schema(VersionConn(version))
+    assert str(main.SUPPORTED_SCHEMA) in str(e.value) and str(version) in str(e.value)
+
+
+def test_a_missing_schema_function_stops_the_worker_too():
+    with pytest.raises(SystemExit):
+        main.check_schema(VersionConn(error=psycopg.errors.UndefinedFunction("no such function")))

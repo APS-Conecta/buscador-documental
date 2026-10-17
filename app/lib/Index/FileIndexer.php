@@ -12,7 +12,7 @@ use OCA\BuscadorDocumental\Acl\FileFactsSource;
 use OCA\BuscadorDocumental\Acl\PrincipalWriter;
 use OCA\BuscadorDocumental\Db\IndexDb;
 
-/** Puts one file into the index pipeline: state, metadata, principals and a text job. Listeners calling it are S3. */
+/** Puts one file into the index pipeline: state, metadata (with its storage), principals and a text job. Called by the outbox processor. */
 class FileIndexer {
 	public function __construct(
 		private IndexDb $db,
@@ -31,19 +31,25 @@ class FileIndexer {
 		if ($facts === null || $this->exclusion->isExcluded($fileId)) {
 			return false;
 		}
+		// A permanent verdict (encrypted, corrupt, ...) stands while the etag is unchanged; only policy skips are re-evaluated.
+		$reevaluable = "('excluded', 'out_of_scope', 'trashed', 'user_deleted')";
 		$this->db->execute(
 			"INSERT INTO aps_search.file_state (file_id, etag, text_state) VALUES (?, ?, 'pending')
 			 ON CONFLICT (file_id) DO UPDATE SET
 				text_state = CASE WHEN aps_search.file_state.etag IS DISTINCT FROM EXCLUDED.etag
-					OR aps_search.file_state.text_state = 'skipped' THEN 'pending' ELSE aps_search.file_state.text_state END,
-				skip_reason = NULL,
+					OR (aps_search.file_state.text_state = 'skipped' AND aps_search.file_state.skip_reason IN $reevaluable)
+					THEN 'pending' ELSE aps_search.file_state.text_state END,
+				skip_reason = CASE WHEN aps_search.file_state.etag IS DISTINCT FROM EXCLUDED.etag
+					OR (aps_search.file_state.text_state = 'skipped' AND aps_search.file_state.skip_reason IN $reevaluable)
+					THEN NULL ELSE aps_search.file_state.skip_reason END,
 				etag = EXCLUDED.etag, updated_at = now()",
 			[$fileId, $facts->etag],
 		);
 		$this->db->execute(
-			'INSERT INTO aps_search.file_meta (file_id, name, mime, mtime) VALUES (?, ?, ?, ?)
-			 ON CONFLICT (file_id) DO UPDATE SET name = EXCLUDED.name, mime = EXCLUDED.mime, mtime = EXCLUDED.mtime',
-			[$fileId, $facts->name, $facts->mime, $facts->mtime],
+			'INSERT INTO aps_search.file_meta (file_id, name, mime, mtime, storage_id) VALUES (?, ?, ?, ?, ?)
+			 ON CONFLICT (file_id) DO UPDATE SET name = EXCLUDED.name, mime = EXCLUDED.mime, mtime = EXCLUDED.mtime,
+				storage_id = EXCLUDED.storage_id',
+			[$fileId, $facts->name, $facts->mime, $facts->mtime, $facts->storageId],
 		);
 		$this->acl->writeFacts($facts);
 		// Unclaimed jobs for an older etag are obsolete; claimed ones fail with etag_mismatch and are reclaimed.

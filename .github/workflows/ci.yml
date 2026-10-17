@@ -46,6 +46,13 @@ jobs:
       - run: make -C app test-canary
       - run: make -C worker test-sandbox
       - run: make -C app test-e2e-formats
+      - run: make -C app test-e2e-groupfolder
+      - run: make -C app test-e2e-scope
+      - run: make -C app test-e2e-events
+      - run: make -C app test-e2e-erasure
+      - run: make -C app test-e2e-reconcile
+      - run: make -C app test-e2e-logs
+      - run: make -C app test-e2e-rbac
       - name: Logs on failure
         if: failure()
         run: docker compose -f compose.yaml logs --no-color --tail=200

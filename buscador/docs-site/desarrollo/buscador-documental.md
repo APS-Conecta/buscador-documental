@@ -48,6 +48,16 @@ La etapa S1 entrega el recorrido completo mínimo: una aplicación de Nextcloud 
 - **Fragmentación.** Los artículos y las secciones son las unidades; cada fragmento repite su encabezado; el solapamiento ocurre solo dentro de una unidad; las filas de tabla no se parten; un documento que no cabe se rechaza en lugar de truncarse.
 - **Criterio A-QUAL-1.** Con 406 páginas sintéticas: CER 0,25 %, WER 0,57 %. La primera política falló (CER 4,80 %) y se reemplazó; el motivo está en la ADR-0012. El corpus es sintético, por lo que el resultado es provisional hasta contar con documentos reales.
 
+## Decisiones de la etapa S3 (eventos, alcance y borrado)
+
+- **Eventos como pistas (ADR-0013).** Los oyentes solo guardan un identificador de archivo y un tipo en una bandeja de salida (`outbox`) sin duplicados; un procesador recalcula la verdad desde la caché de archivos, las etiquetas y las reglas de alcance. La pérdida, la repetición o el orden de los eventos no pueden corromper el índice. Los trabajos de Nextcloud son solo disparadores: el estado vive en PostgreSQL.
+- **Primero se quita, después se agrega.** Exclusión, salida del alcance, papelera y borrado se procesan antes de leer nada nuevo y no se detienen con la pausa.
+- **Alcance.** Reglas por identificador de archivo (carpeta con todo su contenido, o todas las carpetas de equipo); un único predicado sirve a los dos modos, y su forma masiva (consulta recursiva sobre el índice por padre) devuelve exactamente los mismos archivos. La papelera, las versiones y los almacenamientos externos nunca se leen.
+- **Borrado inmediato.** Una etiqueta `rag-excluded` en un archivo o carpeta, la papelera y la eliminación de una cuenta borran páginas, fragmentos, vectores y permisos (`erase_files`, una transacción por lote); la eliminación de una cuenta encuentra los archivos por el almacenamiento registrado, no por la caché de Nextcloud. La auditoría usa seudónimos aleatorios cuya correspondencia se elimina con la cuenta.
+- **Conciliación.** Conjunto elegible materializado una vez por pasada; ventanas por identificador con cursor reanudable; abandonada a las 36 horas o si cambian las reglas; la pasada inversa pone en cola en lugar de borrar.
+- **Cambios de permisos de carpetas de equipo** sin evento tipado: huella cada 15 minutos.
+- **Registros (A-SEC-5).** Ningún registro lleva texto de documentos ni consultas: los mensajes de error se reducen a la clase y el lugar; el detalle del proceso aislado solo se registra con `BD_DEBUG_PARSER=1`. Una prueba con centinelas recorre todo el flujo y busca en todos los registros, con una línea de control en cada uno.
+
 ## Pruebas
 
 Todo corre en Docker, en el proyecto de compose `bd-s1`, solo en `127.0.0.1`. Desde el directorio `app/`:
@@ -61,6 +71,8 @@ Todo corre en Docker, en el proyecto de compose `bd-s1`, solo en `127.0.0.1`. De
 | `make test-e2e-one` | Un PDF escaneado de punta a punta por la aplicación, el trabajador y el OCR. |
 | `make test-e2e-formats` | Seis formatos admitidos, una foto girada, una página con capa de texto falsa y cuatro archivos hostiles contra la instancia real; comprueba el estado final y que los originales no cambian ni un byte. |
 | `make -C worker test` | Extractores, política de reconocimiento, fragmentador (con propiedades de Hypothesis) y protocolo entre el proceso de trabajo y el contenedor aislado. `make -C worker test-sandbox`, `test-laws` y `eval-ocr` son comprobaciones aparte. |
+| `make test-e2e-events`, `test-e2e-erasure`, `test-e2e-reconcile`, `test-e2e-scope` | Eventos reales de Nextcloud (crear, editar, mover, etiquetar, compartir, papelera), borrado por etiqueta en carpeta y por eliminación de cuenta, conciliación con eventos perdidos y comandos de alcance. |
+| `make test-e2e-rbac`, `test-e2e-logs` | La matriz adversarial de permisos (equipos, ACL de carpetas de equipo, caducidad, movimiento, varias vías de acceso, propietario eliminado) y la prueba de centinelas en los registros. `make bench-reconcile` mide la conciliación con 300 000 archivos. |
 | `make test-canary` | Veinte comprobaciones con Nextcloud 34 y el trabajador reales: línea base, recurso revocado, descarga desactivada, grupo retirado, etiqueta en carpeta superior, etiqueta duplicada, borrado y rechazo al encolar. |
 
 `make clean` elimina únicamente los recursos de `bd-s1`. Las pruebas de trabajo en Python se ejecutan con `make -C worker test`. La integración continua (`.github/workflows/ci.yml`: `php`, `worker` y `smoke`) está escrita pero aún no se ha ejecutado en GitHub.

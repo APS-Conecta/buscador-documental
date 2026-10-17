@@ -33,6 +33,12 @@ Cada resultado muestra el nombre, la carpeta, la página y un extracto con las p
 
 El buscador lee PDF, documentos de texto (Word y de formato abierto), presentaciones, hojas de cálculo, archivos de texto y fotografías. En una hoja de cálculo cada hoja se busca por separado. Un PDF mezcla páginas con texto y páginas escaneadas: cada página se trata según corresponda.
 
+## Qué carpetas se leen y cómo excluir una
+
+Su administrador decide qué carpetas se leen: una carpeta incluida se lee completa, con sus subcarpetas y con los archivos nuevos que reciba, sin que nadie tenga que volver a pedirlo. También puede incluir todas las carpetas de equipo.
+
+Para que una carpeta o un archivo no se lea, aplíquele la etiqueta `rag-excluded`: lo ya leído se borra del buscador, no solo se oculta, y se vuelve a leer si usted retira la etiqueta. Cualquier persona con permiso de edición sobre el archivo puede retirar la etiqueta; si necesita que la exclusión no pueda deshacerse, pida a su administrador que excluya la carpeta por regla. Si envía un archivo a la papelera, su contenido deja de buscarse de inmediato y se borra del índice; si lo restaura, se lee de nuevo desde cero.
+
 ## Documentos escaneados
 
 El buscador lee documentos escaneados y fotografías. Si la lectura no es clara, el resultado muestra **Lectura incierta**. Una foto más nítida y recta mejora el resultado. En la pestaña **Texto reconocido** del panel lateral de Archivos puede ver el texto leído y pedir que se vuelva a leer el documento.
@@ -50,6 +56,7 @@ Cuando se activa por primera vez, la preparación depende de la cantidad de docu
 ## Privacidad
 
 - Los documentos nunca salen del servidor de su establecimiento.
+- Si se elimina una cuenta, todo lo leído de los archivos de esa persona se borra del buscador.
 - Usted solo ve lo que ya puede ver en Archivos; se verifica en cada búsqueda. Si alguien deja de compartirle un documento, deja de aparecer de inmediato.
 - Si un documento le fue compartido sin permiso de descarga, aparece en la lista solo con su nombre, sin extracto.
 - Si la búsqueda abarca demasiados resultados, se le pedirá que use palabras más específicas.

@@ -20,7 +20,7 @@ class FileFactsSource {
 
 	public function load(int $fileId): ?FileFacts {
 		$row = $this->db->executeQuery(
-			'SELECT f.fileid, f.name, f.path, f.etag, f.mtime, f.parent, m.mimetype, s.id AS storage_id
+			'SELECT f.fileid, f.name, f.path, f.etag, f.mtime, f.parent, f.storage, m.mimetype, s.id AS storage_id
 			 FROM *PREFIX*filecache f
 			 JOIN *PREFIX*storages s ON s.numeric_id = f.storage
 			 LEFT JOIN *PREFIX*mimetypes m ON m.id = f.mimetype
@@ -60,16 +60,23 @@ class FileFactsSource {
 		}
 
 		$gfGroups = [];
-		if (preg_match('#^__groupfolders/(\d+)/#', (string)$row['path'], $m) === 1) {
+		// Groupfolders >= 4 give every folder its own storage (`local::<datadir>/__groupfolders/<id>/`) and its files are
+		// `files/...` on it, so the folder id is in the storage id. Older layouts put `__groupfolders/<id>/` in the path.
+		$folderId = null;
+		if (preg_match('#^local::/.+/__groupfolders/(\d+)/?$#', (string)$row['storage_id'], $m) === 1
+			|| preg_match('#^__groupfolders/(\d+)/#', (string)$row['path'], $m) === 1) {
+			$folderId = (int)$m[1];
+		}
+		if ($folderId !== null) {
 			$rows = $this->db->executeQuery(
 				'SELECT group_id FROM *PREFIX*group_folders_groups WHERE folder_id = ? AND permissions > 0',
-				[(int)$m[1]],
+				[$folderId],
 			)->fetchAll();
 			foreach ($rows as $r) {
 				$gfGroups[] = (string)$r['group_id'];
 			}
 			try {
-				$acl = $this->db->executeQuery('SELECT acl FROM *PREFIX*group_folders WHERE folder_id = ?', [(int)$m[1]])->fetchOne();
+				$acl = $this->db->executeQuery('SELECT acl FROM *PREFIX*group_folders WHERE folder_id = ?', [$folderId])->fetchOne();
 				$unmodelled = $unmodelled || (int)$acl > 0; // advanced ACL rules can deny or grant per path
 			} catch (\Throwable) {
 				$unmodelled = true; // schema drift in groupfolders: let the live recheck decide
@@ -87,6 +94,7 @@ class FileFactsSource {
 			array_values(array_unique($groups)),
 			array_values(array_unique($gfGroups)),
 			$unmodelled,
+			(int)$row['storage'],
 		);
 	}
 }

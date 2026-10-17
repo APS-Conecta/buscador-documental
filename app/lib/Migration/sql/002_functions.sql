@@ -18,6 +18,10 @@ BEGIN
 	IF p_worker IS NULL OR length(p_worker) = 0 THEN
 		RAISE EXCEPTION 'worker id required' USING ERRCODE = 'BD001';
 	END IF;
+	-- Paused by an administrator (ADR-0013): no new claims. Work in flight finishes or its lease expires.
+	IF EXISTS (SELECT 1 FROM settings WHERE key = 'paused' AND value = '1') THEN
+		RETURN;
+	END IF;
 	-- Serialise claimers so the caps below hold under READ COMMITTED.
 	PERFORM pg_advisory_xact_lock(hashtext('aps_search.claim_job'));
 	-- Concurrency cap derives from live claims in the table, never from a cache counter (D3).
@@ -30,6 +34,8 @@ BEGIN
 		RETURN;
 	END IF;
 	-- A job whose lease keeps expiring (worker killed by the file, or file gone) is given up after 5 claims.
+	-- Job rows first, in id order, then file_state: the same order write_result and fail_job take, so two claimers cannot deadlock.
+	PERFORM 1 FROM job j WHERE j.attempts >= 5 AND j.lease_until IS NOT NULL AND j.lease_until <= clock_timestamp() ORDER BY j.id FOR UPDATE;
 	UPDATE file_state fs SET text_state = 'skipped', skip_reason = 'internal', updated_at = now()
 		FROM job j WHERE j.file_id = fs.file_id AND j.attempts >= 5
 		  AND j.lease_until IS NOT NULL AND j.lease_until <= clock_timestamp();

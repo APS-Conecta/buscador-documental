@@ -64,7 +64,8 @@ def test_child_crash_is_reported_not_raised(work, tmp_path):
     assert out["status"] == "error" and out["reason"] == "ocr_failed" and "exited 9" in out["detail"]
 
 
-def test_child_stderr_tail_is_returned_for_the_log(work, tmp_path):
+def test_child_stderr_tail_is_returned_for_the_log(work, tmp_path, monkeypatch):
+    monkeypatch.setenv("BD_DEBUG_PARSER", "1")                  # the tail is a debugging aid only (A-SEC-5)
     src = tmp_path / "a.pdf"
     src.write_bytes(b"%PDF")
     serve_in_thread(work, child("import sys; sys.stderr.write('boom: bad thing'); sys.exit(3)"))
@@ -183,7 +184,8 @@ def test_a_symlinked_result_is_not_followed(work, tmp_path):
     assert "LEAK" not in json.dumps(out)
 
 
-def test_only_the_tail_of_a_flooded_stderr_is_read(work, tmp_path):
+def test_only_the_tail_of_a_flooded_stderr_is_read(work, tmp_path, monkeypatch):
+    monkeypatch.setenv("BD_DEBUG_PARSER", "1")
     src = tmp_path / "a.pdf"
     src.write_bytes(b"%PDF")
     serve_in_thread(work, child("import sys; sys.stderr.write('A'*5_000_000 + 'THE-END'); sys.exit(2)"))

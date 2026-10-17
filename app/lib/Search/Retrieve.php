@@ -65,7 +65,7 @@ class Retrieve {
 			}
 			return $this->result('ok', '', $this->hits($query, $survivors));
 		} catch (ExclusionUnavailable $e) {
-			$this->logger->warning('buscador_documental: exclusion state unavailable, search refused (' . $e->getMessage() . ')');
+			$this->logger->warning('buscador_documental: exclusion state unavailable, search refused (' . get_class($e) . ')');      // not its message: A-SEC-5
 			return $this->result('unavailable', 'La búsqueda no está disponible en este momento.', []);
 		} catch (Throwable $e) {
 			if (str_contains($e->getMessage(), 'statement timeout')) {
@@ -93,7 +93,7 @@ class Retrieve {
 				FROM cand, q
 				ORDER BY cand.file_id, ts_rank(cand.tsv, q.tq) DESC, cand.chunk_id DESC
 			)
-			SELECT file_id, chunk_id FROM best ORDER BY rank DESC, file_id LIMIT ? OFFSET ?",
+			SELECT best.file_id, best.chunk_id, fs.etag FROM best JOIN aps_search.file_state fs ON fs.file_id = best.file_id ORDER BY best.rank DESC, best.file_id LIMIT ? OFFSET ?",
 			[$query, $principalSet, $take, $offset],
 		);
 	}
@@ -105,7 +105,7 @@ class Retrieve {
 	private function hits(string $query, array $survivors): array {
 		$ids = [];
 		foreach ($survivors as [$row, $r]) {
-			if ($r->snippetAllowed) {
+			if ($this->snippetServable($row, $r)) {
 				$ids[] = (int)$row['chunk_id'];
 			}
 		}
@@ -130,7 +130,7 @@ class Retrieve {
 		foreach ($survivors as [$row, $r]) {
 			$hit = ['file_id' => $r->fileId, 'title' => $r->node->getName()];
 			$chunk = $chunks[(int)$row['chunk_id']] ?? null;
-			if ($r->snippetAllowed && $chunk !== null) {
+			if ($this->snippetServable($row, $r) && $chunk !== null) {
 				$hit['heading'] = $chunk['heading'] === null ? null : (string)$chunk['heading'];
 				$hit['page_no'] = $chunk['page_no'] === null ? null : (int)$chunk['page_no'];
 				$hit['snippet'] = str_replace([$open, $close], ['<mark>', '</mark>'], htmlspecialchars((string)$chunk['snippet'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
@@ -138,6 +138,11 @@ class Retrieve {
 			$hits[] = $hit;
 		}
 		return $hits;
+	}
+
+	/** A snippet comes from the indexed text; once the file changed (etag differs) it may no longer be the file's content. */
+	private function snippetServable(array $row, RecheckResult $r): bool {
+		return $r->snippetAllowed && (string)($row['etag'] ?? '') === (string)$r->node->getEtag();
 	}
 
 	/** @param list<array<string, mixed>> $hits */

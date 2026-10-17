@@ -26,9 +26,7 @@ class Version000001Date20261016000000 extends SimpleMigrationStep {
 	 * so pre/postSchemaChange would be skipped and the app would be enabled without its index schema.
 	 */
 	public function changeSchema(IOutput $output, Closure $schemaClosure, array $options): ?ISchemaWrapper {
-		foreach (SqlScript::up() as $statement) {
-			$this->db->executeStatement($statement);
-		}
+		SqlScript::runAtomically($this->db, SqlScript::up());
 		$output->info('aps_search schema created');
 		return null;
 	}

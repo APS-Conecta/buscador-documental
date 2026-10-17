@@ -45,7 +45,7 @@ abstract class DbTestCase extends TestCase {
 		}
 		$this->open = [];
 		$app = self::connect('postgres', 'dev', self::$dbName);
-		$app->exec('TRUNCATE aps_search.job, aps_search.page, aps_search.chunk, aps_search.file_state, aps_search.file_meta, aps_search.file_acl RESTART IDENTITY');
+		$app->exec('TRUNCATE aps_search.job, aps_search.page, aps_search.chunk, aps_search.file_state, aps_search.file_meta, aps_search.file_acl, aps_search.outbox, aps_search.tombstone, aps_search.audit_log, aps_search.scope_rule, aps_search.reconcile_run, aps_search.purge_pending, aps_search.pseudonym, aps_search.reconcile_node RESTART IDENTITY; DROP TABLE IF EXISTS aps_search.chunk_vec_9; DROP TABLE IF EXISTS oc_filecache, oc_storages, oc_group_folders, oc_group_folders_groups, oc_group_folders_acl, oc_mimetypes, oc_systemtag, oc_systemtag_object_mapping; DELETE FROM aps_search.settings');
 	}
 
 	protected static function admin(string $db): PDO {
@@ -113,7 +113,7 @@ abstract class DbTestCase extends TestCase {
 	/** An IDBConnection backed by PDO, for the few classes that take Nextcloud's connection. */
 	protected function connection(PDO $pdo): IDBConnection {
 		$run = static function (string $sql, array $params) use ($pdo) {
-			$s = $pdo->prepare($sql);
+			$s = $pdo->prepare(str_replace('*PREFIX*', 'oc_', $sql));            // what Nextcloud's connection does
 			$s->execute($params);
 			return $s;
 		};
@@ -127,9 +127,31 @@ abstract class DbTestCase extends TestCase {
 			return $r;
 		});
 		$c->method('executeStatement')->willReturnCallback(static fn (string $sql, array $params = []) => $run($sql, $params)->rowCount());
-		$c->method('beginTransaction')->willReturnCallback(static fn () => $pdo->beginTransaction());
-		$c->method('commit')->willReturnCallback(static fn () => $pdo->commit());
-		$c->method('rollBack')->willReturnCallback(static fn () => $pdo->rollBack());
+		// Nextcloud nests transactions with savepoints (OC\DB\Connection: setNestTransactionsWithSavepoints): emulate that
+		$levels = [];                                                         // true = this level opened the real transaction
+		$c->method('inTransaction')->willReturnCallback(static fn () => $pdo->inTransaction());
+		$c->method('beginTransaction')->willReturnCallback(static function () use ($pdo, &$levels): void {
+			if ($pdo->inTransaction()) {
+				$pdo->exec('SAVEPOINT sp_' . count($levels));
+				$levels[] = false;
+			} else {
+				$pdo->beginTransaction();
+				$levels[] = true;
+			}
+		});
+		$c->method('commit')->willReturnCallback(static function () use ($pdo, &$levels): void {
+			$owns = array_pop($levels);
+			$owns === false ? $pdo->exec('RELEASE SAVEPOINT sp_' . count($levels)) : $pdo->commit();
+		});
+		$c->method('rollBack')->willReturnCallback(static function () use ($pdo, &$levels): void {
+			$owns = array_pop($levels);
+			if ($owns === false) {
+				$pdo->exec('ROLLBACK TO SAVEPOINT sp_' . count($levels));
+				$pdo->exec('RELEASE SAVEPOINT sp_' . count($levels));
+			} else {
+				$pdo->rollBack();
+			}
+		});
 		return $c;
 	}
 }

@@ -56,4 +56,21 @@ class FileIndexerTest extends TestCase {
 		$db->expects($this->exactly(4))->method('execute');
 		$this->assertTrue($this->indexer($this->facts(), $ex, $db)->enqueue(7));
 	}
+
+	public function testFileMetaRecordsTheStorageSoUserDeletionCanFindTheFiles(): void {
+		$ex = $this->createMock(ExclusionChecker::class);
+		$ex->method('isExcluded')->willReturn(false);
+		$calls = [];
+		$db = $this->createMock(IndexDb::class);
+		$db->method('execute')->willReturnCallback(function (string $sql, array $params = []) use (&$calls): int {
+			$calls[] = [$sql, $params];
+			return 1;
+		});
+		$facts = new FileFacts(7, 'a.pdf', 'application/pdf', 1, 'e1', 'alice', [], [], [], false, 42);
+		$this->indexer($facts, $ex, $db)->enqueue(7);
+		$meta = array_values(array_filter($calls, static fn (array $c): bool => str_contains($c[0], 'aps_search.file_meta')));
+		$this->assertCount(1, $meta);
+		$this->assertStringContainsString('storage_id', $meta[0][0]);
+		$this->assertContains(42, $meta[0][1]);
+	}
 }
