@@ -52,7 +52,7 @@ down:
 
 # Only the bd-s1 project: containers, volumes, network.
 clean:
-	$(COMPOSE) down -v --remove-orphans
+	$(COMPOSE) --profile worker down -v --remove-orphans
 
 # One scanned PDF through app + worker + OCR into the index (S1 plan, phase 2).
 test-e2e-one:
