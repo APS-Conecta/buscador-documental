@@ -1,0 +1,62 @@
+{
+ "summary": {
+  "fake_invisible": {
+   "pages": 2,
+   "cer": 0.0013305455236647026,
+   "wer": 0.008032128514056224,
+   "catastrophic": 0
+  },
+  "fake_visible": {
+   "pages": 21,
+   "cer": 0.038798453098300205,
+   "wer": 0.046917061915139086,
+   "catastrophic": 0
+  },
+  "mixed": {
+   "pages": 122,
+   "cer": 0.0004259495897920255,
+   "wer": 0.0030549221880326743,
+   "catastrophic": 0
+  },
+  "native": {
+   "pages": 152,
+   "cer": 0.0,
+   "wer": 0.0,
+   "catastrophic": 0
+  },
+  "photo": {
+   "pages": 4,
+   "cer": 0.0010976948408342481,
+   "wer": 0.007889546351084813,
+   "catastrophic": 0
+  },
+  "scanned": {
+   "pages": 105,
+   "cer": 0.0009915823282784192,
+   "wer": 0.007025037955791153,
+   "catastrophic": 0
+  },
+  "all": {
+   "pages": 406,
+   "cer": 0.0024028269862519333,
+   "wer": 0.005283234535739919,
+   "catastrophic": 0
+  }
+ },
+ "gate": {
+  "pass": true,
+  "cer": 0.0024028269862519333,
+  "wer": 0.005283234535739919,
+  "criterion": {
+   "cer": 0.02,
+   "wer": 0.05
+  }
+ },
+ "seconds": 2462.6,
+ "ocr_ver": "ocrmypdf 14.0.1+dfsg1; tesseract 5.3.0; langs=spa+eng; policy=perpage-2",
+ "limits": [
+  "synthetic clean DejaVu Sans text from a Zipf word model",
+  "photos tilted +-4 degrees only (no 90/180/270 photos)",
+  "fake_invisible layers are garbage text, not plausible prose"
+ ]
+}
