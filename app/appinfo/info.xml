@@ -23,5 +23,9 @@
         <command>OCA\BuscadorDocumental\Command\ScopeRemove</command>
         <command>OCA\BuscadorDocumental\Command\ScopePreview</command>
         <command>OCA\BuscadorDocumental\Command\ScopeMode</command>
+        <command>OCA\BuscadorDocumental\Command\Status</command>
+        <command>OCA\BuscadorDocumental\Command\Pause</command>
+        <command>OCA\BuscadorDocumental\Command\Resume</command>
+        <command>OCA\BuscadorDocumental\Command\Reindex</command>
     </commands>
 </info>

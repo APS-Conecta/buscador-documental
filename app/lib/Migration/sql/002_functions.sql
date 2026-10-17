@@ -18,6 +18,10 @@ BEGIN
 	IF p_worker IS NULL OR length(p_worker) = 0 THEN
 		RAISE EXCEPTION 'worker id required' USING ERRCODE = 'BD001';
 	END IF;
+	-- Paused by an administrator (ADR-0013): no new claims. Work in flight finishes or its lease expires.
+	IF EXISTS (SELECT 1 FROM settings WHERE key = 'paused' AND value = '1') THEN
+		RETURN;
+	END IF;
 	-- Serialise claimers so the caps below hold under READ COMMITTED.
 	PERFORM pg_advisory_xact_lock(hashtext('aps_search.claim_job'));
 	-- Concurrency cap derives from live claims in the table, never from a cache counter (D3).

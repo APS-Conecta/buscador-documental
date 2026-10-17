@@ -177,4 +177,15 @@ class WorkerControllerTest extends TestCase {
 		$this->assertNull(WorkerController::parseRange('items=0-1', 10));
 		$this->assertNull(WorkerController::parseRange('bytes=0-1', 0));
 	}
+
+	public function testPausedRefusesTheBytesAndTheMetaWith403(): void {
+		$claims = $this->createMock(ClaimGuard::class);
+		$claims->method('activeClaim')->willReturn(['etag' => 'etag-abc']);
+		$claims->method('overCap')->willReturn(false);
+		$claims->method('isPaused')->willReturn(true);
+		$c = $this->controller([], false, $claims);
+		$this->nodes->expects($this->never())->method('locate');
+		$this->assertSame(403, $c->content(42)->getStatus());
+		$this->assertSame(403, $c->meta(42)->getStatus());
+	}
 }

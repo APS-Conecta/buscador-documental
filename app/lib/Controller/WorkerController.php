@@ -136,6 +136,9 @@ class WorkerController extends Controller {
 		if (!ctype_digit($jobId) || !ctype_digit($epoch)) {
 			return $deny('claim:malformed', Http::STATUS_FORBIDDEN);
 		}
+		if ($this->claims->isPaused()) {
+			return $deny('paused', Http::STATUS_FORBIDDEN);
+		}
 		if ($this->claims->overCap($workerId)) {
 			return $deny('claim:over_cap', Http::STATUS_TOO_MANY_REQUESTS);
 		}

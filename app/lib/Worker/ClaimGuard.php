@@ -25,6 +25,11 @@ class ClaimGuard {
 		return $rows === [] ? null : ['etag' => (string)$rows[0]['claimed_etag']];
 	}
 
+	/** An administrator paused indexing: the bytes and the meta are not served either (the claim_job gate covers new claims). */
+	public function isPaused(): bool {
+		return $this->db->rows("SELECT 1 FROM aps_search.settings WHERE key = 'paused' AND value = '1'") !== [];
+	}
+
 	/** True when the worker holds more active claims than the cap allows (derived from the DB, never a cache counter). */
 	public function overCap(string $workerId): bool {
 		$rows = $this->db->rows(

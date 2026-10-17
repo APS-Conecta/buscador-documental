@@ -90,6 +90,70 @@ ALTER TABLE file_state ADD CONSTRAINT file_state_skip_reason_chk CHECK (skip_rea
 	('encrypted', 'too_large', 'corrupt', 'unsupported', 'ocr_failed', 'timeout', 'internal', 'unsafe',
 	 'excluded', 'out_of_scope', 'trashed', 'user_deleted')) NOT VALID;
 -- @@
+-- claim_job with the pause check: a copy of the 002 function so an instance upgraded from schema 1 gets it too
+-- (a test keeps the two bodies identical).
+CREATE OR REPLACE FUNCTION aps_search.claim_job(p_lane text, p_n int, p_worker text, p_lease_seconds int DEFAULT 900)
+RETURNS TABLE (job_id bigint, lease_epoch bigint, file_id bigint, etag text)
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = aps_search, pg_catalog, pg_temp
+AS $$
+#variable_conflict use_column
+DECLARE
+	v_active int;
+	v_total int;
+	v_n int;
+	r record;
+BEGIN
+	IF p_worker IS NULL OR length(p_worker) = 0 THEN
+		RAISE EXCEPTION 'worker id required' USING ERRCODE = 'BD001';
+	END IF;
+	-- Paused by an administrator (ADR-0013): no new claims. Work in flight finishes or its lease expires.
+	IF EXISTS (SELECT 1 FROM settings WHERE key = 'paused' AND value = '1') THEN
+		RETURN;
+	END IF;
+	-- Serialise claimers so the caps below hold under READ COMMITTED.
+	PERFORM pg_advisory_xact_lock(hashtext('aps_search.claim_job'));
+	-- Concurrency cap derives from live claims in the table, never from a cache counter (D3).
+	SELECT count(*) INTO v_active FROM job j
+		WHERE j.claimed_by = p_worker AND j.lease_until > clock_timestamp();
+	-- Global cap too (M1): the worker id is self-declared, so per-worker caps alone can be dodged by renaming.
+	SELECT count(*) INTO v_total FROM job j WHERE j.lease_until > clock_timestamp();
+	v_n := least(coalesce(p_n, 1), 4 - v_active, 16 - v_total);
+	IF v_n <= 0 THEN
+		RETURN;
+	END IF;
+	-- A job whose lease keeps expiring (worker killed by the file, or file gone) is given up after 5 claims.
+	UPDATE file_state fs SET text_state = 'skipped', skip_reason = 'internal', updated_at = now()
+		FROM job j WHERE j.file_id = fs.file_id AND j.attempts >= 5
+		  AND j.lease_until IS NOT NULL AND j.lease_until <= clock_timestamp();
+	DELETE FROM job j WHERE j.attempts >= 5 AND j.lease_until IS NOT NULL AND j.lease_until <= clock_timestamp();
+	-- Jobs for files that were excluded meanwhile are dropped instead of claimed.
+	DELETE FROM job j USING file_state fs
+		WHERE fs.file_id = j.file_id AND fs.text_state = 'skipped';
+	FOR r IN
+		SELECT j.id FROM job j
+		WHERE j.lane = p_lane
+		  AND j.not_before <= clock_timestamp()
+		  AND (j.lease_until IS NULL OR j.lease_until <= clock_timestamp())
+		ORDER BY j.id
+		LIMIT v_n
+		FOR UPDATE SKIP LOCKED
+	LOOP
+		RETURN QUERY
+		UPDATE job j SET
+			lease_epoch = j.lease_epoch + 1,
+			lease_until = clock_timestamp() + make_interval(secs => least(greatest(p_lease_seconds, 1), 3600)),
+			claimed_by = p_worker,
+			claimed_etag = fs.etag,
+			claimed_hash = NULL,   -- set only when a hash is known beforehand (S2 dedupe); S1 never pins one
+			attempts = j.attempts + 1
+		FROM file_state fs
+		WHERE j.id = r.id AND fs.file_id = j.file_id
+		RETURNING j.id, j.lease_epoch, j.file_id, j.claimed_etag;
+	END LOOP;
+END
+$$;
+-- @@
 CREATE OR REPLACE FUNCTION aps_search.schema_version()
 RETURNS int
 LANGUAGE sql SECURITY DEFINER
