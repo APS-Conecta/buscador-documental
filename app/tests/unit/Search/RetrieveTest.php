@@ -141,4 +141,31 @@ class RetrieveTest extends TestCase {
 		$out = $this->retrieve($db, ScriptedRecheck::make([], $this->checker()))->run('b', '   ', 10);
 		$this->assertSame('ok', $out['status']);
 	}
+
+	public function testQueryIsCappedBeforeItReachesThePlanner(): void {
+		$seen = [];
+		$db = $this->createMock(IndexDb::class);
+		$db->method('withTimeout')->willReturnCallback(static fn (int $ms, callable $work) => $work());
+		$db->method('rows')->willReturnCallback(static function (string $sql, array $params) use (&$seen): array {
+			$seen[] = $params[0];
+			return [];
+		});
+		$this->retrieve($db, ScriptedRecheck::make([], $this->checker()))->run('b', str_repeat('á', 5000), 10);
+		$this->assertSame(Retrieve::MAX_QUERY_CHARS, mb_strlen($seen[0]));
+	}
+
+	public function testSnippetSqlRunsUnderTheStatementTimeout(): void {
+		$timed = 0;
+		$db = $this->createMock(IndexDb::class);
+		$db->method('withTimeout')->willReturnCallback(static function (int $ms, callable $work) use (&$timed) {
+			$timed++;
+			return $work();
+		});
+		$db->method('rows')->willReturnCallback(static fn (string $sql): array => str_contains($sql, 'ts_headline')
+			? [['chunk_id' => 500, 'page_no' => 1, 'heading' => null, 'snippet' => 'x']]
+			: [['file_id' => 10, 'chunk_id' => 500]]);
+		$out = $this->retrieve($db, ScriptedRecheck::make([10 => [$this->node('a.pdf')]], $this->checker()))->run('b', 'x', 10);
+		$this->assertSame('ok', $out['status']);
+		$this->assertSame(2, $timed, 'candidates and headline are both bounded');
+	}
 }

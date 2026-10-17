@@ -25,6 +25,7 @@ class Retrieve {
 	public const CANDIDATES = 10000;
 	public const TIMEOUT_MS = 5000;
 	public const MAX_LIMIT = 100;
+	public const MAX_QUERY_CHARS = 500;
 	private const MAX_ROUNDS = 5;
 
 	public function __construct(
@@ -38,6 +39,7 @@ class Retrieve {
 	/** @return array{status: string, message: string, hits: list<array<string, mixed>>} */
 	public function run(string $uid, string $query, int $limit): array {
 		$limit = max(1, min(self::MAX_LIMIT, $limit));
+		$query = mb_substr($query, 0, self::MAX_QUERY_CHARS);
 		if (trim($query) === '') {
 			return $this->result('ok', '', []);
 		}
@@ -112,13 +114,13 @@ class Retrieve {
 		$close = "[[$mark:e]]";
 		$chunks = [];
 		if ($ids !== []) {
-			$rows = $this->db->rows(
+			$rows = $this->db->withTimeout(self::TIMEOUT_MS, fn (): array => $this->db->rows(
 				"SELECT chunk_id, page_no, heading,
 					ts_headline('aps_search.spanish_unaccent'::regconfig, text, websearch_to_tsquery('aps_search.spanish_unaccent'::regconfig, ?),
 						'StartSel=" . $open . ", StopSel=" . $close . ", MaxWords=35, MinWords=15, MaxFragments=1') AS snippet
 				 FROM aps_search.chunk WHERE chunk_id = ANY(?::bigint[])",
 				[$query, '{' . implode(',', $ids) . '}'],
-			);
+			));
 			foreach ($rows as $row) {
 				$chunks[(int)$row['chunk_id']] = $row;
 			}

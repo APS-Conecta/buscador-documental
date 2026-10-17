@@ -166,6 +166,25 @@ class WorkerFunctionsTest extends DbTestCase {
 		$this->assertStringContainsString('invalid reason', $this->failure(fn () => $w->exec("SELECT aps_search.fail_job(1, 1, 'free text', false)")));
 	}
 
+	public function testAJobThatKeepsLosingItsLeaseIsSkippedInsteadOfReclaimedForever(): void {
+		$this->seedFile(10);
+		$w = $this->worker();
+		$this->claim($w);
+		$this->app()->exec("UPDATE aps_search.job SET attempts = 5, lease_until = now() - interval '1 minute'");
+		$this->assertNull($this->claim($w));
+		$this->assertSame(0, $this->rowCount('job'));
+		$st = self::connect('nextcloud', 'dev', self::$dbName)->query('SELECT text_state, skip_reason FROM aps_search.file_state WHERE file_id = 10')->fetch(\PDO::FETCH_ASSOC);
+		$this->assertSame(['text_state' => 'skipped', 'skip_reason' => 'internal'], $st);
+	}
+
+	public function testAFreshJobBelowTheAttemptCapIsStillClaimed(): void {
+		$this->seedFile(10);
+		$w = $this->worker();
+		$this->claim($w);
+		$this->app()->exec("UPDATE aps_search.job SET attempts = 4, lease_until = now() - interval '1 minute'");
+		$this->assertSame(10, $this->claim($w)['file_id']);
+	}
+
 	// ---- H1: erase vs. an in-flight worker ----
 
 	public function testClaimEraseThenWriteResultLeavesNoRows(): void {

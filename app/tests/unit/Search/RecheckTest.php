@@ -123,6 +123,12 @@ class RecheckTest extends TestCase {
 		$this->assertSame(1, $r->dropped());
 	}
 
+	public function testFileLayerFailingForEveryHitIsAFailureNotAnEmptyResult(): void {
+		$r = ScriptedRecheck::make([10 => new \RuntimeException('storage down'), 11 => new \RuntimeException('storage down')], $this->checker());
+		$this->expectException(ExclusionUnavailable::class);
+		$r->filter('b', [10, 11]);
+	}
+
 	public function testTagServiceFailureFailsTheWholeRecheckClosed(): void {
 		$r = ScriptedRecheck::make([10 => [$this->node()]], $this->checker([], [[3, 'rag-excluded']], self::TREE, new \RuntimeException('down')));
 		$this->expectException(ExclusionUnavailable::class);

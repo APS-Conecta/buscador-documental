@@ -8,6 +8,7 @@ namespace OCA\BuscadorDocumental\Controller;
 
 use OCA\BuscadorDocumental\Acl\ExclusionChecker;
 use OCA\BuscadorDocumental\Acl\ExclusionUnavailable;
+use OCA\BuscadorDocumental\Acl\FileGone;
 use OCA\BuscadorDocumental\Security\WorkerAuth;
 use OCA\BuscadorDocumental\Security\WorkerAuthException;
 use OCA\BuscadorDocumental\Worker\ClaimGuard;
@@ -145,6 +146,8 @@ class WorkerController extends Controller {
 			if ($this->exclusion->isExcluded($id)) {
 				return $deny('excluded', Http::STATUS_FORBIDDEN);
 			}
+		} catch (FileGone) {
+			return $deny('not_found', Http::STATUS_NOT_FOUND);
 		} catch (ExclusionUnavailable) {
 			return $deny('exclusion_unavailable', Http::STATUS_SERVICE_UNAVAILABLE);
 		}

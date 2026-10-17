@@ -18,6 +18,8 @@ BEGIN
 	IF p_worker IS NULL OR length(p_worker) = 0 THEN
 		RAISE EXCEPTION 'worker id required' USING ERRCODE = 'BD001';
 	END IF;
+	-- Serialise claimers so the caps below hold under READ COMMITTED.
+	PERFORM pg_advisory_xact_lock(hashtext('aps_search.claim_job'));
 	-- Concurrency cap derives from live claims in the table, never from a cache counter (D3).
 	SELECT count(*) INTO v_active FROM job j
 		WHERE j.claimed_by = p_worker AND j.lease_until > clock_timestamp();
@@ -27,6 +29,11 @@ BEGIN
 	IF v_n <= 0 THEN
 		RETURN;
 	END IF;
+	-- A job whose lease keeps expiring (worker killed by the file, or file gone) is given up after 5 claims.
+	UPDATE file_state fs SET text_state = 'skipped', skip_reason = 'internal', updated_at = now()
+		FROM job j WHERE j.file_id = fs.file_id AND j.attempts >= 5
+		  AND j.lease_until IS NOT NULL AND j.lease_until <= clock_timestamp();
+	DELETE FROM job j WHERE j.attempts >= 5 AND j.lease_until IS NOT NULL AND j.lease_until <= clock_timestamp();
 	-- Jobs for files that were excluded meanwhile are dropped instead of claimed.
 	DELETE FROM job j USING file_state fs
 		WHERE fs.file_id = j.file_id AND fs.text_state = 'skipped';

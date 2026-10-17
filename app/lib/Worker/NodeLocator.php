@@ -18,14 +18,19 @@ class NodeLocator {
 
 	public function locate(int $fileId): ?File {
 		try {
-			foreach ($this->mounts->getMountsForFileId($fileId) as $mount) {
-				$node = $this->root->getUserFolder($mount->getUser()->getUID())->getFirstNodeById($fileId);
-				if ($node instanceof File) {
-					return $node;
-				}
-			}
+			$mounts = $this->mounts->getMountsForFileId($fileId);
 		} catch (Throwable) {
 			return null;
+		}
+		foreach ($mounts as $mount) {
+			try {
+				$node = $this->root->getUserFolder($mount->getUser()->getUID())->getFirstNodeById($fileId);
+			} catch (Throwable) {
+				continue; // a deleted user or a broken storage must not hide the other mounts
+			}
+			if ($node instanceof File) {
+				return $node;
+			}
 		}
 		return null;
 	}

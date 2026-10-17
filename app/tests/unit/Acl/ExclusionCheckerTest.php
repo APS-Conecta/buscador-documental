@@ -80,6 +80,23 @@ class ExclusionCheckerTest extends TestCase {
 		$this->checker([10 => 5], [$this->tag(3, 'rag-excluded')], [])->isExcluded(10); // 5 has no row
 	}
 
+	public function testMissingFileIsFileGoneButMissingAncestorIsNot(): void {
+		try {
+			$this->checker([], [$this->tag(3, 'rag-excluded')], [])->isExcluded(10);
+			$this->fail('expected FileGone');
+		} catch (\OCA\BuscadorDocumental\Acl\FileGone) {
+			$this->addToAssertionCount(1);
+		}
+		try {
+			$this->checker([10 => 5], [$this->tag(3, 'rag-excluded')], [])->isExcluded(10);
+			$this->fail('expected ExclusionUnavailable');
+		} catch (\OCA\BuscadorDocumental\Acl\FileGone) {
+			$this->fail('an ancestor with no row is not FileGone');
+		} catch (ExclusionUnavailable) {
+			$this->addToAssertionCount(1);
+		}
+	}
+
 	public function testTooDeepWalkFailsClosed(): void {
 		$tree = [];
 		for ($i = 1; $i <= ExclusionChecker::MAX_DEPTH + 5; $i++) {

@@ -9,6 +9,14 @@ MAX_CHUNKS = 2000
 MAX_CHARS = 20000
 
 
+class TooManyChunks(Exception):
+    """The document cannot fit the app's chunk cap even with the largest target; it must be refused, not cut."""
+
+
+def clean(text: str) -> str:
+    return text.replace("\x00", "")        # jsonb rejects NUL
+
+
 def _split_page(text: str, target: int) -> list[str]:
     out: list[str] = []
     cur = ""
@@ -33,8 +41,10 @@ def split(pages: list[str], target: int = 1000) -> list[dict]:
     while True:
         chunks = []
         for i, text in enumerate(pages, start=1):
-            for piece in _split_page(text, target):
+            for piece in _split_page(clean(text), target):
                 chunks.append({"page_no": i, "ord": len(chunks), "heading": None, "text": piece})
-        if len(chunks) <= MAX_CHUNKS or target >= MAX_CHARS:
-            return chunks[:MAX_CHUNKS]
+        if len(chunks) <= MAX_CHUNKS:
+            return chunks
+        if target >= MAX_CHARS:
+            raise TooManyChunks(len(chunks))
         target *= 2

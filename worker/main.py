@@ -12,6 +12,7 @@ import threading
 import time
 
 import psycopg
+import requests
 
 import chunk
 import client as bdclient
@@ -19,6 +20,8 @@ import ocr
 
 log = logging.getLogger("bd-worker")
 LEASE_SECONDS = int(os.environ.get("BD_LEASE_SECONDS", "900"))
+MAX_BYTES = 250 * 1024 * 1024        # buscador/02-performance.md: proposed limits, confirmed in S2
+MAX_PAGES = 300
 SILENT_DB_ERRORS = ("stale_lease", "etag_mismatch", "hash_mismatch", "file_skipped")
 
 
@@ -37,12 +40,15 @@ class Heartbeat(threading.Thread):
         self.lost = False
 
     def run(self):
-        with psycopg.connect(self.dsn, autocommit=True) as c:
-            while not self.stop.wait(LEASE_SECONDS / 3):
-                ok = c.execute("SELECT aps_search.heartbeat(%s, %s, %s)", (self.job_id, self.epoch, LEASE_SECONDS)).fetchone()[0]
-                if not ok:
-                    self.lost = True
-                    return
+        try:
+            with psycopg.connect(self.dsn, autocommit=True) as c:
+                while not self.stop.wait(LEASE_SECONDS / 3):
+                    ok = c.execute("SELECT aps_search.heartbeat(%s, %s, %s)", (self.job_id, self.epoch, LEASE_SECONDS)).fetchone()[0]
+                    if not ok:
+                        self.lost = True
+                        return
+        except psycopg.Error:
+            self.lost = True               # cannot extend the lease: stop trusting it
 
 
 def process(conn, api, dsn, job_id, epoch, file_id):
@@ -55,9 +61,14 @@ def process(conn, api, dsn, job_id, epoch, file_id):
             return fail(conn, job_id, epoch, "encrypted", False)
         if meta.get("mime") != "application/pdf":
             return fail(conn, job_id, epoch, "unsupported", False)   # STUB(S2): other formats
+        if meta.get("size", 0) > MAX_BYTES:
+            return fail(conn, job_id, epoch, "too_large", False)
         with tempfile.NamedTemporaryFile(suffix=".pdf") as tmp:
-            content_hash, _ = api.download(file_id, job_id, epoch, meta["etag"], tmp)
+            content_hash, n = api.download(file_id, job_id, epoch, meta["etag"], tmp)
             tmp.flush()
+            if n != meta.get("size"):
+                log.warning("job %s: short or long body (%s of %s bytes)", job_id, n, meta.get("size"))
+                return "abandoned"
             try:
                 pages = ocr.run(tmp.name)
             except ocr.OcrTimeout:
@@ -66,12 +77,21 @@ def process(conn, api, dsn, job_id, epoch, file_id):
                 return fail(conn, job_id, epoch, "ocr_failed", True)
         if hb.lost:
             return "abandoned"
-        chunks = chunk.split(pages)
+        if len(pages) > MAX_PAGES:
+            return fail(conn, job_id, epoch, "too_large", False)
+        try:
+            chunks = chunk.split(pages)
+        except chunk.TooManyChunks:
+            return fail(conn, job_id, epoch, "too_large", False)
+        pages = [chunk.clean(t) for t in pages]
         page_rows = [{"page_no": i, "text": t, "ocr_conf": None, "source": "ocr"} for i, t in enumerate(pages, start=1)]
         conn.execute("SELECT aps_search.write_result(%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s)",
                      (job_id, epoch, meta["etag"], content_hash, json.dumps(page_rows), json.dumps(chunks),
                       ocr.version(), chunk.CHUNKER_VER))
         return "indexed"
+    except (requests.RequestException, ValueError) as e:
+        log.warning("job %s: worker channel error (%s), lease will expire", job_id, type(e).__name__)
+        return "abandoned"
     except (bdclient.ClaimLost, bdclient.EtagChanged):
         return "abandoned"                 # nothing to report: the app side already knows
     except bdclient.Retryable as e:
@@ -83,6 +103,8 @@ def process(conn, api, dsn, job_id, epoch, file_id):
     except psycopg.errors.Error as e:
         if any(tag in str(e) for tag in SILENT_DB_ERRORS):
             return "abandoned"
+        if "payload_too_large" in str(e):
+            return fail(conn, job_id, epoch, "too_large", False)
         raise
     finally:
         hb.stop.set()

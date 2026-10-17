@@ -69,6 +69,8 @@ class WorkerClient:
             raise ValueError(f"request rejected with {r.status_code}")
         if r.status_code in (429, 503) or r.status_code >= 500:
             raise Retryable(str(r.status_code))
+        if r.status_code >= 400:
+            raise ValueError(f"request rejected with {r.status_code}")
 
     def meta(self, file_id, job_id, epoch) -> dict:
         path = f"{PREFIX}/files/{file_id}/meta"

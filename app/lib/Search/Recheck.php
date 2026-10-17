@@ -45,17 +45,24 @@ class Recheck {
 	 */
 	public function filter(string $uid, array $fileIds): array {
 		$readable = [];
-		foreach (array_unique($fileIds) as $fileId) {
+		$errors = 0;
+		$ids = array_unique($fileIds);
+		foreach ($ids as $fileId) {
 			try {
 				$best = $this->bestNode($uid, $fileId);
 			} catch (Throwable) {
 				$best = null;
+				$errors++;
 			}
 			if ($best === null) {
 				$this->dropped++;
 				continue;
 			}
 			$readable[$fileId] = $best;
+		}
+
+		if ($ids !== [] && $errors === count($ids)) {
+			throw new ExclusionUnavailable('The file layer failed for every hit'); // systemic, not per-file: do not report "no results"
 		}
 
 		$excluded = $this->exclusion->excludedAmong(array_keys($readable), true);

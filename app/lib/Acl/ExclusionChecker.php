@@ -102,7 +102,9 @@ class ExclusionChecker {
 		for ($depth = 0; $depth < self::MAX_DEPTH; $depth++) {
 			$parent = array_key_exists($current, $parents) ? $parents[$current] : ($parents[$current] = $this->parentOf($current));
 			if ($parent === null) {
-				throw new ExclusionUnavailable("File $current has no filecache row");
+				throw $current === $fileId
+					? new FileGone("File $current has no filecache row")
+					: new ExclusionUnavailable("Ancestor $current has no filecache row");
 			}
 			if ($parent <= 0 || $parent === $current) {
 				return $chain;

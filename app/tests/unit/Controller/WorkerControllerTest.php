@@ -130,6 +130,11 @@ class WorkerControllerTest extends TestCase {
 		$this->assertSame(503, $c->content(42)->getStatus());
 	}
 
+	public function testDeletedFileIs404NotARetryable503(): void {
+		$c = $this->controller([], false, null, new \OCA\BuscadorDocumental\Acl\FileGone('gone'));
+		$this->assertSame(404, $c->content(42)->getStatus());
+	}
+
 	public function testContentRequiresIfMatch(): void {
 		$c = $this->controller(['If-Match' => '']);
 		$this->nodes->method('locate')->willReturn($this->file());

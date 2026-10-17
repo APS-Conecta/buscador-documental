@@ -47,7 +47,7 @@ $PSQL -c "TRUNCATE aps_search.job, aps_search.page, aps_search.chunk, aps_search
 $PSQL -c "delete from oc_systemtag where name='rag-excluded' and visibility=1" >/dev/null   # leftover duplicate from an aborted run
 $C --profile worker build worker >/dev/null
 OUT=$(mktemp -d /tmp/bd-s1-canary.XXXXXX)
-docker run --rm -v "$OUT":/out --entrypoint python3 bd-s1-worker make_scan.py /out/scan.pdf
+docker run --rm --user root -v "$OUT":/out --entrypoint python3 bd-s1-worker make_scan.py /out/scan.pdf
 H=/var/www/html/data/canary_a/files/top/mid
 $C exec -T --user www-data nextcloud mkdir -p "$H"
 $C cp "$OUT/scan.pdf" nextcloud:$H/scan.pdf

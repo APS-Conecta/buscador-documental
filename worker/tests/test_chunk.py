@@ -26,3 +26,14 @@ def test_never_exceeds_the_app_caps():
     assert len(out) <= chunk.MAX_CHUNKS
     huge = chunk.split(["x" * 50000])
     assert all(len(c["text"]) <= chunk.MAX_CHARS for c in huge) and len(huge) == 3
+
+
+def test_a_document_that_cannot_fit_is_refused_not_truncated():
+    import pytest
+    pages = ["texto"] * (chunk.MAX_CHUNKS + 1)       # one chunk per page, however far the target grows
+    with pytest.raises(chunk.TooManyChunks):
+        chunk.split(pages)
+
+
+def test_nul_characters_are_removed_from_page_text():
+    assert chunk.clean("a\x00b\x00") == "ab"
