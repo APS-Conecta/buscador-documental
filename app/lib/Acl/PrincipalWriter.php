@@ -50,7 +50,8 @@ class PrincipalWriter {
 	public function writeFacts(FileFacts $facts): void {
 		$this->db->execute(
 			'INSERT INTO aps_search.file_acl (file_id, principals, acl_ver) VALUES (?, ?::text[], 1)
-			 ON CONFLICT (file_id) DO UPDATE SET principals = EXCLUDED.principals, acl_ver = aps_search.file_acl.acl_ver + 1',
+			 ON CONFLICT (file_id) DO UPDATE SET principals = EXCLUDED.principals, acl_ver = aps_search.file_acl.acl_ver + 1
+			 WHERE aps_search.file_acl.principals IS DISTINCT FROM EXCLUDED.principals',
 			[$facts->fileId, IndexDb::textArray(self::principalsFor($facts))],
 		);
 	}

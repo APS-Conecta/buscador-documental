@@ -25,14 +25,16 @@ class RetrievePgTest extends DbTestCase {
 		$pdo = $this->app();
 		$pdo->prepare('INSERT INTO aps_search.file_acl (file_id, principals) VALUES (?, ?::text[])')
 			->execute([$fileId, IndexDb::textArray($principals)]);
+		$pdo->prepare("INSERT INTO aps_search.file_state (file_id, text_state, etag) VALUES (?, 'indexed', 'e1') ON CONFLICT (file_id) DO NOTHING")->execute([$fileId]);
 		$pdo->prepare('INSERT INTO aps_search.chunk (file_id, page_no, ord, heading, text) VALUES (?, ?, 0, ?, ?)')
 			->execute([$fileId, $page, $heading, $text]);
 	}
 
-	private function node(string $name): Node {
+	private function node(string $name, string $etag = 'e1'): Node {
 		$n = $this->createMock(Node::class);
 		$n->method('isReadable')->willReturn(true);
 		$n->method('getName')->willReturn($name);
+		$n->method('getEtag')->willReturn($etag);
 		return $n;
 	}
 
@@ -68,6 +70,13 @@ class RetrievePgTest extends DbTestCase {
 		$this->assertSame('ok', $out['status']);
 		$this->assertSame([], $out['hits']);
 		$this->assertSame(1, $recheck->dropped(), 'the SQL stage returned the id and the recheck dropped it');
+	}
+
+	public function testChangedFileGetsTitleOnlyUntilReindexed(): void {
+		$this->index(10, ['u:b'], 'La hemoglobina glicosilada del paciente');
+		$recheck = ScriptedRecheck::make([10 => [$this->node('a.pdf', 'e2')]], $this->checker());
+		$out = $this->retrieve($recheck)->run('b', 'hemoglobina', 10);
+		$this->assertSame([['file_id' => 10, 'title' => 'a.pdf']], $out['hits']);
 	}
 
 	public function testPrincipalsThatDoNotMatchNeverReachTheRecheck(): void {

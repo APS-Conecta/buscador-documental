@@ -28,6 +28,10 @@ expect "list: empty, opt_in" "rules: none" $OCC buscador:scope:list
 expect "preview with no rules indexes nothing" "files: 0" $OCC buscador:scope:preview
 expect "refuses two targets at once" "exactly one" $OCC buscador:scope:add --folder-id=1 --groupfolders
 expect "refuses an unknown folder id" "No such folder" $OCC buscador:scope:add --folder-id=99999999
+PLAIN=$($PSQL -c "select f.fileid from oc_filecache f join oc_storages s on s.numeric_id=f.storage where s.id='home::scope_a' and f.path='files/suelto.txt'")
+expect "refuses a plain file as a scope" "not a folder" $OCC buscador:scope:add --folder-id="$PLAIN"
+STORE=$($PSQL -c "select f.fileid from oc_filecache f join oc_storages s on s.numeric_id=f.storage where s.id='home::scope_a' and f.path=''")
+expect "refuses the storage root as a scope" "not a folder" $OCC buscador:scope:add --folder-id="$STORE"
 expect "refuses a file as a folder" "not a folder" $OCC buscador:scope:add --path=scope_a:suelto.txt
 expect "adds a folder by path" "folder " $OCC buscador:scope:add --path=scope_a:Informes
 expect "adding it again is the same rule" "rule 1:" $OCC buscador:scope:add --path=scope_a:Informes

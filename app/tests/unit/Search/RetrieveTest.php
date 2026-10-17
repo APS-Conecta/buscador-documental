@@ -48,6 +48,19 @@ class RetrieveTest extends TestCase {
 		return TreeChecker::make([10 => 1, 11 => 1, 1 => -1], [[3, 'rag-excluded']], []);
 	}
 
+	public function testSnippetOfAChangedFileIsNotServed(): void {
+		$n = $this->createMock(Node::class);
+		$n->method('isReadable')->willReturn(true);
+		$n->method('getName')->willReturn('a.pdf');
+		$n->method('getEtag')->willReturn('new');
+		$recheck = ScriptedRecheck::make([10 => [$n]], $this->checker());
+		$db = $this->db([['file_id' => 10, 'chunk_id' => 7, 'etag' => 'old']], [['chunk_id' => 7, 'page_no' => 2, 'heading' => 'H', 'snippet' => 'texto viejo']]);
+
+		$out = $this->retrieve($db, $recheck)->run('b', 'texto', 10);
+
+		$this->assertSame([['file_id' => 10, 'title' => 'a.pdf']], $out['hits']);
+	}
+
 	public function testDownloadDisabledHitIsTitleOnlyInFull(): void {
 		$n = $this->node('contrato.pdf');
 		$recheck = ScriptedRecheck::make([10 => [$n]], $this->checker());

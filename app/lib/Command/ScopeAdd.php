@@ -48,8 +48,14 @@ class ScopeAdd extends Command {
 			$output->writeln('<error>' . $e->getMessage() . '</error>');
 			return 1;
 		}
-		if ($this->tree->node($folderId) === null) {
+		$node = $this->tree->node($folderId);
+		if ($node === null) {
 			$output->writeln('<error>No such folder</error>');
+			return 1;
+		}
+		$userFiles = $node['path'] === 'files' || str_starts_with($node['path'], 'files/') || $this->tree->storageKind($node['storage']) === 'groupfolder';
+		if (!$userFiles || !$this->tree->isDirectory($folderId)) {
+			$output->writeln('<error>That id is not a folder among the files (trash, versions and plain files are not scopes)</error>');
 			return 1;
 		}
 		$id = $this->rules->addFolder($folderId, 'occ');

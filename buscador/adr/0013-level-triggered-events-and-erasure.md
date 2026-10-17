@@ -19,3 +19,7 @@ Nextcloud 34 gives incomplete and uneven events (S3 research, verified): a folde
 - Groupfolder ACL/grant changes are found by a 15-minute fingerprint poll, not an event.
 - Anyone who can edit a file can trigger erasure of its index data by tagging it (the file itself is untouched).
 - Reconcile cost at 1M files is unmeasured until the S3 plan's `EXPLAIN` check.
+
+### Known limit: the opt-out tag is user-assignable
+
+The public `rag-excluded` tag can be set and removed by anyone with edit rights on a file, not only its owner (decision recorded for S3). Consequence: a collaborator with edit rights can remove the tag from a file whose owner excluded it, and the next evaluation indexes it again if it is in scope. Removal is audited like any other change but is not prevented. Open question for the owner of the product: restrict removal to the file owner and admins (needs a tag-permission hook) or accept and document it. Until decided, the user documentation says so plainly.
