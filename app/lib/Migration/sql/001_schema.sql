@@ -47,6 +47,9 @@ CREATE TABLE job (
 -- @@
 CREATE INDEX job_file_id_idx ON job (file_id);
 -- @@
+-- HIPAA Security Rule 45 CFR § 164.312(a)(2)(iv) & NIST SP 800-111 Safeguards (AUD-HIPAA-014):
+-- Tables storing extracted OCR text and full-text vectors must reside on encrypted storage volumes (LUKS2/dm-crypt)
+-- or transparent encrypted tablespaces in production environments.
 CREATE TABLE page (
 	file_id bigint NOT NULL,
 	page_no int NOT NULL,
@@ -57,6 +60,8 @@ CREATE TABLE page (
 	PRIMARY KEY (file_id, page_no)
 );
 -- @@
+-- HIPAA Security Rule 45 CFR § 164.312(a)(2)(iv) & NIST SP 800-111 Safeguards (AUD-HIPAA-014):
+-- Text chunks and precomputed search vectors. Direct worker access is denied; write_result manages DML.
 CREATE TABLE chunk (
 	chunk_id bigserial PRIMARY KEY,
 	file_id bigint NOT NULL,

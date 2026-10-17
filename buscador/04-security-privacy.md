@@ -33,3 +33,8 @@ A short page "Qué lee el Buscador y qué no" (site: usuario page) covering: wha
 
 ## Compliance traceability
 Acceptance rows A-SEC-* in `acceptance.md`; counsel and DPIA outcomes recorded as ADR-0006 supersession note.
+
+## HIPAA & NIST SP 800-111 Encryption at Rest (AUD-HIPAA-014)
+- **Mandatory Storage Encryption:** Under HIPAA Security Rule 45 CFR § 164.312(a)(2)(iv) and NIST SP 800-111, all PostgreSQL storage directories hosting OCR text and precomputed full-text tsvectors (`aps_search.page` and `aps_search.chunk`) must be encrypted at rest using AES-256 (LUKS2 host volume encryption or transparent tablespace encryption).
+- **Access Control & Least Privilege:** Workers have no direct table SELECT/UPDATE privileges on `page` or `chunk`; insertions and modifications are guarded strictly by SECURITY DEFINER routines (`write_result`).
+- **Encrypted Backup Targets:** All database backups, basebackups, and snapshots containing search indexes must be encrypted with AES-256 before offsite replication or disk archiving.
