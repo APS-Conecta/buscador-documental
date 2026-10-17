@@ -9,7 +9,7 @@ NET := bd-s1_default
 DOCKER := docker run --rm -v "$(CURDIR)":/app -w /app $(IMG)
 DOCKER_NET := docker run --rm --network $(NET) -v "$(CURDIR)":/app -w /app -e BD_PG_HOST=db $(IMG)
 
-.PHONY: instance-reset-schema bench-reconcile test-e2e-reconcile test-e2e-erasure test-e2e-events test-e2e-scope test-e2e-groupfolder test-e2e-formats test-e2e-one test-contract test-search test-canary build-test-image deps test-unit test-db up down clean instance-migrate
+.PHONY: instance-reset-schema test-e2e-rbac test-e2e-logs bench-reconcile test-e2e-reconcile test-e2e-erasure test-e2e-events test-e2e-scope test-e2e-groupfolder test-e2e-formats test-e2e-one test-contract test-search test-canary build-test-image deps test-unit test-db up down clean instance-migrate
 
 build-test-image:
 	docker build -q -f Dockerfile.test -t $(IMG) . >/dev/null
@@ -57,6 +57,14 @@ clean:
 # One scanned PDF through app + worker + OCR into the index (S1 plan, phase 2).
 test-e2e-one:
 	bash tests/e2e/one.sh
+
+# The adversarial permission matrix with the real mechanisms (circles, team-folder ACL, expiry, moves, multi-mount, deletion).
+test-e2e-rbac:
+	bash tests/e2e/rbac.sh
+
+# A-SEC-5: sentinels through the whole pipeline, then every log sink, with positive controls (S3 plan, phase 7).
+test-e2e-logs:
+	bash tests/e2e/logs.sh
 
 # Reconciliation at scale: N synthetic files (default 300000), real Reconciler, EXPLAIN ANALYZE (S3 plan, phase 6).
 bench-reconcile:

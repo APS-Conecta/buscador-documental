@@ -199,10 +199,11 @@ def test_the_parser_timeout_scales_with_the_file_size():
 
 
 def test_parser_detail_is_logged_without_control_characters(monkeypatch, caplog):
+    monkeypatch.setenv("BD_DEBUG_PARSER", "1")                  # only in debug mode is the detail logged at all
     monkeypatch.setattr(main, "parse", lambda *a: {"status": "error", "reason": "ocr_failed", "detail": "a\rb\x1b[31mc\x0bd e"})
     with caplog.at_level("WARNING", logger="bd-worker"):
         run(FakeConn(), FakeApi())
-    msg = [r.getMessage() for r in caplog.records if "parser said" in r.getMessage()][0]
+    msg = [r.getMessage() for r in caplog.records if "parser detail" in r.getMessage()][0]
     assert not any(ch in msg for ch in "\r\x1b\x0b ")
 
 

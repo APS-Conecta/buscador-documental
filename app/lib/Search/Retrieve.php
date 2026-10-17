@@ -65,7 +65,7 @@ class Retrieve {
 			}
 			return $this->result('ok', '', $this->hits($query, $survivors));
 		} catch (ExclusionUnavailable $e) {
-			$this->logger->warning('buscador_documental: exclusion state unavailable, search refused (' . $e->getMessage() . ')');
+			$this->logger->warning('buscador_documental: exclusion state unavailable, search refused (' . get_class($e) . ')');      // not its message: A-SEC-5
 			return $this->result('unavailable', 'La búsqueda no está disponible en este momento.', []);
 		} catch (Throwable $e) {
 			if (str_contains($e->getMessage(), 'statement timeout')) {

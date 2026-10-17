@@ -129,13 +129,14 @@ def run_child(cmd: list, req: str, res: str, timeout: int) -> dict:
         except (ValueError, RecursionError):
             pass
     tail = ""
-    try:
-        with open(errp, "rb") as fh:
-            fh.seek(0, os.SEEK_END)
-            fh.seek(max(0, fh.tell() - ERR_TAIL))
-            tail = fh.read(ERR_TAIL).decode("utf-8", "replace")      # diagnostics for the supervisor's log, never for users
-    except OSError:
-        pass
+    if os.environ.get("BD_DEBUG_PARSER") == "1":
+        try:
+            with open(errp, "rb") as fh:
+                fh.seek(0, os.SEEK_END)
+                fh.seek(max(0, fh.tell() - ERR_TAIL))
+                tail = fh.read(ERR_TAIL).decode("utf-8", "replace")      # may hold document text: debugging only (A-SEC-5)
+        except OSError:
+            pass
     return {"status": "error", "reason": "ocr_failed", "detail": tail or f"child exited {p.returncode}"}
 
 

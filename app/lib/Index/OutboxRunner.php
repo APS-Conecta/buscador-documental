@@ -16,6 +16,19 @@ class OutboxRunner {
 	}
 
 	/**
+	 * One job run: permission changes first (files already marked), then the outbox, then the files that batch just
+	 * marked, so a share or an ACL change is reflected in the stored principals in the same pass that learned of it.
+	 *
+	 * @return array<string, int>
+	 */
+	public function cycle(int $seconds, int $batch, int $refreshLimit): array {
+		$this->processor->refreshDirty($refreshLimit);
+		$counts = $this->runFor($seconds, $batch);
+		$this->processor->refreshDirty($refreshLimit);
+		return $counts;
+	}
+
+	/**
 	 * Keeps taking batches for up to $seconds (always at least one), so a large backlog (an initial scan can queue
 	 * hundreds of thousands of rows) drains at the pace the database allows instead of one batch a minute. It stops as
 	 * soon as a batch is not full or makes no progress (everything held by a pause, or failing), so it cannot spin.

@@ -276,4 +276,25 @@ class OutboxProcessorTest extends DbTestCase {
 		$runner->runFor(30, 200);
 		$this->assertLessThan(5, microtime(true) - $start, 'a run that can make no progress ends at once');
 	}
+
+	public function testOneCycleSettlesAPermissionChangeItJustLearnedAbout(): void {
+		[$db, $rules, , $p, $outbox] = $this->build();
+		$rules->addFolder(10, 'occ');
+		$this->indexedRow(13);
+		$outbox->touch(11, 'acl');                                     // a share on folder 11 (its event arrived since the last cycle)
+		$runner = new OutboxRunner($db, $outbox, $p, $this->createMock(LoggerInterface::class));
+		$runner->cycle(30, 200, 500);
+		$this->assertSame([13], $this->aclWritten, 'marked and refreshed in the same cycle, not the next one');
+		$this->assertSame(0, (int)$db->rows('SELECT count(*) AS n FROM aps_search.file_state WHERE acl_dirty')[0]['n']);
+	}
+
+	public function testACycleRefreshesAlreadyDirtyFilesBeforeTheBatchToo(): void {
+		[$db, $rules, , $p, $outbox] = $this->build();
+		$rules->addFolder(10, 'occ');
+		$this->indexedRow(13);
+		$db->execute("UPDATE aps_search.file_state SET acl_dirty = true, acl_dirty_since = now() WHERE file_id = 13");
+		$runner = new OutboxRunner($db, $outbox, $p, $this->createMock(LoggerInterface::class));
+		$runner->cycle(0, 200, 500);
+		$this->assertSame([13], $this->aclWritten);
+	}
 }

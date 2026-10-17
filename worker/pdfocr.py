@@ -101,7 +101,7 @@ def _ocr_page_once(src: str, force: bool, workdir: str, image: bool = False) -> 
     except subprocess.TimeoutExpired as e:
         raise OcrTimeout() from e
     if r.returncode != 0:
-        raise OcrFailed(f"ocrmypdf exit {r.returncode}: {r.stderr[-200:]}")
+        raise OcrFailed(f"ocrmypdf exit {r.returncode}")       # not its stderr: that can hold page text
     with open(sidecar, encoding="utf-8", errors="replace") as fh:
         text = fh.read().replace("\f", "").strip()
     return text, out_pdf
