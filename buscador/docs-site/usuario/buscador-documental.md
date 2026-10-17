@@ -37,7 +37,7 @@ El buscador lee PDF, documentos de texto (Word y de formato abierto), presentaci
 
 Su administrador decide qué carpetas se leen: una carpeta incluida se lee completa, con sus subcarpetas y con los archivos nuevos que reciba, sin que nadie tenga que volver a pedirlo. También puede incluir todas las carpetas de equipo.
 
-Para que una carpeta o un archivo no se lea, aplíquele la etiqueta `rag-excluded`: lo ya leído se borra del buscador, no solo se oculta, y se vuelve a leer si usted retira la etiqueta. Si envía un archivo a la papelera, su contenido deja de buscarse de inmediato y se borra del índice; si lo restaura, se lee de nuevo desde cero.
+Para que una carpeta o un archivo no se lea, aplíquele la etiqueta `rag-excluded`: lo ya leído se borra del buscador, no solo se oculta, y se vuelve a leer si usted retira la etiqueta. Cualquier persona con permiso de edición sobre el archivo puede retirar la etiqueta; si necesita que la exclusión no pueda deshacerse, pida a su administrador que excluya la carpeta por regla. Si envía un archivo a la papelera, su contenido deja de buscarse de inmediato y se borra del índice; si lo restaura, se lee de nuevo desde cero.
 
 ## Documentos escaneados
 
