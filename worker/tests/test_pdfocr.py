@@ -19,7 +19,8 @@ def has(text, words=KEY):
     ("The patient was referred to nutrition and follow-up in three months for review.", "native"),
     ("", "image-only"),
     ("  \n ", "image-only"),
-    ("a", "image-only"),
+    ("a", "untrusted"),                       # 1-4 characters: a bare page number cannot be told from debris
+    ("3 1", "untrusted"),
     ("#@!$%^&*()_+{}|:<>?~" * 6, "untrusted"),
     ("��� xx �" * 10, "untrusted"),
     ("qzxv wjkp bnmt rtyu plkj hgfd sdfg" * 5, "untrusted"),
@@ -66,6 +67,38 @@ def test_rotated_scans_are_read(tmp_path, angle):
 def test_upright_sparse_pages_are_not_rotated_by_mistake(tmp_path, lines):
     out = pdfocr.run(fx.scan_pdf(tmp_path / "u.pdf", lines=lines))
     assert has(out["pages"][0]), out["pages"][0][:200]
+
+
+def test_a_page_with_only_a_page_number_is_ocrd_without_the_skip_marker(tmp_path):
+    out = pdfocr.run(fx.pdf_text(tmp_path / "num.pdf", text="3", pages=1))
+    assert out["source"] == ["ocr"]
+    assert not out["pages"][0].startswith("[OCR skipped")
+
+
+def test_the_skip_marker_is_never_stored_as_text(tmp_path, monkeypatch):
+    calls = []
+    def fake(src, force, workdir, image=False):
+        calls.append(force)
+        return ("[OCR skipped on page(s) 1]" if not force else "texto real"), str(tmp_path / "o.pdf")
+    monkeypatch.setattr(pdfocr, "_ocr_page_once", fake)
+    monkeypatch.setattr(pdfocr, "page_confidence", lambda *a: 50.0)
+    out = pdfocr.run(fx.pdf_text(tmp_path / "x.pdf", text="La paciente fue derivada a nutricion y control", pages=1), layer=[""])
+    assert out["pages"] == ["texto real"] and calls == [False, True]
+
+
+def test_a_ghostscript_timeout_is_an_ocr_timeout(tmp_path, monkeypatch):
+    import subprocess
+    import ocr
+    def slow(cmd, *a, **k):
+        raise subprocess.TimeoutExpired(cmd, 1)
+    monkeypatch.setattr(pdfocr.subprocess, "run", slow)
+    with pytest.raises(ocr.OcrTimeout):
+        pdfocr.page_confidence(str(tmp_path / "x.pdf"), str(tmp_path))
+
+
+def test_a_scan_wrapped_in_a_form_xobject_is_still_a_scan(tmp_path):
+    p = fx.pdf_with_image(tmp_path / "f.pdf", 2000, 1500, in_form=True)
+    assert pdfocr._image_heavy(p) == [True]
 
 
 def test_a_garbage_text_layer_is_replaced_by_ocr(tmp_path):

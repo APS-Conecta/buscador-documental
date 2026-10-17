@@ -33,6 +33,8 @@ def main(req_path: str, res_path: str) -> None:
         out = {"status": "error", "reason": "timeout"}
     except ocr.OcrFailed:
         out = {"status": "error", "reason": "ocr_failed"}
+    except Exception as e:                                 # a bug or a hostile shape we did not foresee: terminal, not retried
+        out = {"status": "error", "reason": "internal", "detail": f"{type(e).__name__}: {str(e)[:120]}"}
     with open(res_path, "w") as fh:
         json.dump(out, fh)
 

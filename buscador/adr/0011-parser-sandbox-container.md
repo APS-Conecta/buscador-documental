@@ -9,6 +9,10 @@ Affects: `worker/`, `parser/`, `compose.yaml`, A-SAFE-2, `01-architecture.md` (w
 ## Decision
 Two compose services. `worker` (supervisor) holds the database role, the HMAC secret and the network, downloads the file, and never parses it. `parser` runs extraction and OCR with `network_mode: none`, read-only rootfs, tmpfs scratch, `cap_drop: [ALL]`, `no-new-privileges`, `pids_limit`, `mem_limit`, a non-root user and no secrets. They exchange one input file and one result JSON per job through a shared tmpfs volume. The supervisor enforces the per-file timeout and kills the parser's process group on expiry. No Docker socket is mounted.
 
+## What is enforced (S2 review, 2026-10-17)
+Enforced and tested: no network, no `BD_*` secrets, read-only rootfs, non-root, no capabilities, `no-new-privileges`, a pids limit and a fork-loop test, memory and CPU cgroup limits, `RLIMIT_FSIZE` (512 MiB) and `RLIMIT_CORE` 0 on every child, process-group kill on timeout, a parser that survives malformed requests and a heartbeat health check, `init` and `restart: unless-stopped`, answer validation and a size cap on the supervisor side.
+Not enforced (earlier text overstated it): a custom seccomp profile (Docker's default applies), `RLIMIT_AS`/`RLIMIT_NPROC`, and isolation between jobs inside the shared work volume (one uid, one directory). A compromised parser dependency could therefore read other queued inputs or forge another job's answer within the volume. That needs a prior exploit of ocrmypdf, Ghostscript, Tesseract, Pillow, pikepdf, pypdf or openpyxl plus a `setsid` escape; S7 hardening replaces the shared directory with per-job directories under distinct uids and adds a seccomp profile.
+
 ## Consequences
 - A-SAFE-2 is proven by tests that run inside `parser`: no `BD_*` in the environment, no route to `db`, no write outside tmpfs, bounded processes and memory.
 - Two containers per worker deployment; the per-job IPC adds a file copy.

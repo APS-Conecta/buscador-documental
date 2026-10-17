@@ -22,6 +22,8 @@ RATIO_FLOOR = 1024 * 1024          # tiny entries compress legitimately well; on
 MAX_XML_DEPTH = 100
 MAX_XML_PART = 100 * 1024 * 1024
 MAX_CELLS = 1_000_000
+RASTER_DPI = 200                   # pages are rasterised at this density for OCR confidence and force-OCR
+OLE2 = bytes.fromhex("d0cf11e0a1b11ae1")
 
 
 class Refusal(Exception):
@@ -44,6 +46,10 @@ class TooLarge(Refusal):
     reason = "too_large"
 
 
+class Unsupported(Refusal):
+    reason = "unsupported"
+
+
 def extract(path: str) -> list:
     import os
     size = os.path.getsize(path)
@@ -53,6 +59,8 @@ def extract(path: str) -> list:
         raise TooLarge("file over the size cap")
     with open(path, "rb") as fh:
         head = fh.read(16)
+    if head.startswith(OLE2):
+        raise Encrypted("OLE2 container: a password-protected Office file")      # the supported Office types are all zip-based
     if head.startswith(b"%PDF"):
         return _pdf(path)
     if head.startswith(b"PK\x03\x04"):
@@ -66,12 +74,15 @@ def extract(path: str) -> list:
 def _text(path):
     with open(path, "rb") as fh:
         data = fh.read()
+    # Deterministic on purpose: statistical detectors guess wrong on short Spanish text. A UTF-16 BOM first (its NUL bytes
+    # must not be mistaken for binary data), then UTF-8, then Windows-1252, which decodes every byte except five.
+    if data.startswith((b"\xff\xfe", b"\xfe\xff")):
+        try:
+            return [data.decode("utf-16")]
+        except UnicodeDecodeError as e:
+            raise Corrupt("truncated UTF-16 text") from e
     if data.count(b"\x00") > len(data) // 100:
         raise Corrupt("binary data")
-    # Deterministic on purpose: statistical detectors guess wrong on short Spanish text. UTF-8, UTF-16 with a BOM, then
-    # Windows-1252 (a superset of Latin-1 for the characters Spanish uses), which decodes every byte except five.
-    if data.startswith((b"\xff\xfe", b"\xfe\xff")):
-        return [data.decode("utf-16")]
     try:
         return [data.decode("utf-8-sig")]
     except UnicodeDecodeError:
@@ -88,16 +99,47 @@ def _image(path):
     try:
         with Image.open(path) as im:
             w, h = im.size
+            frames = getattr(im, "n_frames", 1)
     except Image.DecompressionBombError as e:
         raise Unsafe("pixel bomb") from e
     except Exception as e:
         raise Corrupt("unreadable image") from e
     if w * h > MAX_PIXELS:
         raise Unsafe(f"{w}x{h} pixels")
+    if frames > 1:
+        raise Unsupported("multi-frame image")      # later frames would go unchecked and be read as one page
     return [""]                                   # text comes from OCR
 
 
 # ---- PDF ----
+def page_images(page, _depth=0, _seen=None):
+    """Yields (width, height) of every image reachable from a page, through nested Form XObjects. A non-numeric size is
+    corrupt, not a crash."""
+    import pikepdf
+    seen = _seen if _seen is not None else set()
+    res = page.get("/Resources") if hasattr(page, "get") else None
+    xobjects = (res.get("/XObject") if res is not None else None) or {}
+    for _name, xo in xobjects.items():
+        key = xo.objgen if getattr(xo, "is_indirect", False) else None
+        if key is not None:
+            if key in seen:
+                continue
+            seen.add(key)
+        sub = xo.get("/Subtype")
+        if sub == "/Image":
+            try:
+                yield int(xo.get("/Width", 0)), int(xo.get("/Height", 0))
+            except (TypeError, ValueError, pikepdf.PdfError) as e:
+                raise Corrupt("image with a non-numeric size") from e
+        elif sub == "/Form" and _depth < 8:
+            yield from page_images(xo, _depth + 1, seen)
+
+
+def _raster_pixels(page) -> float:
+    box = [float(x) for x in page.MediaBox]
+    return abs(box[2] - box[0]) * abs(box[3] - box[1]) * (RASTER_DPI / 72.0) ** 2
+
+
 def _pdf(path):
     import pikepdf
     from pypdf import PdfReader
@@ -112,9 +154,13 @@ def _pdf(path):
         if n > MAX_PAGES:
             raise TooLarge(f"{n} pages")
         for page in pdf.pages:
-            xobjects = (page.get("/Resources") or {}).get("/XObject") or {}
-            for _name, xo in xobjects.items():
-                if xo.get("/Subtype") == "/Image" and int(xo.get("/Width", 0)) * int(xo.get("/Height", 0)) > MAX_PIXELS:
+            try:
+                if _raster_pixels(page) > MAX_PIXELS:
+                    raise TooLarge("page area beyond the raster cap")
+            except (TypeError, ValueError, AttributeError, pikepdf.PdfError) as e:
+                raise Corrupt("unreadable page size") from e
+            for w, h in page_images(page):
+                if w * h > MAX_PIXELS:
                     raise Unsafe("pixel bomb in PDF")
         buf = io.BytesIO()
         pdf.save(buf)                              # decrypted copy of an owner-password-only file, in memory
@@ -154,7 +200,11 @@ def _zip_document(path):
             if "content.xml" in names and "mimetype" in names:
                 return _odt(z)
             if "xl/workbook.xml" in names:
-                pass
+                sheets = [n for n in names if re.fullmatch(r"xl/worksheets/sheet\d+\.xml", n)]
+                if len(sheets) > MAX_PAGES:
+                    raise TooLarge(f"{len(sheets)} sheets")
+                if any(z.getinfo(n).file_size > MAX_XML_PART for n in sheets):
+                    raise Unsafe("worksheet part too large")
             else:
                 raise Corrupt("unknown zip document")
         except (zipfile.BadZipFile, EOFError, OSError) as e:
@@ -205,42 +255,50 @@ def _local(tag):
 
 
 def _docx(z):
-    blocks, row, cell, para = [], None, None, None
-    in_cell = 0
+    """Paragraphs, table rows (cells tab-joined) and text-box content, with stacks so nesting never loses text: a table
+    inside a cell, or a text box inside a paragraph, is read in place and the outer text continues afterwards."""
+    sinks = [[]]                  # where finished paragraphs/rows go: the body, or the cell being read
+    rows, cells = [], []          # row stack (cells of the row being built), cell stack (sink of the cell)
+    paras = []                    # paragraph stack (text parts)
     for ev, el in _events(z, "word/document.xml"):
         t = _local(el.tag)
         if ev == "start":
             if t == "p":
-                para = []
+                if paras:
+                    paras[-1].append(" ")            # a paragraph inside a paragraph (text box): keep the words apart
+                paras.append([])
             elif t == "tr":
-                row = []
+                rows.append([])
             elif t == "tc":
-                cell, in_cell = [], in_cell + 1
+                cells.append([])
+                sinks.append(cells[-1])
         else:
-            if t == "t" and para is not None:
-                para.append(el.text or "")
-            elif t == "p" and para is not None:
-                text = "".join(para)
-                if in_cell and cell is not None:
-                    cell.append(text)
-                elif text:
-                    blocks.append(text)
-                para = None
-            elif t == "tc":
-                in_cell -= 1
-                if row is not None:
-                    row.append(" ".join(c for c in (cell or []) if c))
-                cell = None
-            elif t == "tr" and row is not None:
-                blocks.append("\t".join(row))
-                row = None
+            if t == "t" and paras:
+                paras[-1].append(el.text or "")
+            elif t in ("tab", "br", "cr") and paras:
+                paras[-1].append(" ")
+            elif t == "p" and paras:
+                text = "".join(paras.pop())
+                if paras:
+                    paras[-1].append(" ")
+                if text.strip():
+                    sinks[-1].append(text.strip())
+            elif t == "tc" and cells:
+                sinks.pop()
+                cell = cells.pop()
+                if rows:
+                    rows[-1].append(" ".join(cell))
+            elif t == "tr" and rows:
+                sinks[-1].append("\t".join(rows.pop()))
             el.clear()
-    return ["\n".join(blocks)]
+    return ["\n".join(sinks[0])]
 
 
 def _pptx(z):
     slides = sorted((n for n in z.namelist() if re.fullmatch(r"ppt/slides/slide\d+\.xml", n)),
                     key=lambda n: int(re.findall(r"\d+", n)[0]))
+    if len(slides) > MAX_PAGES:
+        raise TooLarge(f"{len(slides)} slides")
     pages = []
     for name in slides:
         paras, cur = [], None
@@ -250,19 +308,31 @@ def _pptx(z):
                 cur = []
             elif ev == "end" and t == "t" and cur is not None:
                 cur.append(el.text or "")
+            elif ev == "end" and t == "br" and cur is not None:
+                cur.append(" ")
             elif ev == "end" and t == "p" and cur is not None:
-                if "".join(cur):
+                if "".join(cur).strip():
                     paras.append("".join(cur))
                 cur = None
+                el.clear()
         pages.append("\n".join(paras))
     return pages
+
+
+def _odt_text(el):
+    """Text of an element with ODF whitespace elements turned into spaces (depth is bounded by the XML depth cap)."""
+    parts = [el.text or ""]
+    for ch in el:
+        parts.append(" " if _local(ch.tag) in ("tab", "line-break", "s") else _odt_text(ch))
+        parts.append(ch.tail or "")
+    return "".join(parts)
 
 
 def _odt(z):
     paras = []
     for ev, el in _events(z, "content.xml"):
         if ev == "end" and _local(el.tag) in ("p", "h"):
-            text = "".join(el.itertext())
+            text = _odt_text(el).strip()
             if text:
                 paras.append(text)
             el.clear()
@@ -271,11 +341,14 @@ def _odt(z):
 
 def _xlsx(path):
     import openpyxl
+    fh = open(path, "rb")                      # a file object: the parser's input name has no extension
     try:
-        wb = openpyxl.load_workbook(open(path, "rb"), read_only=True, data_only=True)    # a file object: the parser's input name has no extension
+        wb = openpyxl.load_workbook(fh, read_only=True, data_only=True)
     except DefusedXmlException as e:
+        fh.close()
         raise Unsafe("XML entities are not allowed") from e
     except Exception as e:
+        fh.close()
         raise Corrupt("unreadable workbook") from e
     cells, pages = 0, []
     try:
@@ -294,4 +367,5 @@ def _xlsx(path):
         raise Corrupt("unreadable sheet") from e
     finally:
         wb.close()
+        fh.close()
     return pages

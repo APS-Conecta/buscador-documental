@@ -176,3 +176,70 @@ def native_with_logo(path, text="La paciente fue derivada a nutricion y control 
     c.drawImage(ImageReader(Image.new("RGB", (120, 60), (200, 30, 30))), 60, 760, width=120, height=60)
     c.save()
     return str(path)
+
+
+# ---- S2 review fixtures ----
+def docx_raw(path, body_xml):
+    xml = f'<?xml version="1.0"?><w:document xmlns:w="{W}"><w:body>{body_xml}</w:body></w:document>'
+    return _zip(path, {"[Content_Types].xml": "<Types/>", "word/document.xml": xml})
+
+
+def pptx_raw(path, paragraphs_xml):
+    xml = f'<?xml version="1.0"?><p:sld xmlns:p="p" xmlns:a="{A}"><p:txBody>{paragraphs_xml}</p:txBody></p:sld>'
+    return _zip(path, {"[Content_Types].xml": "<Types/>", "ppt/slides/slide1.xml": xml})
+
+
+def odt_raw(path, body_xml):
+    xml = f'<?xml version="1.0"?><office:document-content xmlns:office="o" xmlns:text="t"><office:body><office:text>{body_xml}</office:text></office:body></office:document-content>'
+    return _zip(path, {"mimetype": "application/vnd.oasis.opendocument.text", "content.xml": xml})
+
+
+def ole2(path):
+    path.write_bytes(bytes.fromhex("d0cf11e0a1b11ae1") + b"\x00" * 512)       # what a password-protected .docx/.xlsx is
+    return str(path)
+
+
+def utf16_txt(path, text):
+    path.write_bytes(text.encode("utf-16"))
+    return str(path)
+
+
+def pdf_with_image(path, w, h, in_form=False, width_value=None):
+    """A one-page PDF whose only image declares w x h pixels, optionally wrapped in a Form XObject."""
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(200, 200))
+    img = pikepdf.Stream(pdf, b"\x00", Type=pikepdf.Name.XObject, Subtype=pikepdf.Name.Image,
+                         Width=w if width_value is None else width_value, Height=h,
+                         ColorSpace=pikepdf.Name.DeviceGray, BitsPerComponent=1)
+    if in_form:
+        form = pikepdf.Stream(pdf, b"q 200 0 0 200 0 0 cm /Im0 Do Q", Type=pikepdf.Name.XObject, Subtype=pikepdf.Name.Form,
+                              BBox=[0, 0, 200, 200],
+                              Resources=pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im0=img)))
+        pdf.pages[0].Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Fm0=form))
+        pdf.pages[0].Contents = pdf.make_stream(b"/Fm0 Do")
+    else:
+        pdf.pages[0].Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im0=img))
+        pdf.pages[0].Contents = pdf.make_stream(b"q 200 0 0 200 0 0 cm /Im0 Do Q")
+    pdf.save(path)
+    return str(path)
+
+
+def pdf_huge_page(path, points=14400):
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(points, points))
+    pdf.save(path)
+    return str(path)
+
+
+def tiff_frames(path, n):
+    frames = [Image.new("L", (50, 50), 255 - i) for i in range(n)]
+    frames[0].save(path, "TIFF", save_all=True, append_images=frames[1:])
+    return str(path)
+
+
+def many_sheets_xlsx(path, n):
+    wb = Workbook(write_only=True)
+    for i in range(n):
+        wb.create_sheet(f"s{i}").append([i])
+    wb.save(path)
+    return str(path)

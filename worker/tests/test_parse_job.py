@@ -33,3 +33,9 @@ def test_refusals_carry_the_database_reason(tmp_path, monkeypatch):
     assert run(tmp_path, fx.truncated_zip(tmp_path / "t.docx"))["reason"] == "corrupt"
     assert run(tmp_path, fx.pdf_text(tmp_path / "m.pdf", pages=301))["reason"] == "too_large"
     assert run(tmp_path, fx.pixel_bomb_png(tmp_path / "p.png"))["reason"] == "unsafe"
+
+
+def test_an_unexpected_error_in_the_child_is_a_terminal_internal_answer(tmp_path, monkeypatch):
+    monkeypatch.setattr(pdfocr, "run", lambda *a, **k: (_ for _ in ()).throw(TypeError("surprise")))
+    out = run(tmp_path, fx.pdf_text(tmp_path / "a.pdf"))
+    assert out["status"] == "error" and out["reason"] == "internal" and "TypeError" in out["detail"]

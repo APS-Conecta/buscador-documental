@@ -46,7 +46,20 @@ class FileFactsSourceTest extends TestCase {
 	}
 
 	public static function unmodelledTypes(): array {
-		return [[4], [6], [7], [10], [12]];
+		return [[4], [6], [7], [8], [9], [10], [11], [12], [13], [15]];
+	}
+
+	/** @dataProvider internalTypes */
+	public function testLinkSharesAndPerMemberGroupRowsAreNotUnmodelledAccess(int $type): void {
+		$f = $this->source('files/a.pdf', [['share_type' => 1, 'share_with' => 'staff'], ['share_type' => $type, 'share_with' => 'bob']])->load(5);
+		$this->assertFalse($f->unmodelledAccess);
+		$this->assertSame(['staff'], $f->shareGroupIds);
+	}
+
+	public static function internalTypes(): array {
+		// 2 = the per-member row Nextcloud creates under every group share (an override of the group share, not new access);
+		// 3 = anonymous link: search needs a logged-in user, so a link grants nobody a hit.
+		return [[2], [3]];
 	}
 
 	public function testGroupfolderWithAdvancedAclIsUnmodelled(): void {

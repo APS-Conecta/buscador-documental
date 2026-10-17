@@ -44,8 +44,10 @@ def classify(text: str, image_heavy: bool = False) -> str:
     reading the image, which costs as much as OCR, so such a page is always OCR'd (S2 evaluation: a short layer of wrong
     words passes every text-only test)."""
     chars = [c for c in text if not c.isspace()]
-    if len(chars) < MIN_CHARS:
+    if not chars:
         return "image-only"
+    if len(chars) < MIN_CHARS:
+        return "untrusted"            # a bare page number is indistinguishable from debris, and --skip-text would keep it
     if image_heavy:
         return "untrusted"
     bad = sum(1 for c in chars if c == "�" or 0xE000 <= ord(c) <= 0xF8FF or (ord(c) < 32) or 0x7F <= ord(c) < 0xA0)
@@ -70,8 +72,23 @@ def version() -> str:
     return f"{ocr.version()}; policy={POLICY}"
 
 
+SKIP_MARKER = "[OCR skipped"
+
+
 def ocr_page(src: str, force: bool, workdir: str, image: bool = False) -> tuple:
-    """OCRs a one-page PDF (or an image). Returns (text, output_pdf)."""
+    """OCRs a one-page PDF (or an image). Returns (text, output_pdf). If ocrmypdf declined the page (it writes a marker
+    instead of text), the page is read again with --force-ocr: the marker is never stored as content."""
+    text, out = _ocr_page_once(src, force, workdir, image)
+    if text.startswith(SKIP_MARKER) or text.startswith("[skipped page]"):
+        if force:
+            return "", out
+        text, out = _ocr_page_once(src, True, workdir, image)
+        if text.startswith(SKIP_MARKER) or text.startswith("[skipped page]"):
+            return "", out
+    return text, out
+
+
+def _ocr_page_once(src: str, force: bool, workdir: str, image: bool = False) -> tuple:
     sidecar = os.path.join(workdir, "side.txt")
     out_pdf = os.path.join(workdir, "out.pdf")
     cmd = ["ocrmypdf", "--sidecar", sidecar, "--force-ocr" if force else "--skip-text", "--deskew", "--rotate-pages",
@@ -93,8 +110,11 @@ def ocr_page(src: str, force: bool, workdir: str, image: bool = False) -> tuple:
 def page_confidence(pdf: str, workdir: str) -> float:
     """Mean Tesseract word confidence over the rasterised first page of `pdf`."""
     png = os.path.join(workdir, "page.png")
-    r = subprocess.run(["gs", "-q", "-dSAFER", "-dBATCH", "-dNOPAUSE", "-dFirstPage=1", "-dLastPage=1", "-sDEVICE=pnggray",
-                        "-r200", f"-sOutputFile={png}", pdf], capture_output=True, timeout=PAGE_TIMEOUT)
+    try:
+        r = subprocess.run(["gs", "-q", "-dSAFER", "-dBATCH", "-dNOPAUSE", "-dFirstPage=1", "-dLastPage=1", "-sDEVICE=pnggray",
+                            "-r200", f"-sOutputFile={png}", pdf], capture_output=True, timeout=PAGE_TIMEOUT)
+    except subprocess.TimeoutExpired as e:
+        raise OcrTimeout() from e
     if r.returncode != 0 or not os.path.exists(png):
         raise OcrFailed("rasterising for confidence failed")
     try:
@@ -120,14 +140,10 @@ def _layer_texts(path: str) -> list:
 
 
 def _image_heavy(path: str) -> list:
+    import extract
     import pikepdf
-    out = []
     with pikepdf.open(path) as pdf:
-        for page in pdf.pages:
-            xobjects = (page.get("/Resources") or {}).get("/XObject") or {}
-            out.append(any(xo.get("/Subtype") == "/Image" and int(xo.get("/Width", 0)) * int(xo.get("/Height", 0)) >= SCAN_PIXELS
-                           for xo in xobjects.values()))
-    return out
+        return [any(w * h >= SCAN_PIXELS for w, h in extract.page_images(page)) for page in pdf.pages]
 
 
 def _single_page(src: str, index: int, dst: str) -> None:
