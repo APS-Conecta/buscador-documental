@@ -127,9 +127,31 @@ abstract class DbTestCase extends TestCase {
 			return $r;
 		});
 		$c->method('executeStatement')->willReturnCallback(static fn (string $sql, array $params = []) => $run($sql, $params)->rowCount());
-		$c->method('beginTransaction')->willReturnCallback(static fn () => $pdo->beginTransaction());
-		$c->method('commit')->willReturnCallback(static fn () => $pdo->commit());
-		$c->method('rollBack')->willReturnCallback(static fn () => $pdo->rollBack());
+		// Nextcloud nests transactions with savepoints (OC\DB\Connection: setNestTransactionsWithSavepoints): emulate that
+		$levels = [];                                                         // true = this level opened the real transaction
+		$c->method('inTransaction')->willReturnCallback(static fn () => $pdo->inTransaction());
+		$c->method('beginTransaction')->willReturnCallback(static function () use ($pdo, &$levels): void {
+			if ($pdo->inTransaction()) {
+				$pdo->exec('SAVEPOINT sp_' . count($levels));
+				$levels[] = false;
+			} else {
+				$pdo->beginTransaction();
+				$levels[] = true;
+			}
+		});
+		$c->method('commit')->willReturnCallback(static function () use ($pdo, &$levels): void {
+			$owns = array_pop($levels);
+			$owns === false ? $pdo->exec('RELEASE SAVEPOINT sp_' . count($levels)) : $pdo->commit();
+		});
+		$c->method('rollBack')->willReturnCallback(static function () use ($pdo, &$levels): void {
+			$owns = array_pop($levels);
+			if ($owns === false) {
+				$pdo->exec('ROLLBACK TO SAVEPOINT sp_' . count($levels));
+				$pdo->exec('RELEASE SAVEPOINT sp_' . count($levels));
+			} else {
+				$pdo->rollBack();
+			}
+		});
 		return $c;
 	}
 }

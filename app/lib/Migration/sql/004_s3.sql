@@ -14,8 +14,18 @@ CREATE TABLE IF NOT EXISTS outbox (
 	attempts int NOT NULL DEFAULT 0
 );
 -- @@
--- Level-triggered (ADR-0013): one pending row per (file, kind) is enough, a row only means "re-evaluate this file".
-CREATE UNIQUE INDEX IF NOT EXISTS outbox_pending_uq ON outbox (file_id, kind) WHERE processed_at IS NULL;
+-- A row being worked on (claimed_at) and a retry waiting out its backoff (not_before).
+ALTER TABLE outbox ADD COLUMN IF NOT EXISTS claimed_at timestamptz;
+-- @@
+ALTER TABLE outbox ADD COLUMN IF NOT EXISTS not_before timestamptz NOT NULL DEFAULT now();
+-- @@
+-- Level-triggered (ADR-0013): one WAITING row per (file, kind) is enough, a row only means "re-evaluate this file".
+-- A claimed row and a parked row (5 attempts) no longer hold the slot: an event that arrives while a row is in flight
+-- becomes its own row (it would otherwise be lost when the in-flight one is settled), and a parked row can never block
+-- the events that follow it.
+DROP INDEX IF EXISTS outbox_pending_uq;
+-- @@
+CREATE UNIQUE INDEX IF NOT EXISTS outbox_pending_uq ON outbox (file_id, kind) WHERE processed_at IS NULL AND claimed_at IS NULL AND attempts < 5;
 -- @@
 CREATE INDEX IF NOT EXISTS outbox_processed_idx ON outbox (processed_at) WHERE processed_at IS NOT NULL;
 -- @@

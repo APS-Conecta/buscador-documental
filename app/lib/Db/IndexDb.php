@@ -43,6 +43,26 @@ class IndexDb {
 		}
 	}
 
+	/**
+	 * Runs $work so that a failure cannot poison a transaction the caller is already in: Nextcloud nests transactions
+	 * with savepoints, so this is a savepoint inside the request's transaction and a plain transaction outside one.
+	 *
+	 * @template T
+	 * @param callable(): T $work
+	 * @return T
+	 */
+	public function guarded(callable $work): mixed {
+		$this->db->beginTransaction();
+		try {
+			$result = $work();
+			$this->db->commit();
+			return $result;
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
+		}
+	}
+
 	/** Postgres array literal for a text[] parameter (use as `?::text[]`). */
 	public static function textArray(array $values): string {
 		$items = array_map(

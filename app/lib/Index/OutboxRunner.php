@@ -52,8 +52,10 @@ class OutboxRunner {
 	/** @return array<string, int> outcome => count */
 	public function runBatch(int $limit): array {
 		$counts = [];
+		$this->processor->beginBatch();
 		$done = [];
 		$held = [];
+		$retry = [];
 		foreach ($this->outbox->claim($limit) as $row) {
 			try {
 				$outcome = $this->processor->process($row['file_id'], $row['kind']);
@@ -64,12 +66,16 @@ class OutboxRunner {
 			$counts[$outcome] = ($counts[$outcome] ?? 0) + 1;
 			if ($outcome === 'held') {
 				$held[] = $row['id'];
-			} elseif ($outcome !== 'retry') {
+			} elseif ($outcome === 'retry') {
+				$retry[] = $row['id'];
+			} else {
 				$done[] = $row['id'];
 			}
 		}
+		$this->processor->endBatch();
 		$this->outbox->done($done);
 		$this->outbox->release($held);
+		$this->outbox->retryLater($retry);
 		return $counts;
 	}
 }

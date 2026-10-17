@@ -187,7 +187,7 @@ class Reconciler {
 				SELECT c.fileid FROM *PREFIX*filecache c JOIN excl p ON c.parent = p.fileid WHERE c.parent > 0
 			)
 			INSERT INTO aps_search.reconcile_node (run_id, file_id)
-			SELECT ?::bigint, e.file_id FROM (" . $eligible . ') e WHERE e.file_id NOT IN (SELECT fileid FROM excl) ON CONFLICT DO NOTHING';
+			SELECT ?::bigint, e.file_id FROM (" . $eligible . ') e WHERE NOT EXISTS (SELECT 1 FROM excl x WHERE x.fileid = e.file_id) ON CONFLICT DO NOTHING';
 	}
 
 	private function forwardSql(): string {

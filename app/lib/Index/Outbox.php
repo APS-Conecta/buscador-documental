@@ -11,12 +11,13 @@ use OCA\BuscadorDocumental\Db\IndexDb;
 /** The event outbox (ADR-0013): a row means "re-evaluate this file". One pending row per (file, kind). */
 class Outbox {
 	public const MAX_ATTEMPTS = 5;
+	public const STALE_CLAIM_MINUTES = 10;
 
 	public function __construct(private IndexDb $db) {
 	}
 
 	public function touch(int $fileId, string $kind): void {
-		$this->db->execute('INSERT INTO aps_search.outbox (file_id, kind) VALUES (?, ?) ON CONFLICT DO NOTHING', [$fileId, $kind]);
+		$this->db->guarded(fn () => $this->db->execute('INSERT INTO aps_search.outbox (file_id, kind) VALUES (?, ?) ON CONFLICT DO NOTHING', [$fileId, $kind]));
 	}
 
 	/** @param list<int> $fileIds */
@@ -24,24 +25,29 @@ class Outbox {
 		if ($fileIds === []) {
 			return;
 		}
-		$this->db->execute(
+		$this->db->guarded(fn () => $this->db->execute(
 			'INSERT INTO aps_search.outbox (file_id, kind) SELECT DISTINCT unnest(?::bigint[]), ? ON CONFLICT DO NOTHING',
 			['{' . implode(',', array_map('intval', $fileIds)) . '}', $kind],
-		);
+		));
 	}
 
 	/**
-	 * Takes a batch for processing. The attempt is counted at claim time, so a run that crashes mid-way cannot leave a
-	 * row that is retried forever: after MAX_ATTEMPTS it is parked and shows in the status.
+	 * Takes a batch for processing. The attempt is counted and the row marked claimed at once, so a run that crashes
+	 * mid-way cannot leave a row that is retried forever (after MAX_ATTEMPTS it is parked and shows in the status) and a
+	 * claim older than STALE_CLAIM_MINUTES belongs to a dead run and is taken again. Rows waiting out a backoff
+	 * (not_before) are skipped.
 	 *
 	 * @return list<array{id: int, file_id: int, kind: string}>
 	 */
 	public function claim(int $limit): array {
 		$rows = $this->db->rows(
-			'UPDATE aps_search.outbox SET attempts = attempts + 1
-			 WHERE id IN (SELECT id FROM aps_search.outbox WHERE processed_at IS NULL AND attempts < ? ORDER BY id LIMIT ? FOR UPDATE SKIP LOCKED)
+			'UPDATE aps_search.outbox SET attempts = attempts + 1, claimed_at = now()
+			 WHERE id IN (SELECT id FROM aps_search.outbox
+			              WHERE processed_at IS NULL AND attempts < ? AND not_before <= now()
+			                AND (claimed_at IS NULL OR claimed_at < now() - make_interval(mins => ?))
+			              ORDER BY id LIMIT ? FOR UPDATE SKIP LOCKED)
 			 RETURNING id, file_id, kind',
-			[self::MAX_ATTEMPTS, $limit],
+			[self::MAX_ATTEMPTS, self::STALE_CLAIM_MINUTES, $limit],
 		);
 		usort($rows, static fn (array $a, array $b): int => (int)$a['id'] <=> (int)$b['id']);
 		return array_map(static fn (array $r): array => ['id' => (int)$r['id'], 'file_id' => (int)$r['file_id'], 'kind' => (string)$r['kind']], $rows);
@@ -57,7 +63,17 @@ class Outbox {
 	/** Gives the attempt back: the row was only held (paused), not tried. @param list<int> $ids */
 	public function release(array $ids): void {
 		if ($ids !== []) {
-			$this->db->execute('UPDATE aps_search.outbox SET attempts = greatest(attempts - 1, 0) WHERE id = ANY(?::bigint[])', ['{' . implode(',', $ids) . '}']);
+			$this->db->execute('UPDATE aps_search.outbox SET attempts = greatest(attempts - 1, 0), claimed_at = NULL WHERE id = ANY(?::bigint[])', ['{' . implode(',', $ids) . '}']);
+		}
+	}
+
+	/** The evaluation failed: try again later, waiting longer each time (2, 4, 8, 16 minutes), so a short outage cannot use up every attempt at once. @param list<int> $ids */
+	public function retryLater(array $ids): void {
+		if ($ids !== []) {
+			$this->db->execute(
+				'UPDATE aps_search.outbox SET claimed_at = NULL, not_before = now() + make_interval(mins => power(2, attempts)::int) WHERE id = ANY(?::bigint[])',
+				['{' . implode(',', $ids) . '}'],
+			);
 		}
 	}
 
@@ -73,7 +89,7 @@ class Outbox {
 	public function markAclDirtySubtree(int $folderId): int {
 		return $this->db->execute(
 			'UPDATE aps_search.file_state SET acl_dirty = true, acl_dirty_since = coalesce(acl_dirty_since, now())
-			 WHERE file_id IN (SELECT d.fileid FROM (' . self::descendantFiles() . ') d)',
+			 WHERE text_state <> \'skipped\' AND file_id IN (SELECT d.fileid FROM (' . self::descendantFiles() . ') d)',
 			[$folderId],
 		);
 	}

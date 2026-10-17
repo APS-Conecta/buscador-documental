@@ -49,7 +49,7 @@ class OutboxProcessorTest extends DbTestCase {
 		$admin->exec('GRANT SELECT ON oc_filecache, oc_storages, oc_group_folders, oc_mimetypes TO nextcloud');
 	}
 
-	private function build(array $tagged = [], ?\Throwable $exclusionFails = null, array $tree = self::TREE): array {
+	private function build(array $tagged = [], ?\Throwable $exclusionFails = null, array $tree = self::TREE, ?callable $aclWrite = null, ?LoggerInterface $logger = null): array {
 		$this->fixture();
 		$conn = $this->connection($this->app());
 		$db = new IndexDb($conn);
@@ -64,13 +64,16 @@ class OutboxProcessorTest extends DbTestCase {
 			return true;
 		});
 		$acl = $this->createMock(PrincipalWriter::class);
-		$acl->method('write')->willReturnCallback(function (int $id): bool {
+		$acl->method('write')->willReturnCallback(function (int $id) use ($aclWrite): bool {
+			if ($aclWrite !== null) {
+				$aclWrite($id);
+			}
 			$this->aclWritten[] = $id;
 			return true;
 		});
 		$exclusion = TreeChecker::make($tree, [[3, ExclusionChecker::TAG_NAME]], $tagged, $exclusionFails);
 		$tree = new FileTree($conn);
-		$processor = new Processor($db, $tree, $rules, new ScopePredicate($tree), $exclusion, $indexer, $acl, $settings, $this->createMock(LoggerInterface::class));
+		$processor = new Processor($db, $tree, $rules, new ScopePredicate($tree), $exclusion, $indexer, $acl, $settings, $logger ?? $this->createMock(LoggerInterface::class));
 		return [$db, $rules, $settings, $processor, new Outbox($db), $audit];
 	}
 
@@ -203,6 +206,8 @@ class OutboxProcessorTest extends DbTestCase {
 		$runner2 = new OutboxRunner($db2, $outbox2, $p2, $this->createMock(LoggerInterface::class));
 		for ($i = 1; $i <= 5; $i++) {
 			$this->assertSame(['retry' => 1], $runner2->runBatch(50), "attempt $i");
+			$this->assertSame([], $runner2->runBatch(50), "attempt $i: a failed row backs off, it is not retried straight away");
+			$db2->execute('UPDATE aps_search.outbox SET not_before = now() WHERE processed_at IS NULL');          // time passes
 		}
 		$this->assertSame([], $runner2->runBatch(50), 'parked after five attempts: not picked again');
 		$this->assertSame(1, (int)$db2->rows('SELECT count(*) AS n FROM aps_search.outbox WHERE processed_at IS NULL AND attempts >= 5')[0]['n']);
@@ -243,7 +248,9 @@ class OutboxProcessorTest extends DbTestCase {
 		$claimed = $outbox->claim(10);                                    // claims, then the run "crashes" before marking
 		$this->assertCount(1, $claimed);
 		$runner = new OutboxRunner($db, $outbox, $p, $this->createMock(LoggerInterface::class));
-		$this->assertSame(['enqueued' => 1], $runner->runBatch(50), 'the next run picks the unfinished row again');
+		$this->assertSame([], $runner->runBatch(50), 'a fresh claim belongs to a run that may still be working');
+		$db->execute("UPDATE aps_search.outbox SET claimed_at = now() - interval '11 minutes'");
+		$this->assertSame(['enqueued' => 1], $runner->runBatch(50), 'once the claim is stale the unfinished row is picked again');
 		$this->assertSame(1, $this->rowCount('outbox') , 'one row, now processed');
 	}
 
@@ -296,5 +303,169 @@ class OutboxProcessorTest extends DbTestCase {
 		$runner = new OutboxRunner($db, $outbox, $p, $this->createMock(LoggerInterface::class));
 		$runner->cycle(0, 200, 500);
 		$this->assertSame([13], $this->aclWritten);
+	}
+
+	public function testAnEventThatArrivesWhileARowIsBeingProcessedIsNotLost(): void {
+		[$db, , , , $outbox] = $this->build();
+		$outbox->touch(13, 'file');
+		$claimed = $outbox->claim(10);                                    // the row is in flight
+		$outbox->touch(13, 'file');                                       // the file changes again meanwhile (tag, edit, share)
+		$outbox->done(array_column($claimed, 'id'));                      // the first evaluation finishes
+		$pending = $db->rows('SELECT id FROM aps_search.outbox WHERE processed_at IS NULL');
+		$this->assertCount(1, $pending, 'the later event survived as its own row');
+		$this->assertNotSame($claimed[0]['id'], (int)$pending[0]['id']);
+	}
+
+	public function testAParkedRowNeverBlocksALaterEvent(): void {
+		[$db, $rules, , $p, $outbox] = $this->build();
+		$rules->addFolder(11, 'occ');
+		$db->execute("INSERT INTO aps_search.outbox (file_id, kind, attempts) VALUES (13, 'file', 5)");       // parked long ago
+		$outbox->touch(13, 'file');
+		$this->assertSame(2, $this->rowCount('outbox', 13), 'a fresh row next to the parked one');
+		$runner = new OutboxRunner($db, $outbox, $p, $this->createMock(LoggerInterface::class));
+		$this->assertSame(['enqueued' => 1], $runner->runBatch(50), 'and it is processed');
+	}
+
+	public function testATransientFailureCannotBurnAllAttemptsInOneRun(): void {
+		[$db, $rules, , $p, $outbox] = $this->build([], new \RuntimeException('tag service down'));
+		$rules->addFolder(11, 'occ');
+		foreach ([13, 17] as $id) {
+			$outbox->touch($id, 'file');
+		}
+		$db->execute("INSERT INTO aps_search.outbox (file_id, kind) SELECT g, 'file' FROM generate_series(2000, 2249) g");     // 250 more, so the batch is full
+		$runner = new OutboxRunner($db, $outbox, $p, $this->createMock(LoggerInterface::class));
+		$runner->runFor(30, 100);
+		$max = (int)$db->rows('SELECT max(attempts) AS m FROM aps_search.outbox')[0]['m'];
+		$this->assertLessThanOrEqual(1, $max, 'every row was tried once in this run, none again');
+	}
+
+	public function testBackoffGrowsWithEachAttempt(): void {
+		[$db, $rules, , $p, $outbox] = $this->build([], new \RuntimeException('down'));
+		$rules->addFolder(11, 'occ');
+		$outbox->touch(13, 'file');
+		$runner = new OutboxRunner($db, $outbox, $p, $this->createMock(LoggerInterface::class));
+		$waits = [];
+		for ($i = 0; $i < 3; $i++) {
+			$runner->runBatch(10);
+			$waits[] = (int)round((float)$db->rows('SELECT extract(epoch FROM not_before - now()) / 60 AS m FROM aps_search.outbox')[0]['m']);
+			$db->execute('UPDATE aps_search.outbox SET not_before = now()');
+		}
+		$this->assertSame([2, 4, 8], $waits);
+	}
+
+	// ---- S3 review fixes ----
+	public function testOneFailingPermissionRefreshDoesNotStopTheOthersAndIsRetried(): void {
+		$logged = [];
+		$logger = $this->createMock(LoggerInterface::class);
+		$logger->method('warning')->willReturnCallback(function (string $m) use (&$logged): void {
+			$logged[] = $m;
+		});
+		[$db, $rules, , $p] = $this->build([], null, self::TREE, static function (int $id): void {
+			if ($id === 13) {
+				throw new \RuntimeException('row with uids: u:alice u:bob');
+			}
+		}, $logger);
+		$rules->addFolder(10, 'occ');
+		$this->indexedRow(13);
+		$this->indexedRow(17);
+		$db->execute("UPDATE aps_search.file_state SET acl_dirty = true, acl_dirty_since = now()");
+		$this->assertSame(1, $p->refreshDirty(100), 'the healthy file was refreshed');
+		$this->assertSame([17], $this->aclWritten);
+		$dirty = array_map('intval', array_column($db->rows('SELECT file_id FROM aps_search.file_state WHERE acl_dirty'), 'file_id'));
+		$this->assertSame([13], $dirty, 'the failing one stays marked for the next cycle');
+		$this->assertNotEmpty($logged);
+		$this->assertStringNotContainsString('alice', implode(' ', $logged), 'the failure is logged by class and place only');
+	}
+
+	public function testAChangeThatArrivesWhileThePrincipalsAreBeingWrittenIsNotLost(): void {
+		[$db, $rules, , $p] = $this->build([], null, self::TREE, function (int $id) use (&$db): void {
+			// a share event marks the file again in the middle of the write
+			self::connect('postgres', 'dev', self::$dbName)->exec("UPDATE aps_search.file_state SET acl_dirty = true, acl_dirty_since = now() WHERE file_id = $id");
+		});
+		$rules->addFolder(10, 'occ');
+		$this->indexedRow(13);
+		$db->execute("UPDATE aps_search.file_state SET acl_dirty = true, acl_dirty_since = now() WHERE file_id = 13");
+		$p->refreshDirty(10);
+		$this->assertSame(1, (int)$db->rows('SELECT count(*) AS n FROM aps_search.file_state WHERE acl_dirty')[0]['n'], 'still marked: the mid-write change must be seen next time');
+	}
+
+	public function testTheNewestPermissionChangesAreRefreshedFirst(): void {
+		[$db, $rules, , $p] = $this->build();
+		$rules->addFolder(10, 'occ');
+		$this->indexedRow(13);
+		$this->indexedRow(17);
+		$db->execute("UPDATE aps_search.file_state SET acl_dirty = true, acl_dirty_since = now() - interval '3 days' WHERE file_id = 13");      // the weekly sweep marked it long ago
+		$db->execute("UPDATE aps_search.file_state SET acl_dirty = true, acl_dirty_since = now() WHERE file_id = 17");                          // a revocation just happened
+		$p->refreshDirty(1);
+		$this->assertSame([17], $this->aclWritten, 'a real change is not queued behind the weekly sweep');
+	}
+
+	public function testErasedFilesAreNeverMarkedOrRefreshedForPermissions(): void {
+		[$db, $rules, , $p] = $this->build();
+		$rules->addFolder(10, 'occ');
+		$this->indexedRow(13);
+		$db->execute("UPDATE aps_search.file_state SET text_state = 'skipped', skip_reason = 'excluded' WHERE file_id = 13");
+		$p->process(11, 'acl');
+		$this->assertSame(0, (int)$db->rows('SELECT count(*) AS n FROM aps_search.file_state WHERE acl_dirty')[0]['n'], 'an erased file is not marked');
+		$db->execute("UPDATE aps_search.file_state SET acl_dirty = true, acl_dirty_since = now() WHERE file_id = 13");
+		$this->assertSame(0, $p->refreshDirty(10));
+		$this->assertSame([], $this->aclWritten, 'and file_acl is not re-created for it');
+		$this->assertSame(0, (int)$db->rows('SELECT count(*) AS n FROM aps_search.file_state WHERE acl_dirty')[0]['n'], 'the stale mark is dropped');
+	}
+
+	public function testLeavingTheScopeIsErasedEvenWhileTheTagStateIsUnavailable(): void {
+		[, $rules, , $p] = $this->build([], new \RuntimeException('tag service down'));
+		$rules->addFolder(11, 'occ');
+		$this->indexedRow(15);                                            // under 'other', outside the rule
+		$this->assertSame('erased_out_of_scope', $p->process(15, 'file'), 'removals do not need the tag service');
+		$this->assertSame(0, $this->rowCount('chunk', 15));
+	}
+
+	public function testFilesNeverIndexedLeaveNoStateOrTombstoneBehind(): void {
+		[$db, , , $p] = $this->build();
+		$this->assertSame('ignored', $p->process(16, 'file'), 'a trash or version path that was never indexed');
+		$this->assertSame('ignored', $p->process(98, 'file'), 'an id that is gone and was never indexed');
+		$this->assertSame(0, (int)$db->rows('SELECT count(*) AS n FROM aps_search.file_state')[0]['n']);
+		$this->assertSame(0, (int)$db->rows('SELECT count(*) AS n FROM aps_search.tombstone')[0]['n']);
+	}
+
+	public function testTheScopeIsLoadedOncePerBatchNotOncePerRow(): void {
+		[$db, $rules, , , $outbox] = $this->build();
+		$rules->addFolder(11, 'occ');
+		$spy = $this->createMock(ScopeRules::class);
+		$calls = 0;
+		$spy->method('current')->willReturnCallback(function () use ($rules, &$calls) {
+			$calls++;
+			return $rules->current();
+		});
+		$conn = $this->connection($this->app());
+		$tree = new FileTree($conn);
+		$exclusion = TreeChecker::make(self::TREE, [[3, ExclusionChecker::TAG_NAME]], []);
+		$indexer = $this->createMock(FileIndexer::class);
+		$indexer->method('enqueue')->willReturn(true);
+		$p = new Processor($db, $tree, $spy, new ScopePredicate($tree), $exclusion, $indexer, $this->createMock(PrincipalWriter::class), new Settings($db), $this->createMock(LoggerInterface::class));
+		foreach ([13, 17] as $id) {
+			$outbox->touch($id, 'file');
+		}
+		$db->execute("INSERT INTO aps_search.outbox (file_id, kind) VALUES (15, 'file'), (21, 'file')");
+		(new OutboxRunner($db, $outbox, $p, $this->createMock(LoggerInterface::class)))->runBatch(50);
+		$this->assertSame(1, $calls, 'four rows, one load of the rules and the settings');
+	}
+
+	public function testAFailingOutboxInsertDoesNotPoisonTheRequestsOwnTransaction(): void {
+		$pdo = $this->app();
+		$conn = $this->connection($pdo);
+		$outbox = new Outbox(new IndexDb($conn));
+		$pdo->beginTransaction();
+		try {
+			$outbox->touch(5, 'nonsense');                                // violates the kind check
+			$this->fail('the failure itself is still reported to the caller');
+		} catch (\PDOException) {
+			$this->addToAssertionCount(1);
+		}
+		$pdo->query('SELECT 1');                                          // without a savepoint: "current transaction is aborted"
+		$outbox->touch(6, 'file');
+		$pdo->commit();
+		$this->assertSame(1, $this->rowCount('outbox', 6));
 	}
 }
