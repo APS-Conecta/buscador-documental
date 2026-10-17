@@ -59,6 +59,12 @@ services:
     build: ./worker
     image: bd-s1-worker
     restart: "no"
+    init: true
+    read_only: true
+    tmpfs: ["/tmp:size=1g,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
     mem_limit: 2g
     depends_on:
       db:
@@ -73,6 +79,7 @@ services:
       BD_WORKER_ID: worker-1
       BD_WORKER_SECRET: bd-s1-toy-secret-0123456789abcdef0123
       BD_WORK: /work
+      PYTHONDONTWRITEBYTECODE: "1"
     volumes:
       - bd_work:/work
 
@@ -82,7 +89,8 @@ services:
     build: ./worker
     image: bd-s1-worker
     command: ["python3", "parserd.py"]
-    restart: "no"
+    restart: unless-stopped
+    init: true                      # reaps the orphans of killed process groups; PID 1 python would not
     network_mode: none
     read_only: true
     tmpfs: ["/tmp:size=512m,mode=1777"]
@@ -97,7 +105,7 @@ services:
     volumes:
       - bd_work:/work
     healthcheck:
-      test: ["CMD", "test", "-e", "/tmp/ready"]
+      test: ["CMD-SHELL", "find /tmp/ready -mmin -1 | grep -q ."]   # refreshed on every loop: a wedged parser goes unhealthy
       interval: 2s
       retries: 30
 

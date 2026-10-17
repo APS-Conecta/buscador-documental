@@ -5,7 +5,9 @@ The worker connects to Postgres as the bd_worker role, which can only execute cl
 fail_job. File bytes come from the app's worker channel, never from a path."""
 import json
 import logging
+import math
 import os
+import re
 import sys
 import tempfile
 import threading
@@ -21,7 +23,8 @@ import jobbox
 log = logging.getLogger("bd-worker")
 WORK = os.environ.get("BD_WORK", "/work")
 RETRYABLE = ("timeout", "ocr_failed")
-KNOWN_REASONS = ("timeout", "ocr_failed", "unsafe", "corrupt", "encrypted", "too_large")
+KNOWN_REASONS = ("timeout", "ocr_failed", "unsafe", "corrupt", "encrypted", "too_large", "unsupported", "internal")
+MAX_TEXT_CHARS = 60_000_000          # the write_result payload cap is 64 MB of page JSON
 LEASE_SECONDS = int(os.environ.get("BD_LEASE_SECONDS", "900"))
 MAX_BYTES = 250 * 1024 * 1024        # buscador/02-performance.md: proposed limits, confirmed in S2
 MAX_PAGES = 300
@@ -60,10 +63,43 @@ class Heartbeat(threading.Thread):
             self.lost = True               # cannot extend the lease: stop trusting it
 
 
+def timeout_for(size):
+    """Per-file budget: 120 s plus 20 s per MiB (a scan is about 0.7 MiB a page and 6-13 s to read), at most an hour."""
+    return min(3600, 120 + 20 * (int(size) // (1024 * 1024)))
+
+
 def parse(job_id, epoch, path, size):
     """Hands the file to the parser container (ADR-0011) and returns its answer."""
-    timeout = min(3600, 12 * MAX_PAGES + 60)   # the plan formula 12 s x pages + 60 s at the page cap; per-size tuning is S5
-    return jobbox.submit(WORK, f"{job_id}-{epoch}", path, {"kind": "file"}, timeout)
+    return jobbox.submit(WORK, f"{job_id}-{epoch}", path, {"kind": "file"}, timeout_for(size))
+
+
+class BadAnswer(Exception):
+    pass
+
+
+def check_answer(a):
+    """The parser is untrusted: the answer is checked for shape and range before anything is derived from it."""
+    if not isinstance(a, dict) or a.get("status") not in ("ok", "error"):
+        raise BadAnswer("shape")
+    if a["status"] == "error":
+        return a
+    pages = a.get("pages")
+    if not isinstance(pages, list) or not all(isinstance(p, str) for p in pages):
+        raise BadAnswer("pages")
+    conf = a.get("conf")
+    if conf is not None and (not isinstance(conf, list) or len(conf) != len(pages) or
+                             not all(c is None or (isinstance(c, (int, float)) and not isinstance(c, bool) and math.isfinite(c) and 0 <= c <= 100) for c in conf)):
+        raise BadAnswer("conf")
+    source = a.get("source")
+    if source is not None and (not isinstance(source, list) or len(source) != len(pages) or not all(x in ("layer", "ocr") for x in source)):
+        raise BadAnswer("source")
+    if "ocr_ver" in a and (not isinstance(a["ocr_ver"], str) or len(a["ocr_ver"]) > 300):
+        raise BadAnswer("ocr_ver")
+    return a
+
+
+def clean_detail(text):
+    return re.sub(r"[^\x20-\x7e\u00a1-\u2027\u202a-\uffff]+", " ", str(text))[:300]
 
 
 def process(conn, api, dsn, job_id, epoch, file_id):
@@ -89,12 +125,19 @@ def process(conn, api, dsn, job_id, epoch, file_id):
             except jobbox.ParserUnavailable:
                 log.warning("job %s: parser container did not answer, lease will expire", job_id)
                 return "abandoned"
+            try:
+                answer = check_answer(answer)
+            except BadAnswer as e:
+                log.error("job %s: the parser returned a malformed answer (%s)", job_id, e)
+                return fail(conn, job_id, epoch, "internal", False)
             if answer.get("status") != "ok":
                 if answer.get("detail"):
-                    log.warning("job %s: parser said: %s", job_id, str(answer["detail"]).replace("\n", " | ")[:300])
+                    log.warning("job %s: parser said: %s", job_id, clean_detail(answer["detail"]))
                 reason = answer.get("reason") if answer.get("reason") in KNOWN_REASONS else "ocr_failed"
                 return fail(conn, job_id, epoch, reason, reason in RETRYABLE)
             pages = answer["pages"]
+            if sum(len(p) for p in pages) > MAX_TEXT_CHARS:
+                return fail(conn, job_id, epoch, "too_large", False)
         if hb.lost:
             return "abandoned"
         if len(pages) > MAX_PAGES:
@@ -111,6 +154,9 @@ def process(conn, api, dsn, job_id, epoch, file_id):
                      (job_id, epoch, meta["etag"], content_hash, json.dumps(page_rows), json.dumps(chunks),
                       answer.get("ocr_ver", "unknown"), chunk.CHUNKER_VER))
         return "indexed"
+    except OSError as e:
+        log.warning("job %s: shared work volume error (%s), lease will expire", job_id, type(e).__name__)
+        return "abandoned"
     except (requests.RequestException, ValueError) as e:
         log.warning("job %s: worker channel error (%s), lease will expire", job_id, type(e).__name__)
         return "abandoned"
@@ -128,6 +174,9 @@ def process(conn, api, dsn, job_id, epoch, file_id):
         if "payload_too_large" in str(e):
             return fail(conn, job_id, epoch, "too_large", False)
         raise
+    except Exception:
+        log.exception("job %s: unexpected error, lease will expire", job_id)
+        return "abandoned"                 # the attempts cap in claim_job bounds a deterministic bug
     finally:
         hb.stop.set()
 
