@@ -35,6 +35,8 @@ class UiControllersTest extends TestCase {
 
 	public function testFileTextIsForUsersAndRereadIsRateLimitedWithCsrf(): void {
 		$this->assertTrue($this->has(FileTextController::class, 'show', NoAdminRequired::class));
+		$this->assertTrue($this->has(FileTextController::class, 'folders', NoAdminRequired::class));
+		$this->assertFalse($this->has(FileTextController::class, 'folders', NoCSRFRequired::class));
 		$this->assertTrue($this->has(FileTextController::class, 'reread', NoAdminRequired::class));
 		$this->assertTrue($this->has(FileTextController::class, 'reread', UserRateLimit::class));
 		$this->assertFalse($this->has(FileTextController::class, 'reread', NoCSRFRequired::class));

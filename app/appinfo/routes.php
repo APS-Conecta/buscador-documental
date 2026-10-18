@@ -14,6 +14,7 @@ return [
 		['name' => 'admin#acknowledgeNotice', 'url' => '/admin/notice/ack', 'verb' => 'POST'],
 		['name' => 'admin#removeRule', 'url' => '/admin/scope/{id}', 'verb' => 'DELETE', 'requirements' => ['id' => '\d+']],
 		['name' => 'admin#retry', 'url' => '/admin/skipped/{id}/retry', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
+		['name' => 'file_text#folders', 'url' => '/folders', 'verb' => 'GET'],
 		['name' => 'file_text#show', 'url' => '/file/{id}/text', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
 		['name' => 'file_text#reread', 'url' => '/file/{id}/reread', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
 		['name' => 'search#search', 'url' => '/search', 'verb' => 'POST'],

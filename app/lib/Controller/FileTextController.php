@@ -7,6 +7,7 @@ declare(strict_types=1);
 namespace OCA\BuscadorDocumental\Controller;
 
 use OCA\BuscadorDocumental\Ui\FileText;
+use OCA\BuscadorDocumental\Ui\FolderList;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -17,7 +18,7 @@ use OCP\IUserSession;
 
 /** Recognised text of one file for the Files sidebar tab. "Not found" is the answer for unreadable, excluded and unknown files alike. */
 class FileTextController extends Controller {
-	public function __construct(IRequest $request, private IUserSession $session, private FileText $text) {
+	public function __construct(IRequest $request, private IUserSession $session, private FileText $text, private FolderList $folders) {
 		parent::__construct('buscador_documental', $request);
 	}
 
@@ -29,6 +30,12 @@ class FileTextController extends Controller {
 		}
 		$out = $this->text->text($uid, $id);
 		return $out === null ? $this->json(['status' => 'not_found'], Http::STATUS_NOT_FOUND) : $this->json($out);
+	}
+
+	#[NoAdminRequired]
+	public function folders(): JSONResponse {
+		$uid = $this->session->getUser()?->getUID();
+		return $uid === null ? $this->json(['status' => 'unauthorized'], Http::STATUS_UNAUTHORIZED) : $this->json(['folders' => $this->folders->forUser($uid)]);
 	}
 
 	#[NoAdminRequired]

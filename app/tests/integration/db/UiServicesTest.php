@@ -192,4 +192,12 @@ class UiServicesTest extends DbTestCase {
 		$this->assertSame([3], array_column($only['items'], 'file_id'));
 		$this->assertSame([], $this->actions()->skipped('not a reason', 0, 25)['items']);
 	}
+
+	public function testTheFolderFilterListsOnlyIndexedFoldersThePersonCanRead(): void {
+		$this->app()->exec("INSERT INTO aps_search.scope_rule (kind, file_id) VALUES ('folder', 11), ('folder', 12), ('all_groupfolders', NULL)");
+		$this->nodes = [11 => [$this->node('Informes')]];                                     // 12 is not readable by this person
+		$db = $this->db();
+		$list = (new \OCA\BuscadorDocumental\Ui\FolderList(new ScopeRules($db, new AuditLog($db, new Pseudonyms($db))), $this->recheck()))->forUser('alice');
+		$this->assertSame([['id' => 11, 'path' => '/Informes/Informes']], $list);
+	}
 }
