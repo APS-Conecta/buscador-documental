@@ -15,4 +15,5 @@ The mockup (`buscador/mockup/v1`) was accepted at U0 and the guidelines (`03-ui-
 - Snippets contain only `<mark>` from the server; the client renders them through a tiny allow-list parser, never `v-html` on raw text.
 
 ## Consequences
+PDF page deep links do not work in Nextcloud 34 (spike `spikes/s6`): results open the document and state the page in words.
 The bundle is part of review (a diff of minified code is noise: reviewers check the source and the drift gate). Adding a dependency needs the size gate to stay green.

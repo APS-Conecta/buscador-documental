@@ -4,6 +4,9 @@
 			<NcNoteCard v-if="hit.uncertain" type="warning">
 				<strong>Lectura incierta.</strong> Una copia más nítida mejora el resultado.
 			</NcNoteCard>
+			<p v-if="hit.page_no" class="bd-side__page">
+				La coincidencia está en la página {{ hit.page_no }}.
+			</p>
 			<Snippet :html="hit.snippet" />
 			<div class="bd-side__actions">
 				<NcButton variant="primary" :href="url">
@@ -65,5 +68,6 @@ async function reread() {
 <style scoped>
 .bd-side { padding: 0 16px 16px; }
 .bd-side__actions { display: grid; gap: 8px; margin-top: 12px; }
+.bd-side__page { font-weight: 600; margin: 8px 0 0; }
 .bd-side__msg { margin-top: 12px; color: var(--color-text-maxcontrast); }
 </style>

@@ -1,0 +1,22 @@
+{
+  "/f/ID#page=3": {
+    "requested": "/f/154#page=3",
+    "iframeSrc": "/apps/files_pdfviewer/?file=http%3A%2F%2F127.0.0.1%3A8191%2Fremote.php%2Fdav%2Ffiles%2Fadmin%2FDocs%2Ftres-paginas.pdf",
+    "pageShown": 1
+  },
+  "/f/ID?page=3": {
+    "requested": "/f/154?page=3",
+    "iframeSrc": "/apps/files_pdfviewer/?file=http%3A%2F%2F127.0.0.1%3A8191%2Fremote.php%2Fdav%2Ffiles%2Fadmin%2FDocs%2Ftres-paginas.pdf",
+    "pageShown": 1
+  },
+  "/f/ID (no page)": {
+    "requested": "/f/154",
+    "iframeSrc": "/apps/files_pdfviewer/?file=http%3A%2F%2F127.0.0.1%3A8191%2Fremote.php%2Fdav%2Ffiles%2Fadmin%2FDocs%2Ftres-paginas.pdf",
+    "pageShown": 1
+  },
+  "viewer iframe src with #page=3 (direct)": {
+    "requested": "/apps/files_pdfviewer/?file=%2FDocs%2Ftres-paginas.pdf#page=3",
+    "iframeSrc": "http://127.0.0.1:8191/apps/dashboard/",
+    "pageShown": "error: TimeoutError: frame.waitForSelector: Timeout 20000ms exceeded.\nCall log:\n  - waiting for locator('#pageNumber') to be vi"
+  }
+}

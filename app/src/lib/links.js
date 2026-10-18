@@ -1,10 +1,10 @@
 import { generateUrl } from '@nextcloud/router'
 
-/** Where "Abrir" goes. The Files app opens the document in its viewer; page deep links are decided by the S6 spike (ADR-0016). */
+/** Where "Abrir" goes. The Files app opens the document in its viewer; the viewer does not honour a page fragment (spikes/s6), so the page is stated in words (ADR-0016). */
 export function fileUrl(hit, origin = window.location.origin) {
 	return origin + generateUrl('/f/{id}', { id: hit.file_id })
 }
 
 export function openLabel(hit) {
-	return hit.page_no ? `Abrir en la página ${hit.page_no}` : 'Abrir documento'
+	return hit.page_no ? `Abrir documento (página ${hit.page_no})` : 'Abrir documento'
 }
