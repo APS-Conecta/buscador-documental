@@ -87,4 +87,16 @@ class SecretRotationTest extends TestCase {
 		}
 		$this->assertSame([], $this->store);
 	}
+
+	public function testItCanSayWhetherAPreviousSecretIsStillValid(): void {
+		$r = $this->rotation();
+		$this->assertFalse($r->previousStillValid());
+		$this->store['worker_secret'] = 'the-old-secret-0123456789abcdefghijklmn';
+		$r->rotate(24);
+		$this->assertTrue($r->previousStillValid());
+		$this->store['worker_secret_prev_until'] = (string)(self::NOW - 1);
+		$this->assertFalse($r->previousStillValid());
+		$this->store['worker_secret_prev_until'] = 'soon';
+		$this->assertFalse($r->previousStillValid());
+	}
 }

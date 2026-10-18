@@ -12,8 +12,12 @@ final class Prometheus {
 	public static function render(array $s): string {
 		$m = [];
 		$add = static function (string $name, string $help, array $samples) use (&$m): void {
-			if ($samples !== []) {
-				$m[$name] = [$help, $samples];
+			$unique = [];
+			foreach ($samples as [$labels, $value]) {
+				$unique[$labels] ??= [$labels, $value];          // a series appears once: two odd names both becoming "other" must not duplicate it
+			}
+			if ($unique !== []) {
+				$m[$name] = [$help, array_values($unique)];
 			}
 		};
 		$add('buscador_jobs_queued', 'Jobs waiting for a worker', [['', $s['jobs']['queued']]]);
@@ -74,7 +78,7 @@ final class Prometheus {
 
 	/** Only short codes become label values; anything else is dropped to a fixed word. */
 	private static function label(string $key, string $value): string {
-		return '{' . $key . '="' . (preg_match('/^[A-Za-z0-9_.:-]{1,40}$/', $value) === 1 ? $value : 'other') . '"}';
+		return '{' . $key . '="' . (preg_match('/^[A-Za-z0-9_.:-]{1,40}$/D', $value) === 1 ? $value : 'other') . '"}';
 	}
 
 	private static function num(float $v): string {

@@ -51,4 +51,14 @@ class AlertRulesTest extends TestCase {
 			}
 		}
 	}
+
+	public function testRulesThatJoinSeriesWithDifferentLabelsSayOnNothing(): void {
+		foreach ($this->rules() as $r) {
+			$expr = (string)$r['expr'];
+			$joins = preg_match_all('/\b(and|or|unless)\b(?!\s*(on|ignoring)\s*\()/', $expr);
+			if ($joins > 0) {
+				$this->assertStringContainsString('on()', $expr, $r['alert'] . ' joins series with different label sets: without on() the result is always empty');
+			}
+		}
+	}
 }

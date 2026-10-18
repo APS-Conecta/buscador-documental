@@ -9,9 +9,9 @@ ALTER TABLE file_state ADD COLUMN IF NOT EXISTS indexed_at timestamptz;
 -- @@
 ALTER TABLE file_state ADD COLUMN IF NOT EXISTS embedded_at timestamptz;
 -- @@
-UPDATE file_state SET indexed_at = updated_at WHERE text_state = 'indexed' AND indexed_at IS NULL;
--- @@
-UPDATE file_state SET embedded_at = updated_at WHERE vec_state = 'embedded' AND embedded_at IS NULL;
+UPDATE file_state SET indexed_at = CASE WHEN text_state = 'indexed' AND indexed_at IS NULL THEN updated_at ELSE indexed_at END,
+	embedded_at = CASE WHEN vec_state = 'embedded' AND embedded_at IS NULL THEN updated_at ELSE embedded_at END
+	WHERE (text_state = 'indexed' AND indexed_at IS NULL) OR (vec_state = 'embedded' AND embedded_at IS NULL);
 -- @@
 CREATE INDEX IF NOT EXISTS file_state_indexed_at_idx ON file_state (indexed_at) WHERE indexed_at IS NOT NULL;
 -- @@
@@ -68,9 +68,19 @@ BEGIN
 	IF p_worker IS NULL OR length(p_worker) = 0 THEN
 		RAISE EXCEPTION 'worker id required' USING ERRCODE = 'BD001';
 	END IF;
-	-- Every call proves the worker is alive, paused or not (occ buscador:doctor reads this).
-	INSERT INTO worker_seen (worker, lane, at) VALUES (p_worker, p_lane, now())
-		ON CONFLICT (worker, lane) DO UPDATE SET at = EXCLUDED.at;
+	IF p_worker !~ '^[A-Za-z0-9_-]{1,64}$' THEN
+		RAISE EXCEPTION 'bad worker id' USING ERRCODE = 'BD001';
+	END IF;
+	IF p_lane NOT IN ('text', 'vec') THEN
+		RETURN;                                           -- there is no other lane; nothing is recorded for a made-up one
+	END IF;
+	-- Every call proves the worker is alive, paused or not (occ buscador:doctor reads this). A known worker is refreshed; a new
+	-- one is added only while the table is small, so inventing names cannot grow it (a worker holds the DSN and picks its name).
+	IF EXISTS (SELECT 1 FROM worker_seen WHERE worker = p_worker AND lane = p_lane) THEN
+		UPDATE worker_seen SET at = now() WHERE worker = p_worker AND lane = p_lane;
+	ELSIF (SELECT count(*) FROM worker_seen) < 200 THEN
+		INSERT INTO worker_seen (worker, lane, at) VALUES (p_worker, p_lane, now()) ON CONFLICT (worker, lane) DO UPDATE SET at = EXCLUDED.at;
+	END IF;
 	-- Paused by an administrator (ADR-0013): no new claims. Work in flight finishes or its lease expires.
 	IF EXISTS (SELECT 1 FROM settings WHERE key = 'paused' AND value = '1') THEN
 		RETURN;
@@ -151,6 +161,90 @@ BEGIN
 		WHERE j.id = r.id AND fs.file_id = j.file_id
 		RETURNING j.id, j.lease_epoch, j.file_id, j.claimed_etag;
 	END LOOP;
+END
+$$;
+-- @@
+CREATE OR REPLACE FUNCTION aps_search.heartbeat(p_job_id bigint, p_lease_epoch bigint, p_lease_seconds int DEFAULT 900)
+RETURNS boolean
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = aps_search, pg_catalog, pg_temp
+AS $$
+DECLARE
+	j job%ROWTYPE;
+BEGIN
+	SELECT * INTO j FROM job WHERE id = p_job_id FOR UPDATE;
+	IF NOT FOUND OR j.lease_epoch <> p_lease_epoch OR j.lease_until IS NULL OR j.lease_until <= clock_timestamp() THEN
+		RETURN false;
+	END IF;
+	UPDATE job SET lease_until = clock_timestamp() + make_interval(secs => least(greatest(p_lease_seconds, 1), 3600))
+		WHERE id = p_job_id;
+	-- A long job is still a live worker (the worker polls only between jobs).
+	UPDATE worker_seen SET at = now() WHERE worker = j.claimed_by AND lane = j.lane;
+	RETURN true;
+END
+$$;
+-- @@
+CREATE OR REPLACE FUNCTION aps_search.write_vectors(
+	p_job_id bigint, p_lease_epoch bigint, p_etag text, p_chunk_ids bigint[], p_vectors text[])
+RETURNS boolean
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = aps_search, pg_catalog, pg_temp
+AS $$
+DECLARE
+	j job%ROWTYPE;
+	fs file_state%ROWTYPE;
+	vs text;
+	tbl text;
+	d int;
+	complete boolean;
+BEGIN
+	SELECT * INTO j FROM job WHERE id = p_job_id FOR UPDATE;
+	IF NOT FOUND OR j.lane <> 'vec' OR j.lease_epoch <> p_lease_epoch OR j.lease_until IS NULL OR j.lease_until <= clock_timestamp() THEN
+		RAISE EXCEPTION 'stale_lease' USING ERRCODE = 'BD001';
+	END IF;
+	SELECT * INTO fs FROM file_state WHERE file_id = j.file_id FOR UPDATE;
+	IF NOT FOUND OR fs.text_state = 'skipped' THEN
+		RAISE EXCEPTION 'file_skipped' USING ERRCODE = 'BD001';
+	END IF;
+	IF p_etag IS DISTINCT FROM j.claimed_etag OR fs.etag IS DISTINCT FROM j.claimed_etag THEN
+		RAISE EXCEPTION 'etag_mismatch' USING ERRCODE = 'BD001';
+	END IF;
+	SELECT e.dim INTO d FROM embedding_profile e WHERE e.gen = j.gen AND e.state <> 'retired';
+	IF NOT FOUND THEN
+		RAISE EXCEPTION 'retired' USING ERRCODE = 'BD001';
+	END IF;
+	IF p_chunk_ids IS NULL OR p_vectors IS NULL OR cardinality(p_chunk_ids) <> cardinality(p_vectors)
+		OR cardinality(p_chunk_ids) > 2000 THEN
+		RAISE EXCEPTION 'bad_vector' USING ERRCODE = 'BD001';
+	END IF;
+	IF (SELECT count(DISTINCT i) FROM unnest(p_chunk_ids) i) <> cardinality(p_chunk_ids) THEN
+		RAISE EXCEPTION 'bad_vector' USING ERRCODE = 'BD001';        -- repeated ids (and NULLs, which count as none)
+	END IF;
+	IF EXISTS (SELECT 1 FROM unnest(p_chunk_ids) i
+			WHERE i IS NULL OR NOT EXISTS (SELECT 1 FROM chunk c WHERE c.chunk_id = i AND c.file_id = j.file_id)) THEN
+		RAISE EXCEPTION 'bad_vector' USING ERRCODE = 'BD001';
+	END IF;
+	vs := aps_search.vec_schema();
+	tbl := 'chunk_vec_' || j.gen;
+	BEGIN
+		EXECUTE format('INSERT INTO aps_search.%I (chunk_id, file_id, vec)
+			SELECT x.id, $1, x.v::%I.halfvec(%s) FROM unnest($2, $3) AS x(id, v)
+			ON CONFLICT (chunk_id) DO UPDATE SET vec = EXCLUDED.vec', tbl, vs, d) USING j.file_id, p_chunk_ids, p_vectors;
+	EXCEPTION WHEN SQLSTATE '22000' OR SQLSTATE '22003' OR SQLSTATE '22P02' OR SQLSTATE '22023' THEN
+		RAISE EXCEPTION 'bad_vector' USING ERRCODE = 'BD001';
+	END;
+	EXECUTE format('SELECT NOT EXISTS (SELECT 1 FROM aps_search.chunk c WHERE c.file_id = $1
+		AND NOT EXISTS (SELECT 1 FROM aps_search.%I v WHERE v.chunk_id = c.chunk_id))', tbl) INTO complete USING j.file_id;
+	IF complete THEN
+		DELETE FROM job WHERE id = p_job_id;
+		-- Every finished generation counts for the rate shown by occ buscador:status, not only the one searches use.
+		UPDATE file_state SET embedded_at = now() WHERE file_id = j.file_id;
+		-- vec_state describes the generation searches use (or the first one, while none is active yet).
+		UPDATE file_state SET vec_state = 'embedded', updated_at = now() WHERE file_id = j.file_id
+			AND (j.gen = (SELECT e.gen FROM embedding_profile e WHERE e.state = 'active')
+				OR NOT EXISTS (SELECT 1 FROM embedding_profile e WHERE e.state = 'active'));
+	END IF;
+	RETURN complete;
 END
 $$;
 -- @@

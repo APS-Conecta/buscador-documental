@@ -16,7 +16,7 @@ use OCA\BuscadorDocumental\Status\StatusReport;
 class StatusEtaTest extends DbTestCase {
 	private function report(): StatusReport {
 		$db = new IndexDb($this->connection($this->app()));
-		return new StatusReport($db, new WorkWindow(new Settings($db), new AuditLog($db, new Pseudonyms($db))));
+		return new StatusReport($db, new WorkWindow(new Settings($db), new AuditLog($db, new Pseudonyms($db)), $db));
 	}
 
 	public function testATransitionToIndexedStampsTheCompletionTimeAndALaterTouchDoesNot(): void {
@@ -65,7 +65,7 @@ class StatusEtaTest extends DbTestCase {
 		$a->exec('SELECT aps_search.activate_generation(1)');
 		$a->exec("INSERT INTO aps_search.file_state (file_id, etag, text_state, vec_state, indexed_at, embedded_at) SELECT g, 'e', 'indexed', 'embedded', now() - interval '3 hours', now() - make_interval(mins => g) FROM generate_series(1, 30) g");
 		$a->exec("INSERT INTO aps_search.file_state (file_id, etag, text_state, vec_state, indexed_at) SELECT g, 'e', 'indexed', 'pending', now() - interval '3 hours' FROM generate_series(31, 90) g");
-		$a->exec("INSERT INTO aps_search.settings (key, value) VALUES ('vec_coverage', '0.3333')");
+		$a->exec("INSERT INTO aps_search.settings (key, value) VALUES ('vec_coverage', '0.3333'), ('vec_coverage_1', '0.3333')");     // VecBackfill keeps both
 		$e = $this->report()->snapshot()['eta']['vec'];
 		$this->assertSame('ok', $e['state']);
 		$this->assertEqualsWithDelta(60, $e['remaining'], 2);
@@ -87,5 +87,24 @@ class StatusEtaTest extends DbTestCase {
 
 	private function claimAs(string $who): void {
 		$this->worker()->prepare('SELECT * FROM aps_search.claim_job(?, 1, ?, 900)')->execute(['text', $who]);
+	}
+
+	public function testTheVectorEtaIsNotBlankWhileTheFirstGenerationIsStillBeingBuilt(): void {
+		$a = $this->app();
+		$a->exec("SELECT aps_search.create_generation(1, 'p', 'm', 'd', 3, 'f16', '', '', 512)");     // building: no active generation yet
+		$a->exec("INSERT INTO aps_search.file_state (file_id, etag, text_state, vec_state, indexed_at, embedded_at) SELECT g, 'e', 'indexed', 'embedded', now() - interval '3 hours', now() - make_interval(mins => g) FROM generate_series(1, 30) g");
+		$a->exec("INSERT INTO aps_search.file_state (file_id, etag, text_state, vec_state, indexed_at) SELECT g, 'e', 'indexed', 'pending', now() - interval '3 hours' FROM generate_series(31, 90) g");
+		$a->exec("INSERT INTO aps_search.settings (key, value) VALUES ('vec_coverage_1', '0.3333')");
+		$e = $this->report()->snapshot()['eta']['vec'];
+		$this->assertSame('ok', $e['state']);
+		$this->assertEqualsWithDelta(60, $e['remaining'], 2);
+	}
+
+	public function testOutboxReEvaluationsOfIndexedFilesAreNotRemainingWork(): void {
+		$a = $this->app();
+		$a->exec("INSERT INTO aps_search.file_state (file_id, etag, text_state) SELECT g, 'e', 'indexed' FROM generate_series(1, 20) g");
+		$a->exec("INSERT INTO aps_search.outbox (file_id, kind) SELECT g, 'file' FROM generate_series(1, 20) g");       // e.g. the folder-chain backfill
+		$a->exec("INSERT INTO aps_search.outbox (file_id, kind) SELECT g, 'file' FROM generate_series(21, 25) g");       // five files never seen: real work
+		$this->assertSame(5, $this->report()->snapshot()['eta']['text']['remaining']);
 	}
 }

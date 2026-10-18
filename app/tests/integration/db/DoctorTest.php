@@ -147,4 +147,18 @@ class DoctorTest extends DbTestCase {
 		$this->assertSame(1, Doctor::exitCode($this->doctor()->run()));
 		$this->assertSame(0, Doctor::exitCode([['id' => 'x', 'status' => 'warn', 'detail' => 'd']]), 'warnings do not fail a monitoring probe');
 	}
+
+	public function testAWindowTheDatabaseCannotInterpretIsFlaggedBecauseItWouldBeIgnored(): void {
+		$this->assertArrayNotHasKey('night_window', $this->checks(), 'no window, no check');
+		$a = $this->app();
+		$a->exec("INSERT INTO aps_search.settings (key, value) VALUES ('work_window', '01:00-05:00'), ('work_tz', 'America/Santiago')");
+		$this->assertSame('ok', $this->statusOf('night_window'));
+		$a->exec("UPDATE aps_search.settings SET value = '+03:00' WHERE key = 'work_tz'");
+		$r = $this->checks();
+		$this->assertSame('fail', $r['night_window']['status']);
+		$this->assertStringContainsString('ignored', $r['night_window']['detail']);
+		$a->exec("UPDATE aps_search.settings SET value = 'America/Santiago' WHERE key = 'work_tz'");
+		$a->exec("UPDATE aps_search.settings SET value = 'tonight' WHERE key = 'work_window'");
+		$this->assertSame('fail', $this->statusOf('night_window'), 'an unusable window is silently ignored by the claim, so say so');
+	}
 }

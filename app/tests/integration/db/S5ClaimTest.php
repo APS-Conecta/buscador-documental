@@ -145,4 +145,35 @@ class S5ClaimTest extends DbTestCase {
 		$this->assertSame('e1', $c['etag']);
 		$this->assertNull($this->claimLane($w, 'text', 'w2'), 'a claimed job is not handed out twice');
 	}
+
+	public function testOnlyRealLanesAreRecordedAndAMalformedWorkerNameIsRefused(): void {
+		$w = $this->worker();
+		$this->assertNull($this->claimLane($w, "x\n"), 'an unknown lane gets nothing');
+		$this->assertNull($this->claimLane($w, 'weird'));
+		$this->assertSame(0, (int)$this->app()->query('SELECT count(*) FROM aps_search.worker_seen')->fetchColumn(), 'and leaves no trace');
+		foreach (["bad name", "w\n", str_repeat('x', 65), 'ñandú'] as $bad) {
+			$this->assertStringContainsString('worker id', $this->failure(fn () => $this->claimLane($w, 'text', $bad)), json_encode($bad));
+		}
+		$this->assertSame(0, (int)$this->app()->query('SELECT count(*) FROM aps_search.worker_seen')->fetchColumn());
+	}
+
+	public function testTheLivenessTableCannotBeFilledByInventingWorkerNames(): void {
+		$w = $this->worker();
+		for ($i = 0; $i < 210; $i++) {
+			$this->claimLane($w, 'text', 'w' . $i);
+		}
+		$this->assertLessThanOrEqual(200, (int)$this->app()->query('SELECT count(*) FROM aps_search.worker_seen')->fetchColumn());
+		$this->app()->exec("UPDATE aps_search.worker_seen SET at = now() - interval '1 hour' WHERE worker = 'w0'");
+		$this->claimLane($w, 'text', 'w0');
+		$this->assertLessThan(60, (int)$this->app()->query("SELECT extract(epoch FROM now() - at) FROM aps_search.worker_seen WHERE worker = 'w0'")->fetchColumn(), 'a known worker is still refreshed when the table is full');
+	}
+
+	public function testAHeartbeatAlsoProvesTheWorkerIsAliveDuringALongJob(): void {
+		$this->seedFile(1);
+		$w = $this->worker();
+		$c = $this->claimLane($w, 'text', 'slow-worker');
+		$this->app()->exec("UPDATE aps_search.worker_seen SET at = now() - interval '30 minutes'");
+		$w->prepare('SELECT aps_search.heartbeat(?, ?, 900)')->execute([$c['job_id'], $c['lease_epoch']]);
+		$this->assertLessThan(60, (int)$this->app()->query("SELECT extract(epoch FROM now() - at) FROM aps_search.worker_seen WHERE worker = 'slow-worker' AND lane = 'text'")->fetchColumn());
+	}
 }

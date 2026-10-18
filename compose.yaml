@@ -84,9 +84,9 @@ services:
       PYTHONDONTWRITEBYTECODE: "1"
     volumes:
       - bd_work:/work
+    networks: [workers]          # no route to the internet; a remote Ollama needs its network added here by the administrator
 
   # Deterministic stand-in for the Ollama endpoint (tests and CI only): hashed bags of words, no model, no text kept.
-    networks: [workers]
   embedstub:
     profiles: ["worker"]
     build: ./worker
@@ -107,9 +107,9 @@ services:
       interval: 3s
       timeout: 3s
       retries: 20
+    networks: [workers]
 
   # Parsing and OCR run here (ADR-0011): no network, no secrets, read-only rootfs, no capabilities.
-    networks: [workers]
   parser:
     profiles: ["worker"]
     build: ./worker

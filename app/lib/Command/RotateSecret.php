@@ -27,34 +27,52 @@ class RotateSecret extends Command {
 
 	protected function execute(InputInterface $input, OutputInterface $output): int {
 		$grace = $input->getOption('grace');
-		if (!is_string($grace) || !preg_match('/^-?\d+$/', $grace)) {
+		if (!is_string($grace) || preg_match('/^\d{1,3}$/D', $grace) !== 1 || (int)$grace > 720) {
 			$output->writeln('<error>The grace period is a whole number of hours from 0 to 720.</error>');
 			return 1;
 		}
 		$file = $input->getOption('to-file');
-		if (is_string($file) && $file !== '') {
-			$old = umask(0o177);                                    // the file must never be readable by others, even for an instant
-			$probe = @file_put_contents($file, '');
-			umask($old);
-			if ($probe === false) {
-				$output->writeln('<error>Cannot write the file, nothing was changed.</error>');
+		$file = is_string($file) && $file !== '' ? $file : null;
+		$temp = null;
+		if ($file !== null) {
+			if (is_link($file)) {
+				$output->writeln('<error>The file is a symbolic link: refusing to write a secret through it. Nothing was changed.</error>');
 				return 1;
 			}
-			chmod($file, 0o600);
+			// Create the private temporary file first: if there is nowhere to put the secret, nothing is rotated.
+			$temp = dirname($file) . '/.' . basename($file) . '.' . bin2hex(random_bytes(4)) . '.tmp';
+			$old = umask(0o177);
+			$handle = @fopen($temp, 'x');
+			umask($old);
+			if ($handle === false) {
+				$output->writeln('<error>Cannot create a file there, nothing was changed.</error>');
+				return 1;
+			}
+			fclose($handle);
 		}
+		$notice = $this->rotation->previousStillValid();
 		try {
 			$secret = $this->rotation->rotate((int)$grace);
 		} catch (OpsException $e) {
+			if ($temp !== null) {
+				@unlink($temp);
+			}
 			$output->writeln('<error>' . $e->getMessage() . '</error>');
 			return 1;
 		}
-		if (is_string($file) && $file !== '') {
-			file_put_contents($file, $secret . "\n");
-			$output->writeln("new secret written to $file; set it as BD_WORKER_SECRET for the worker and restart it within $grace hours");
-		} else {
-			$output->writeln($secret);
-			$output->writeln("<comment>This is the new BD_WORKER_SECRET; it is not shown again. The old secret works for $grace hours.</comment>");
+		if ($notice) {
+			$output->writeln('<comment>The secret that was still valid from the last rotation stops working now; only the one it replaced has a grace period.</comment>');
 		}
+		if ($temp !== null && $file !== null && @file_put_contents($temp, $secret . "\n") !== false && @rename($temp, $file)) {
+			$output->writeln("new secret written to $file; set it as BD_WORKER_SECRET for the worker and restart it within $grace hours");
+			return 0;
+		}
+		if ($temp !== null) {
+			@unlink($temp);
+			$output->writeln('<error>The secret was rotated but could not be written to the file; it is printed once here instead.</error>');
+		}
+		$output->writeln($secret);
+		$output->writeln("<comment>This is the new BD_WORKER_SECRET; it is not shown again. The old secret works for $grace hours.</comment>");
 		return 0;
 	}
 }

@@ -80,6 +80,14 @@ class Doctor {
 				$last === null ? 'never finished' : sprintf('last finished %d hours ago', intdiv((int)$last, 3600)));
 		}
 
+		$window = $this->settings->get('work_window');
+		if ($window !== null && $window !== '') {
+			$tz = $this->settings->get('work_tz') ?: 'UTC';
+			$usable = preg_match('/^([01][0-9]|2[0-3]):[0-5][0-9]-([01][0-9]|2[0-3]):[0-5][0-9]$/D', $window) === 1
+				&& $this->db->rows('SELECT 1 FROM pg_timezone_names WHERE name = ?', [$tz]) !== [];
+			$c[] = $this->check('night_window', $usable ? 'ok' : 'fail', $usable ? 'set and understood by the database' : 'the window or its time zone is not understood by the database, so it is ignored and heavy work runs at any hour: set it again with occ buscador:window set');
+		}
+
 		return array_merge($c, $this->vectorChecks());
 	}
 

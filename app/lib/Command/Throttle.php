@@ -22,7 +22,7 @@ class Throttle extends Command {
 
 	protected function configure(): void {
 		$this->setName('buscador:throttle')
-			->setDescription('Concurrency per worker: show, set --text=N --vec=N, or reset')
+			->setDescription('Concurrency caps per worker name (and 4x / 2x that across all workers): show, set --text=N --vec=N, or reset')
 			->addArgument('action', InputArgument::OPTIONAL, 'show (default), set or reset', 'show')
 			->addOption('text', null, InputOption::VALUE_REQUIRED, 'set: files read at once, 1 to 16 (default 4)')
 			->addOption('vec', null, InputOption::VALUE_REQUIRED, 'set: files embedded at once, 1 to 16 (default 2)');

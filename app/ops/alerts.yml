@@ -4,7 +4,7 @@ groups:
   - name: buscador
     rules:
       - alert: BuscadorWorkerSilent
-        expr: buscador_jobs_queued > 0 and buscador_paused == 0 and buscador_worker_last_seen_age_seconds{lane="text"} > 600
+        expr: buscador_jobs_queued > 0 and on() buscador_paused == 0 and on() buscador_worker_last_seen_age_seconds{lane="text"} > 600
         for: 10m
         labels: {severity: critical}
         annotations:
@@ -46,7 +46,7 @@ groups:
           summary: "Some files had their vectors given up on"
           runbook: "Check the embedding endpoint; occ buscador:profile refresh --retry-failed"
       - alert: BuscadorVectorCoverageStalled
-        expr: buscador_vector_coverage_ratio < 0.95 and buscador_vector_queued == 0 and buscador_jobs_queued == 0
+        expr: buscador_vector_coverage_ratio < 0.95 and on() buscador_vector_queued == 0 and on() buscador_jobs_queued == 0
         for: 2h
         labels: {severity: warning}
         annotations:

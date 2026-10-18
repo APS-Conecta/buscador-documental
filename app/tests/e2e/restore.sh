@@ -25,7 +25,7 @@ $PSQL -c "TRUNCATE aps_search.job, aps_search.page, aps_search.chunk, aps_search
 $PSQL -c "DO \$\$ DECLARE t text; BEGIN FOR t IN SELECT relname FROM pg_class WHERE relnamespace = 'aps_search'::regnamespace AND relkind = 'r' AND relname ~ '^chunk_vec_[0-9]+\$' LOOP EXECUTE format('DROP TABLE aps_search.%I', t); END LOOP; END \$\$; DELETE FROM aps_search.embedding_profile; DELETE FROM aps_search.settings" >/dev/null
 $C --profile worker build worker >/dev/null
 $C --profile worker up -d --wait parser embedstub >/dev/null
-trap '$PSQL -c "DO \$\$ DECLARE t text; BEGIN FOR t IN SELECT relname FROM pg_class WHERE relnamespace = '"'"'aps_search'"'"'::regnamespace AND relkind = '"'"'r'"'"' AND relname ~ '"'"'^chunk_vec_[0-9]+\$'"'"' LOOP EXECUTE format('"'"'DROP TABLE aps_search.%I'"'"', t); END LOOP; END \$\$; DELETE FROM aps_search.embedding_profile" >/dev/null 2>&1 || true; $C exec -T db dropdb -U postgres --if-exists bd_restore_test >/dev/null 2>&1 || true; rm -rf "$TMP"' EXIT
+trap '$PSQL -c "DO \$\$ DECLARE t text; BEGIN FOR t IN SELECT relname FROM pg_class WHERE relnamespace = '"'"'aps_search'"'"'::regnamespace AND relkind = '"'"'r'"'"' AND relname ~ '"'"'^chunk_vec_[0-9]+\$'"'"' LOOP EXECUTE format('"'"'DROP TABLE aps_search.%I'"'"', t); END LOOP; END \$\$; DELETE FROM aps_search.embedding_profile" >/dev/null 2>&1 || true; $C exec -T db dropdb -U postgres --if-exists bd_restore_test >/dev/null 2>&1 || true; $C exec -T db dropdb -U postgres --if-exists bd_restore_test2 >/dev/null 2>&1 || true; rm -rf "$TMP"' EXIT
 TMP=$(mktemp -d /tmp/bd-s1-rs.XXXXXX)
 $OCC buscador:profile set bge-m3 --url=http://embedstub:11434 >/dev/null
 $OCC user:delete rs_a >/dev/null 2>&1 || true
@@ -85,8 +85,25 @@ ok "a keyword search on the restored database finds all $N chunks"
 ok "the $V vectors came back, each with its chunk"
 [ "$(DBX psql -qAt -d bd_restore_test -c "select has_function_privilege('bd_worker','aps_search.claim_job(text,int,text,int)','execute'), has_table_privilege('bd_worker','aps_search.chunk','select')")" = "t|f" ] || die "privileges changed in the restore"
 ok "the worker role still has its functions and no table access"
+[ "$(DBX psql -qAt -d bd_restore_test -c "select count(*) from pg_class where relnamespace = 'aps_search'::regnamespace and pg_get_userbyid(relowner) <> 'bd_owner'")" = 0 ] || die "something in aps_search is not owned by bd_owner after the restore"
+ok "everything restored belongs to bd_owner (the restore ran as that role, not as the superuser)"
+# the role the restore runs as cannot do what a tampered archive would want
+[ -z "$(DBX psql -qAt -d bd_restore_test -c "select 1 from pg_roles where rolname = 'bd_owner' and (rolsuper or rolcreaterole or rolcreatedb)")" ] || die "bd_owner has powers it should not have"
+if DBX psql -q -d bd_restore_test -c "set role bd_owner; copy (select 1) to program 'id > /tmp/pwned'" >/dev/null 2>&1; then die "bd_owner can run programs on the server"; fi
+if DBX psql -q -d bd_restore_test -c "set role bd_owner; alter role nextcloud superuser" >/dev/null 2>&1; then die "bd_owner can change roles"; fi
+ok "bd_owner cannot run server programs or change roles, so a tampered archive is confined to the search schema"
 BAD=$(DBX bash /tmp/restore.sh /tmp/x.bak bd_restore_test 2>&1 || true); grep -q "already has an aps_search schema" <<<"$BAD" || die "a second restore over the first was not refused: $BAD"
 ok "restoring over an existing schema is refused"
+DBX cp /tmp/x.bak.sha256 /tmp/x.sha.keep; DBX rm -f /tmp/x.bak.sha256
+BAD=$(DBX bash /tmp/restore.sh /tmp/x.bak bd_restore_test 2>&1 || true); grep -q "checksum file" <<<"$BAD" || die "a backup without its checksum was accepted: $BAD"
+DBX mv /tmp/x.sha.keep /tmp/x.bak.sha256
+ok "a backup without its checksum file is refused"
+DBX sh -c 'head -c 3 /dev/urandom | od -An -tx1 > /dev/null; printf "abc\n%s\n" "$(head -c 60 /dev/urandom | base64 -w0)" > /tmp/twoline.key; chmod 600 /tmp/twoline.key'
+BAD=$($C exec -T -e PGUSER=postgres -e BD_BACKUP_KEY_FILE=/tmp/twoline.key db bash /tmp/restore.sh /tmp/x.bak bd_restore_test 2>&1 || true); grep -qE "wrong key|already has" <<<"$BAD" || die "unexpected: $BAD"
+DBX dropdb --if-exists bd_restore_test2; DBX createdb bd_restore_test2; DBX psql -q -d bd_restore_test2 -c "CREATE EXTENSION unaccent; CREATE EXTENSION vector"
+BAD=$($C exec -T -e PGUSER=postgres -e BD_BACKUP_KEY_FILE=/tmp/twoline.key db bash /tmp/restore.sh /tmp/x.bak bd_restore_test2 2>&1 || true); grep -q "wrong key" <<<"$BAD" || die "a key that merely shares the first line decrypted the backup: $BAD"
+DBX dropdb --if-exists bd_restore_test2
+ok "the whole key file is the passphrase: a file that only shares the first line does not decrypt"
 
 mkdir -p spikes/s5/results-s5
 printf '{"files":3,"chunks":%s,"vectors":%s,"backup_ms":%s,"restore_ms":%s,"read_and_embed_seconds":%s,"note":"3 small text files on the test stack; the stub embedder; indicative of the procedure, not of volume"}\n' "$N" "$V" "$BACKUP_MS" "$RESTORE_MS" "$READ_SECONDS" > spikes/s5/results-s5/restore_rehearsal.json

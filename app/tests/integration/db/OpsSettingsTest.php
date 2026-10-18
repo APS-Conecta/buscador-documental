@@ -23,7 +23,7 @@ class OpsSettingsTest extends DbTestCase {
 
 	private function window(): WorkWindow {
 		$db = $this->db();
-		return new WorkWindow(new Settings($db), new AuditLog($db, new Pseudonyms($db)));
+		return new WorkWindow(new Settings($db), new AuditLog($db, new Pseudonyms($db)), $db);
 	}
 
 	private function throttle(): Throttle {
@@ -38,7 +38,7 @@ class OpsSettingsTest extends DbTestCase {
 
 	public function testSettingAWindowStoresItWithTheZoneAndReportsWhetherItIsOpen(): void {
 		$w = $this->window();
-		$w->set('01:00-05:00', 'vec', 'America/Santiago');
+		$w->set('01:00-05:00', 'vec', 'America/Santiago');            // an IANA name both PHP and PostgreSQL know
 		$noon = new DateTimeImmutable('2026-10-18 15:00', new DateTimeZone('UTC'));          // 12:00 in Santiago (UTC-3 in October)
 		$night = new DateTimeImmutable('2026-10-18 05:00', new DateTimeZone('UTC'));         // 02:00 in Santiago
 		$this->assertSame(['window' => '01:00-05:00', 'lanes' => 'vec', 'tz' => 'America/Santiago', 'open_now' => false], $w->show($noon));
@@ -75,6 +75,11 @@ class OpsSettingsTest extends DbTestCase {
 			'same ends' => ['01:00-01:00', 'vec', 'UTC', 'differ'],
 			'lanes' => ['01:00-05:00', 'text', 'UTC', 'vec or all'],
 			'zone' => ['01:00-05:00', 'vec', 'Mars/Olympus', 'time zone'],
+			'newline in the window' => ["01:00-05:00\n", 'vec', 'UTC', 'HH:MM-HH:MM'],
+			'newline in the lanes' => ['01:00-05:00', "vec\n", 'UTC', 'vec or all'],
+			'an offset PHP reads one way and PostgreSQL the other' => ['01:00-05:00', 'vec', '+03:00', 'time zone'],
+			'an abbreviation' => ['01:00-05:00', 'vec', 'CEST', 'time zone'],
+			'a POSIX rule' => ['01:00-05:00', 'vec', 'EST5EDT4', 'time zone'],
 		];
 	}
 

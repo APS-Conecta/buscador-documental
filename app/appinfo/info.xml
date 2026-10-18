@@ -44,5 +44,6 @@
         <command>OCA\BuscadorDocumental\Command\Throttle</command>
         <command>OCA\BuscadorDocumental\Command\Doctor</command>
         <command>OCA\BuscadorDocumental\Command\RotateSecret</command>
+        <command>OCA\BuscadorDocumental\Command\Reconcile</command>
     </commands>
 </info>

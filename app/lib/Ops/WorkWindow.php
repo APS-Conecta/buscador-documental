@@ -9,13 +9,14 @@ namespace OCA\BuscadorDocumental\Ops;
 use DateTimeImmutable;
 use DateTimeZone;
 use OCA\BuscadorDocumental\Audit\AuditLog;
+use OCA\BuscadorDocumental\Db\IndexDb;
 use OCA\BuscadorDocumental\Reconcile\ReconcileWindow;
 use OCA\BuscadorDocumental\Scope\Settings;
 use Throwable;
 
 /** The night window for heavy work (ADR-0015). `claim_job` enforces it; this validates and stores it. */
 class WorkWindow {
-	public function __construct(private Settings $settings, private AuditLog $audit) {
+	public function __construct(private Settings $settings, private AuditLog $audit, private IndexDb $db) {
 	}
 
 	/** @return array{window: ?string, lanes: string, tz: string, open_now: bool} */
@@ -49,7 +50,7 @@ class WorkWindow {
 
 	/** @throws OpsException */
 	public function set(string $window, string $lanes, string $tz): void {
-		if (preg_match('/^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$/', $window) !== 1) {
+		if (preg_match('/^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$/D', $window) !== 1) {
 			throw new OpsException('The window must look like HH:MM-HH:MM with two digits for hours (00-23) and minutes, for example 01:00-05:00.');
 		}
 		if (substr($window, 0, 5) === substr($window, 6, 5)) {
@@ -58,10 +59,16 @@ class WorkWindow {
 		if (!in_array($lanes, ['vec', 'all'], true)) {
 			throw new OpsException('The lanes must be vec or all.');
 		}
+		// PHP accepts offsets and abbreviations that PostgreSQL reads differently (+03:00 is UTC+3 to one and UTC-3 to the other),
+		// and the window is enforced by the database: only names both know are allowed.
 		try {
 			new DateTimeZone($tz);
+			$known = $this->db->rows('SELECT 1 FROM pg_timezone_names WHERE name = ?', [$tz]) !== [];
 		} catch (Throwable) {
-			throw new OpsException("Unknown time zone '$tz'. Use an IANA name such as America/Santiago.");
+			$known = false;
+		}
+		if (!$known) {
+			throw new OpsException('Unknown time zone. Use an IANA name such as America/Santiago that the database also knows.');
 		}
 		$this->settings->set('work_window', $window);
 		$this->settings->set('work_window_lanes', $lanes);

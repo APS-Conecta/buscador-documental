@@ -270,4 +270,21 @@ class S4VecFunctionsTest extends DbTestCase {
 		$this->assertStringContainsString('lock timeout', $this->failure(static fn () => $other->exec('SELECT aps_search.drop_generation(2)')), 'a drop waits for a concurrent activation instead of racing it');
 		$app->rollBack();
 	}
+
+	public function testFinishingABuildingGenerationStampsTheCompletionTimeWithoutTouchingTheActiveState(): void {
+		$this->generation(1, 'active');
+		$this->indexed(10, 1);
+		$w = $this->worker();
+		$c = $this->claimVec($w);
+		$this->writeVec($w, $c, $this->chunkIds(10), ['[1,0,0]']);
+		$this->app()->exec("UPDATE aps_search.file_state SET embedded_at = now() - interval '5 hours' WHERE file_id = 10");
+		$this->generation(2, 'building');
+		$this->app()->exec('SELECT aps_search.enqueue_vec_backfill(2, 10)');
+		$c2 = $this->claimVec($w, 'vec-w2');
+		$this->assertNotNull($c2);
+		$this->writeVec($w, $c2, $this->chunkIds(10), ['[0,1,0]']);
+		$row = $this->app()->query("SELECT vec_state, embedded_at > now() - interval '1 minute' AS fresh FROM aps_search.file_state WHERE file_id = 10")->fetch(PDO::FETCH_ASSOC);
+		$this->assertSame('embedded', $row['vec_state']);
+		$this->assertTrue((bool)$row['fresh'], 'the completion of the other generation counts for the rate');
+	}
 }

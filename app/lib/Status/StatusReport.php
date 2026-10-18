@@ -70,16 +70,18 @@ class StatusReport {
 		$closed = $w !== null && !$w['open_now'];
 		$r = $this->db->rows("SELECT
 			(SELECT count(*) FROM aps_search.job WHERE lane = 'text') AS text_jobs,
-			(SELECT count(*) FROM aps_search.outbox WHERE processed_at IS NULL AND kind = 'file' AND attempts < 5) AS text_events,
+			(SELECT count(*) FROM aps_search.outbox o WHERE o.processed_at IS NULL AND o.kind = 'file' AND o.attempts < 5
+				AND NOT EXISTS (SELECT 1 FROM aps_search.file_state fs WHERE fs.file_id = o.file_id AND fs.text_state = 'indexed')) AS text_events,
 			(SELECT count(*) FROM aps_search.job WHERE lane = 'vec') AS vec_jobs,
 			(SELECT count(*) FROM aps_search.file_state WHERE text_state = 'indexed') AS indexed,
 			(SELECT count(*) FROM aps_search.file_state WHERE indexed_at > now() - interval '1 hour') AS t1,
 			(SELECT count(*) FROM aps_search.file_state WHERE indexed_at > now() - interval '2 hours' AND indexed_at <= now() - interval '1 hour') AS t2,
 			(SELECT count(*) FROM aps_search.file_state WHERE embedded_at > now() - interval '1 hour') AS v1,
 			(SELECT count(*) FROM aps_search.file_state WHERE embedded_at > now() - interval '2 hours' AND embedded_at <= now() - interval '1 hour') AS v2,
-			(SELECT count(*) FROM aps_search.embedding_profile WHERE state = 'active') AS has_profile")[0];
-		$coverage = (float)($settings->get('vec_coverage') ?? 0);
-		$vecRemaining = (int)$r['has_profile'] > 0 ? max((int)$r['vec_jobs'], (int)round((1 - $coverage) * (int)$r['indexed'])) : 0;
+			(SELECT max(gen) FROM aps_search.embedding_profile WHERE state <> 'retired') AS live_gen")[0];
+		// The newest live generation is the one being worked on (a first build has none active yet).
+		$coverage = $r['live_gen'] === null ? 1.0 : (float)($settings->get('vec_coverage_' . (int)$r['live_gen']) ?? 0);
+		$vecRemaining = $r['live_gen'] !== null ? max((int)$r['vec_jobs'], (int)round((1 - $coverage) * (int)$r['indexed'])) : 0;
 		$lanes = $w['lanes'] ?? 'vec';
 		return [
 			'text' => Eta::estimate((int)$r['text_jobs'] + (int)$r['text_events'], (int)$r['t1'], (int)$r['t2'], $paused, !($closed && $lanes === 'all'), $opens),

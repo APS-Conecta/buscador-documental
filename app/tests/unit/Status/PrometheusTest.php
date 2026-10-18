@@ -74,4 +74,16 @@ class PrometheusTest extends TestCase {
 		$this->assertStringNotContainsString('buscador_acl_backlog_seconds ', $out);
 		$this->assertStringNotContainsString('buscador_worker_last_seen_age_seconds{', $out);
 	}
+
+	public function testALaneWithANewlineOrSpaceCannotBreakTheFormatOrDuplicateASeries(): void {
+		$s = self::snapshot();
+		$s['workers'] = ['text' => 3, "x\n" => 5, 'y z' => 7, "text\n" => 9];
+		$out = Prometheus::render($s);
+		$this->assertStringNotContainsString("\n\"", $out);
+		$lines = array_filter(explode("\n", $out), static fn (string $l): bool => str_starts_with($l, 'buscador_worker_last_seen_age_seconds{'));
+		$this->assertSame(count($lines), count(array_unique(array_map(static fn (string $l): string => explode(' ', $l)[0], $lines))), 'no series twice');
+		foreach (explode("\n", trim($out)) as $line) {
+			$this->assertTrue(str_starts_with($line, '#') || preg_match('/^[a-z_][a-z0-9_]*(\{[a-z_]+="[A-Za-z0-9_.:-]+"(,[a-z_]+="[A-Za-z0-9_.:-]+")*\})? -?[0-9]+(\.[0-9]+)?$/D', $line) === 1, $line);
+		}
+	}
 }
