@@ -25,7 +25,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
-
+    networks: [default, workers]
   nextcloud:
     image: nextcloud:34.0.4-apache@sha256:0e5688ba0988b9112cf03f9c6bab53eccb466d278435f6596f16c1f25acacf74
     restart: "no"
@@ -54,6 +54,7 @@ services:
       start_period: 60s
 
   # One-shot: `docker compose --profile worker run --rm worker python3 main.py --once`. Not started by `up`.
+    networks: [default, workers]
   worker:
     profiles: ["worker"]
     build: ./worker
@@ -83,6 +84,7 @@ services:
       PYTHONDONTWRITEBYTECODE: "1"
     volumes:
       - bd_work:/work
+    networks: [workers]          # no route to the internet; a remote Ollama needs its network added here by the administrator
 
   # Deterministic stand-in for the Ollama endpoint (tests and CI only): hashed bags of words, no model, no text kept.
   embedstub:
@@ -105,6 +107,7 @@ services:
       interval: 3s
       timeout: 3s
       retries: 20
+    networks: [workers]
 
   # Parsing and OCR run here (ADR-0011): no network, no secrets, read-only rootfs, no capabilities.
   parser:
@@ -138,3 +141,10 @@ volumes:
   bd_work:
     driver: local
     driver_opts: {type: tmpfs, device: tmpfs, o: "size=1g,uid=10001,gid=10001,mode=0700"}
+
+# The worker lives on a network with no route to the internet (A-OPS-4, ADR-0015): it reaches the database, Nextcloud and the
+# embedding endpoint by name and nothing else. db and Nextcloud are also on the default network for their loopback ports.
+networks:
+  default: {}
+  workers:
+    internal: true

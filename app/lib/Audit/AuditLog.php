@@ -11,7 +11,7 @@ use OCA\BuscadorDocumental\Db\IndexDb;
 
 /** Administrative actions, pseudonymised, with a closed detail schema (no query text, no content, no names). */
 class AuditLog {
-	public const ACTIONS = ['scope.add', 'scope.remove', 'scope.mode', 'pause', 'resume', 'notice.ack', 'purge_user', 'erase', 'reconcile', 'settings.set', 'profile.set', 'profile.activate', 'profile.drop', 'semantic.set'];
+	public const ACTIONS = ['scope.add', 'scope.remove', 'scope.mode', 'pause', 'resume', 'notice.ack', 'purge_user', 'erase', 'reconcile', 'settings.set', 'profile.set', 'profile.activate', 'profile.drop', 'semantic.set', 'window.set', 'throttle.set', 'secret.rotate'];
 
 	public function __construct(private IndexDb $db, private Pseudonyms $pseudonyms) {
 	}

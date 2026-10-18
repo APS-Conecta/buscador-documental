@@ -1,0 +1,61 @@
+# Prometheus alerting rules for the Buscador Documental. The metrics come from `occ buscador:status --prometheus` (run it from cron
+# into a node_exporter textfile collector file, or from any agent that can run occ). Every threshold is a starting point.
+groups:
+  - name: buscador
+    rules:
+      - alert: BuscadorWorkerSilent
+        expr: buscador_jobs_queued > 0 and on() buscador_paused == 0 and on() buscador_worker_last_seen_age_seconds{lane="text"} > 600
+        for: 10m
+        labels: {severity: critical}
+        annotations:
+          summary: "Work is waiting and no worker has asked for it for more than 10 minutes"
+          runbook: "Check the worker container and its secret; run occ buscador:doctor"
+      - alert: BuscadorEventsParked
+        expr: buscador_outbox_parked > 0
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "Events stopped after repeated failures (files may be out of date)"
+          runbook: "occ buscador:doctor; the nightly reconciliation will repair them"
+      - alert: BuscadorPermissionChangesStuck
+        expr: buscador_acl_backlog_seconds > 3600
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "A permission change has been waiting for more than an hour (the live check still hides files)"
+          runbook: "Check the background-job mode is cron; run occ buscador:doctor"
+      - alert: BuscadorReconciliationStale
+        expr: buscador_last_reconcile_age_seconds > 129600
+        for: 1h
+        labels: {severity: warning}
+        annotations:
+          summary: "No reconciliation has finished in 36 hours"
+          runbook: "Check Nextcloud cron and the reconciliation window; occ buscador:doctor"
+      - alert: BuscadorPausedForLong
+        expr: buscador_paused == 1
+        for: 24h
+        labels: {severity: info}
+        annotations:
+          summary: "Reading has been paused for a day"
+          runbook: "occ buscador:resume when the reason is gone"
+      - alert: BuscadorVectorsFailed
+        expr: buscador_vector_failed > 0
+        for: 1h
+        labels: {severity: warning}
+        annotations:
+          summary: "Some files had their vectors given up on"
+          runbook: "Check the embedding endpoint; occ buscador:profile refresh --retry-failed"
+      - alert: BuscadorVectorCoverageStalled
+        expr: buscador_vector_coverage_ratio < 0.95 and on() buscador_vector_queued == 0 and on() buscador_jobs_queued == 0
+        for: 2h
+        labels: {severity: warning}
+        annotations:
+          summary: "Vector coverage is below the minimum and nothing is queued"
+          runbook: "occ buscador:profile refresh; occ buscador:doctor"
+      - alert: BuscadorBackfillTooSlow
+        expr: buscador_eta_seconds{lane="text"} > 604800
+        for: 6h
+        labels: {severity: info}
+        annotations:
+          summary: "At the current rate the queue will take more than a week"
+          runbook: "More workers or cores, a longer window (occ buscador:window), or a higher cap (occ buscador:throttle)"
