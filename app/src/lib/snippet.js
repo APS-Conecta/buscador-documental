@@ -1,7 +1,7 @@
 // The server sends snippets HTML-escaped with <mark> around matches and nothing else. This is the whole "renderer":
 // it returns plain text segments and the page puts them in the DOM as text, never as HTML.
 const ENTITIES = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#039;': '\'' }
-const decode = (s) => s.replace(/&(?:amp|lt|gt|quot|#039);/g, (m) => ENTITIES[m])
+const decode = (s) => s.replace(/&(?:amp|lt|gt|quot|#0?39);/g, (m) => ENTITIES[m])
 
 export function parseSnippet(html) {
 	if (typeof html !== 'string' || html === '') {
