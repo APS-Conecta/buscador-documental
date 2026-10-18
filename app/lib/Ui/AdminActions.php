@@ -55,6 +55,15 @@ class AdminActions {
 		return $ok;
 	}
 
+	/** @return array<string, int> problem reasons with their number of files; no file is looked at, so it works whatever the state of Nextcloud */
+	public function skippedCounts(): array {
+		$counts = [];
+		foreach ($this->db->rows("SELECT skip_reason AS k, count(*) AS n FROM aps_search.file_state WHERE text_state = 'skipped' AND skip_reason = ANY(?::text[]) GROUP BY 1 ORDER BY n DESC, k", [IndexDb::textArray(self::PROBLEM_REASONS)]) as $r) {
+			$counts[(string)$r['k']] = (int)$r['n'];
+		}
+		return $counts;
+	}
+
 	/**
 	 * Files the worker gave up on, by reason. A name is shown only for files the administrator could open themselves: being an
 	 * administrator does not make other people's file names visible here.
@@ -62,10 +71,7 @@ class AdminActions {
 	 * @return array{counts: array<string, int>, items: list<array{file_id: int, reason: string, name: ?string}>}
 	 */
 	public function skipped(?string $reason, int $offset, int $limit, string $uid = 'admin'): array {
-		$counts = [];
-		foreach ($this->db->rows("SELECT skip_reason AS k, count(*) AS n FROM aps_search.file_state WHERE text_state = 'skipped' AND skip_reason = ANY(?::text[]) GROUP BY 1 ORDER BY n DESC, k", [IndexDb::textArray(self::PROBLEM_REASONS)]) as $r) {
-			$counts[(string)$r['k']] = (int)$r['n'];
-		}
+		$counts = $this->skippedCounts();
 		if ($reason !== null && !in_array($reason, self::PROBLEM_REASONS, true)) {
 			return ['counts' => $counts, 'items' => []];
 		}

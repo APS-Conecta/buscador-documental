@@ -11,7 +11,7 @@ export function parseState(search) {
 	const p = new URLSearchParams(search)
 	const s = { ...DEFAULTS, types: [] }
 	s.q = (p.get('q') ?? '').slice(0, 500)
-	s.mode = MODES[p.get('modo')] ?? DEFAULTS.mode
+	s.mode = Object.hasOwn(MODES, p.get('modo')) ? MODES[p.get('modo')] : DEFAULTS.mode
 	s.sort = SORTS.includes(p.get('orden')) ? p.get('orden') : ''
 	const size = Number(p.get('por_pagina'))
 	s.size = [25, 50, 100].includes(size) ? size : 25

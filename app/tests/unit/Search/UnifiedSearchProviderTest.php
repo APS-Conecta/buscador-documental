@@ -7,7 +7,6 @@ declare(strict_types=1);
 namespace OCA\BuscadorDocumental\Tests\unit\Search;
 
 use OCA\BuscadorDocumental\Scope\ScopeRules;
-use OCA\BuscadorDocumental\Scope\Settings;
 use OCA\BuscadorDocumental\Search\Searcher;
 use OCA\BuscadorDocumental\Search\SearchRequest;
 use OCA\BuscadorDocumental\Search\UnifiedSearchProvider;
@@ -24,15 +23,13 @@ class UnifiedSearchProviderTest extends TestCase {
 			$seen = $r;
 			return $result;
 		});
-		$settings = $this->createMock(Settings::class);
-		$settings->method('isPaused')->willReturn($paused);
 		$scope = $this->createMock(ScopeRules::class);
 		$scope->method('all')->willReturn($rules);
 		$l = $this->createMock(IL10N::class);
 		$l->method('t')->willReturnArgument(0);
 		$urls = $this->createMock(IURLGenerator::class);
 		$urls->method('linkToRouteAbsolute')->willReturnCallback(static fn (string $r, array $p): string => "https://nc/f/{$p['fileid']}");
-		return new UnifiedSearchProvider($searcher, $settings, $scope, $l, $urls);
+		return new UnifiedSearchProvider($searcher, $scope, $l, $urls);
 	}
 
 	private function query(string $term, int $limit = 5): ISearchQuery {
@@ -60,13 +57,19 @@ class UnifiedSearchProviderTest extends TestCase {
 		$this->assertSame('https://nc/f/1', $r['entries'][0]->jsonSerialize()['resourceUrl']);
 	}
 
+	public function testTheSublineIsPlainText(): void {
+		$hits = ['status' => 'ok', 'hits' => [['file_id' => 1, 'title' => 'T', 'snippet' => 'Tom &amp; Jerry <mark>glucosa</mark> &lt;b&gt;']]];
+		$e = $this->provider($hits)->search($this->user(), $this->query('glucosa'))->jsonSerialize()['entries'][0]->jsonSerialize();
+		$this->assertSame('Tom & Jerry glucosa <b>', $e['line1'] ?? $e['subline'] ?? null);
+	}
+
 	public function testShortOrEmptyTermsAndFailuresGiveNothing(): void {
 		$this->assertSame([], $this->provider($this->hits(3))->search($this->user(), $this->query('a'))->jsonSerialize()['entries']);
 		$this->assertSame([], $this->provider(['status' => 'unavailable', 'hits' => []])->search($this->user(), $this->query('glucosa'))->jsonSerialize()['entries']);
 	}
 
-	public function testItHidesWhilePausedOrWithoutFolders(): void {
-		$this->assertNull($this->provider([], paused: true)->getOrder('files.view.index', []));
+	public function testItHidesWithoutFoldersButNotWhilePaused(): void {
+		$this->assertNotNull($this->provider([], paused: true)->getOrder('files.view.index', []), 'what is already read stays searchable');
 		$this->assertNull($this->provider([], rules: [])->getOrder('files.view.index', []));
 		$this->assertNotNull($this->provider([])->getOrder('files.view.index', []));
 	}

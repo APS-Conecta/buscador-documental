@@ -61,7 +61,7 @@ async function reread() {
 	rereading.value = true
 	const r = await api.reread(props.hit.file_id)
 	rereading.value = false
-	message.value = r.status === 'queued' ? 'El documento se leerá de nuevo en unos minutos.' : r.status === 'rate_limited' ? 'Demasiados intentos: espere un momento.' : 'Solo la persona propietaria o un administrador puede pedir una nueva lectura.'
+	message.value = r.status === 'queued' ? 'El documento se leerá de nuevo en unos minutos.' : r.status === 'rate_limited' ? 'Demasiados intentos: espere un momento.' : r.status === 'unavailable' ? 'No se pudo pedir la lectura ahora. Intente de nuevo en unos minutos.' : 'Solo la persona propietaria o un administrador puede pedir una nueva lectura.'
 }
 </script>
 

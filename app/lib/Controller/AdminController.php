@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace OCA\BuscadorDocumental\Controller;
 
+use OCA\BuscadorDocumental\Acl\ExclusionUnavailable;
 use OCA\BuscadorDocumental\Ops\Doctor;
 use OCA\BuscadorDocumental\Scope\ScopeRules;
 use OCA\BuscadorDocumental\Status\StatusReport;
@@ -40,12 +41,16 @@ class AdminController extends Controller {
 			'status' => $this->status->snapshot(),
 			'checks' => $this->doctor->run(),
 			'rules' => $this->rulesWithPaths(),
-			'skipped' => $this->actions->skipped(null, 0, 0, $this->uid())['counts'],
+			'skipped' => $this->actions->skippedCounts(),
 		]);
 	}
 
 	public function skipped(?string $reason = null, int $offset = 0, int $limit = 50): JSONResponse {
-		return $this->json($this->actions->skipped($reason, $offset, $limit, $this->uid()));
+		try {
+			return $this->json($this->actions->skipped($reason, $offset, $limit, $this->uid()));
+		} catch (ExclusionUnavailable) {
+			return $this->json(['status' => 'unavailable'], Http::STATUS_SERVICE_UNAVAILABLE);
+		}
 	}
 
 	public function pause(): JSONResponse {
@@ -73,7 +78,11 @@ class AdminController extends Controller {
 
 	/** The rules, each with the folder's path when this administrator can read the folder (otherwise null: no name is revealed). */
 	private function rulesWithPaths(): array {
-		$paths = array_column($this->folders->forUser($this->uid()), 'path', 'id');
+		try {
+			$paths = array_column($this->folders->forUser($this->uid()), 'path', 'id');
+		} catch (ExclusionUnavailable) {
+			$paths = [];                                       // the overview must still load when the exclusion state does not: that is when it is needed
+		}
 		return array_map(static fn (array $r): array => $r + ['path' => $r['file_id'] === null ? null : ($paths[$r['file_id']] ?? null)], $this->rules->all());
 	}
 

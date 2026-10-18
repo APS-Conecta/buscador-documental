@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace OCA\BuscadorDocumental\Controller;
 
+use OCA\BuscadorDocumental\Acl\ExclusionUnavailable;
 use OCA\BuscadorDocumental\Ui\FileText;
 use OCA\BuscadorDocumental\Ui\FolderList;
 use OCP\AppFramework\Controller;
@@ -28,14 +29,25 @@ class FileTextController extends Controller {
 		if ($uid === null) {
 			return $this->json(['status' => 'unauthorized'], Http::STATUS_UNAUTHORIZED);
 		}
-		$out = $this->text->text($uid, $id);
+		try {
+			$out = $this->text->text($uid, $id);
+		} catch (ExclusionUnavailable) {
+			return $this->json(['status' => 'unavailable'], Http::STATUS_SERVICE_UNAVAILABLE);
+		}
 		return $out === null ? $this->json(['status' => 'not_found'], Http::STATUS_NOT_FOUND) : $this->json($out);
 	}
 
 	#[NoAdminRequired]
 	public function folders(): JSONResponse {
 		$uid = $this->session->getUser()?->getUID();
-		return $uid === null ? $this->json(['status' => 'unauthorized'], Http::STATUS_UNAUTHORIZED) : $this->json(['folders' => $this->folders->forUser($uid)]);
+		if ($uid === null) {
+			return $this->json(['status' => 'unauthorized'], Http::STATUS_UNAUTHORIZED);
+		}
+		try {
+			return $this->json(['folders' => $this->folders->forUser($uid)]);
+		} catch (ExclusionUnavailable) {
+			return $this->json(['status' => 'unavailable'], Http::STATUS_SERVICE_UNAVAILABLE);
+		}
 	}
 
 	#[NoAdminRequired]
@@ -45,7 +57,12 @@ class FileTextController extends Controller {
 		if ($uid === null) {
 			return $this->json(['status' => 'unauthorized'], Http::STATUS_UNAUTHORIZED);
 		}
-		return $this->text->reread($uid, $id) === 'queued' ? $this->json(['status' => 'queued']) : $this->json(['status' => 'forbidden'], Http::STATUS_FORBIDDEN);
+		try {
+			$queued = $this->text->reread($uid, $id) === 'queued';
+		} catch (ExclusionUnavailable) {
+			return $this->json(['status' => 'unavailable'], Http::STATUS_SERVICE_UNAVAILABLE);
+		}
+		return $queued ? $this->json(['status' => 'queued']) : $this->json(['status' => 'forbidden'], Http::STATUS_FORBIDDEN);
 	}
 
 	/** @param array<string, mixed> $data */

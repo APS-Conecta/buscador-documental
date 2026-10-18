@@ -42,7 +42,7 @@ describe('Texto reconocido tab', () => {
 	})
 
 	it('shows the uncertain-reading warning and page headings', async () => {
-		const el = await tab({ status: 'indexed', truncated: true, pages: [{ page_no: 1, text: 'a', ocr_conf: 40 }, { page_no: 2, text: 'b', ocr_conf: 50 }] })
+		const el = await tab({ status: 'indexed', truncated: true, pages: [{ page_no: 1, text: 'a', ocr_conf: 40, uncertain: true }, { page_no: 2, text: 'b', ocr_conf: 50, uncertain: true }] })
 		const text = el.shadowRoot.textContent
 		expect(text).toContain('Lectura incierta (45 %)')
 		expect(text).toContain('Página 2')
@@ -75,7 +75,7 @@ describe('Texto reconocido tab', () => {
 	})
 
 	it('has no axe violations', async () => {
-		const el = await tab({ status: 'indexed', truncated: false, pages: [{ page_no: 1, text: 'texto', ocr_conf: 40 }] })
+		const el = await tab({ status: 'indexed', truncated: false, pages: [{ page_no: 1, text: 'texto', ocr_conf: 40, uncertain: true }] })
 		const host = document.createElement('div')
 		host.innerHTML = el.shadowRoot.innerHTML.replace(/<style>[\s\S]*?<\/style>/, '')
 		expect((await violations(host)).join('\n')).toBe('')

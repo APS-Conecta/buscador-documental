@@ -150,6 +150,27 @@ describe('SearchApp interaction', () => {
 		w.unmount()
 	})
 
+	it('a search cleared while it is in flight does not come back', async () => {
+		let slow
+		api.search.mockImplementationOnce(() => new Promise((r) => { slow = r }))
+		const w = await open('?q=uno')
+		await w.find('#bd-q').setValue('')
+		await w.find('form').trigger('submit')
+		await flushPromises()
+		slow(ok([hit(1)]))
+		await flushPromises()
+		expect(w.findAll('li.bd-card')).toHaveLength(0)
+		expect(w.text()).toContain('Escriba palabras o una pregunta')
+		w.unmount()
+	})
+
+	it('asks for exact words when meaning search is off, so no second warning is added', async () => {
+		api.search.mockResolvedValue(ok([hit(1)]))
+		const w = await open('?q=x&modo=mixta', { semantic: false, reason: 'no_profile', coverage: 0 })
+		expect(api.search.mock.calls[0][0].mode).toBe('exacta')
+		w.unmount()
+	})
+
 	it('ignores a slow answer that arrives after a newer search', async () => {
 		let slow
 		api.search.mockImplementationOnce(() => new Promise((r) => { slow = r })).mockResolvedValueOnce(ok([hit(2)]))

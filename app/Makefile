@@ -137,7 +137,7 @@ node-image:
 	docker build -q -f Dockerfile.node -t $(NODE_IMG) . >/dev/null
 
 npm-install: node-image
-	$(NODE) npm install --no-audit --no-fund
+	$(NODE) sh -c 'if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi'
 
 build-js: npm-install
 	$(NODE) sh -c 'npm run build && npm run size'

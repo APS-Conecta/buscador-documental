@@ -24,7 +24,7 @@ export class RecognisedText extends HTMLElement {
 	#seq = 0
 
 	connectedCallback() {
-		this.attachShadow({ mode: 'open' })
+		this.shadowRoot ?? this.attachShadow({ mode: 'open' })
 		this.#render({ kind: 'message', tone: 'info', text: 'Cargando…' }, true)
 		this.#load()
 	}
@@ -128,7 +128,8 @@ export class RecognisedText extends HTMLElement {
 		note.setAttribute('role', 'status')
 		note.textContent = r.status === 'queued' ? 'El documento se leerá de nuevo en unos minutos.'
 			: r.status === 'rate_limited' ? 'Demasiados intentos: espere un momento.'
-				: 'Solo la persona propietaria o un administrador puede pedir una nueva lectura.'
+				: r.status === 'unavailable' ? 'No se pudo pedir la lectura ahora. Intente de nuevo en unos minutos.'
+					: 'Solo la persona propietaria o un administrador puede pedir una nueva lectura.'
 		box.prepend(note)
 	}
 }

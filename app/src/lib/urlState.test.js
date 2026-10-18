@@ -16,6 +16,11 @@ describe('urlState', () => {
 		expect(s).toEqual({ ...DEFAULTS, q: 'a', types: ['pdf'] })
 	})
 
+	it('does not take inherited object keys for modes', () => {
+		expect(parseState('?modo=constructor').mode).toBe('mixta')
+		expect(parseState('?modo=toString').mode).toBe('mixta')
+	})
+
 	it('builds the request: relevance with a query, newest first without', () => {
 		expect(toRequest({ ...DEFAULTS, q: 'x' }).sort).toBe('relevance')
 		expect(toRequest({ ...DEFAULTS }).sort).toBe('modified_desc')

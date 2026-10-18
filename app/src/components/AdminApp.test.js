@@ -102,6 +102,16 @@ describe('AdminApp', () => {
 		w.unmount()
 	})
 
+	it('does not say an action worked when the server refused it', async () => {
+		api.pause.mockResolvedValue({ httpStatus: 412, message: 'CSRF check failed' })
+		const w = await open()
+		await button(w, 'Pausar lectura').trigger('click')
+		await flushPromises()
+		expect(w.text()).toContain('No se pudo completar la acción')
+		expect(w.text()).not.toContain('Lectura en pausa.')
+		w.unmount()
+	})
+
 	it('says so when the status cannot be loaded', async () => {
 		api.overview.mockResolvedValue({ status: 'unavailable' })
 		const w = mount(AdminApp)

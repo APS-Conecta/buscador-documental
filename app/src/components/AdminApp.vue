@@ -192,14 +192,14 @@ function say(text, type = 'info') {
 	messageType.value = type
 }
 
-async function load() {
+async function load(reloadList = true) {
 	const r = await api.overview()
 	if (r.status && !r.checks) {
 		loadFailed.value = true
 		return
 	}
 	data.value = r
-	await loadSkipped(true)
+	if (reloadList) await loadSkipped(true)
 }
 
 async function loadSkipped(reset) {
@@ -209,23 +209,29 @@ async function loadSkipped(reset) {
 	hasMore.value = r.items.length >= 50
 }
 
-async function act(call, ok) {
+async function act(call, ok, reloadList = true) {
 	busy.value = true
 	const r = await call()
 	busy.value = false
-	if (r.status === 'unavailable' || r.ok === false) {
+	if (r.status === 'unavailable' || r.ok === false || r.httpStatus >= 400) {
 		say('No se pudo completar la acción. Intente de nuevo.', 'error')
 		return false
 	}
 	say(ok, 'success')
-	await load()
+	await load(reloadList)
 	return true
 }
 
 const pause = () => act(() => api.pause(), 'Lectura en pausa.')
 const resume = () => act(() => api.resume(), 'Lectura reanudada.')
 const acknowledge = () => act(() => api.acknowledge(), 'Aviso confirmado.')
-const retry = (i) => act(() => api.retry(i.file_id), 'El documento se leerá de nuevo.')
+async function retry(i) {
+	const ok = await act(() => api.retry(i.file_id), 'El documento se leerá de nuevo.', false)
+	if (ok) {
+		items.value = items.value.filter((x) => x.file_id !== i.file_id)
+		if (reason.value && !data.value.skipped[reason.value]) { reason.value = ''; await loadSkipped(true) }
+	}
+}
 async function exclude() {
 	const rule = confirming.value
 	confirming.value = null

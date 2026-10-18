@@ -216,6 +216,16 @@ class SearcherPgTest extends DbTestCase {
 		$this->assertSame(['semantic' => false, 'reason' => 'not_validated', 'coverage' => 1.0], $this->searcher()->readiness(), 'the page learns only the aggregate state');
 	}
 
+	public function testTheUncertainFlagIsNotRevealedWhenTheSnippetIsWithheld(): void {
+		$this->boot();
+		$this->nodes[1] = [$this->node('f1.pdf', 'newer')];
+		$this->doc(1, ['u:b'], 'hemoglobina glicosilada borrosa', [1, 0, 0], etag: 'older');   // the index holds an older version than the node: no snippet
+		$this->app()->exec("UPDATE aps_search.page SET ocr_conf = 20, source = 'ocr' WHERE file_id = 1");
+		$hit = $this->searcher()->search('b', $this->req(['mode' => 'exacta']))['hits'][0];
+		$this->assertArrayNotHasKey('snippet', $hit);
+		$this->assertFalse($hit['uncertain'], 'what the page said about its reading is content, withheld with the snippet');
+	}
+
 	public function testHitsCarryPathDateOwnerAndTheUncertainFlagFromTheNodeTheCallerMayRead(): void {
 		$this->boot();
 		$this->doc(1, ['u:b'], 'hemoglobina glicosilada nitida', [1, 0, 0]);

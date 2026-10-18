@@ -185,13 +185,14 @@ function focusResults() {
 
 async function run(cursor = null, retried = false, moveFocus = false) {
 	if (!state.q) {
+		seq++                                              // a search still in flight must not bring its results back
 		result.value = EMPTY()
 		phase.value = 'idle'
 		return
 	}
 	const mine = ++seq
 	phase.value = 'loading'
-	const r = await api.search(toRequest(state, cursor))
+	const r = await api.search(toRequest(props.readiness.semantic ? state : { ...state, mode: 'exacta' }, cursor))
 	if (mine !== seq) {
 		return
 	}

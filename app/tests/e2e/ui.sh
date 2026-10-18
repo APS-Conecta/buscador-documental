@@ -32,7 +32,8 @@ for u in ui_a ui_b; do
 	$C exec -T --user www-data -e OC_PASS=ui-pass-12345 nextcloud php occ user:add --password-from-env $u >/dev/null
 done
 JOB=$($OCC background-job:list --class='OCA\BuscadorDocumental\Job\ProcessOutbox' --output=json | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["id"])')
-WORKLOG=$(mktemp /tmp/bd-s1-ui-work.XXXXXX); TMP=$(mktemp -d /tmp/bd-s1-ui.XXXXXX); trap 'rm -rf "$TMP" "$WORKLOG"' EXIT
+WORKLOG=$(mktemp /tmp/bd-s1-ui-work.XXXXXX); TMP=$(mktemp -d /tmp/bd-s1-ui.XXXXXX)
+trap 'rm -rf "$TMP" "$WORKLOG"; $OCC config:system:delete auth.bruteforce.protection.enabled >/dev/null 2>&1 || true' EXIT
 tick() { $OCC background-job:execute "$JOB" --force-execute >/dev/null; }
 work() { for _ in 1 2 3 4; do $C --profile worker run --rm --no-deps -T worker python3 main.py --once >>"$WORKLOG" 2>&1 || true; done; }
 

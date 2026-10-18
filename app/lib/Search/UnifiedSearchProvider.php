@@ -7,7 +7,6 @@ declare(strict_types=1);
 namespace OCA\BuscadorDocumental\Search;
 
 use OCA\BuscadorDocumental\Scope\ScopeRules;
-use OCA\BuscadorDocumental\Scope\Settings;
 use OCP\IL10N;
 use OCP\IURLGenerator;
 use OCP\IUser;
@@ -19,12 +18,18 @@ use Throwable;
 
 /**
  * The Nextcloud search bar: the five best documents by words (Exacta), through the same Searcher as the page, so the same live
- * permission recheck applies. Hidden while the index is paused or has no folders, so it never promises what it cannot find.
+ * permission recheck applies. Hidden while no folder is included, so it never promises what it cannot find; a pause only stops reading
+ * new documents, what is already read stays searchable.
  */
 class UnifiedSearchProvider implements IProvider {
 	public const LIMIT = 5;
 
-	public function __construct(private Searcher $searcher, private Settings $settings, private ScopeRules $rules, private IL10N $l, private IURLGenerator $urls) {
+	public function __construct(private Searcher $searcher, private ScopeRules $rules, private IL10N $l, private IURLGenerator $urls) {
+	}
+
+	/** The search bar shows sublines as text: drop the highlight tags and turn the server's escaping back into characters. */
+	public static function plain(string $snippet): string {
+		return html_entity_decode(strip_tags($snippet), ENT_QUOTES | ENT_HTML5, 'UTF-8');
 	}
 
 	public function getId(): string {
@@ -37,7 +42,7 @@ class UnifiedSearchProvider implements IProvider {
 
 	public function getOrder(string $route, array $routeParameters): ?int {
 		try {
-			if ($this->settings->isPaused() || $this->rules->all() === []) {
+			if ($this->rules->all() === []) {
 				return null;
 			}
 		} catch (Throwable) {
@@ -64,7 +69,7 @@ class UnifiedSearchProvider implements IProvider {
 			$entries[] = new SearchResultEntry(
 				'',
 				(string)$hit['title'],
-				(string)($hit['snippet'] ?? ''),
+				self::plain((string)($hit['snippet'] ?? '')),
 				$this->urls->linkToRouteAbsolute('files.viewcontroller.showFile', ['fileid' => (int)$hit['file_id']]),
 				'icon-search',
 			);

@@ -1,7 +1,7 @@
 import { REASON_PHRASES } from './admin.js'
 
 /** What the tab shows for each answer of /file/{id}/text. Pure: returns a description, the element renders it. */
-export function describe(answer, uncertainBelow = 60) {
+export function describe(answer) {
 	if (!answer || answer.status === 'unavailable') return { kind: 'message', tone: 'error', text: 'No se pudo cargar el texto. Intente de nuevo en unos minutos.' }
 	if (answer.status === 'not_found') return { kind: 'message', tone: 'info', text: 'No hay texto reconocido para este documento.' }
 	switch (answer.status) {
@@ -17,7 +17,7 @@ export function describe(answer, uncertainBelow = 60) {
 			pages: answer.pages,
 			truncated: answer.truncated,
 			confidence: avg === null ? null : Math.round(avg),
-			uncertain: avg !== null && avg < uncertainBelow,
+			uncertain: answer.pages.some((p) => p.uncertain === true),
 			reread: true,
 		}
 	}

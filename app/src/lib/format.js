@@ -1,9 +1,9 @@
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sept', 'oct', 'nov', 'dic']
 
 /** "12 sept 2026" from a Unix time in seconds (the server's modification time). */
-export function formatDate(seconds) {
-	const d = new Date(seconds * 1000)
-	return `${d.getUTCDate()} ${MESES[d.getUTCMonth()]} ${d.getUTCFullYear()}`
+export function formatDate(seconds, timeZone = 'America/Santiago') {
+	const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone, day: 'numeric', month: 'numeric', year: 'numeric' }).formatToParts(new Date(seconds * 1000)).map((p) => [p.type, p.value]))
+	return `${parts.day} ${MESES[Number(parts.month) - 1]} ${parts.year}`
 }
 
 /** Chilean thousands grouping with a no-break space: 1 214. */

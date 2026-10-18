@@ -64,7 +64,7 @@ class UiServicesTest extends DbTestCase {
 		$this->indexed(1);
 		$out = $this->fileText()->text('bob', 1);
 		$this->assertSame('indexed', $out['status']);
-		$this->assertSame([['page_no' => 1, 'text' => 'texto reconocido del documento', 'ocr_conf' => 88.0, 'source' => 'ocr']], $out['pages']);
+		$this->assertSame([['page_no' => 1, 'text' => 'texto reconocido del documento', 'ocr_conf' => 88.0, 'source' => 'ocr', 'uncertain' => false]], $out['pages']);
 		$this->assertFalse($out['truncated']);
 	}
 
@@ -199,5 +199,33 @@ class UiServicesTest extends DbTestCase {
 		$db = $this->db();
 		$list = (new \OCA\BuscadorDocumental\Ui\FolderList(new ScopeRules($db, new AuditLog($db, new Pseudonyms($db))), $this->recheck()))->forUser('alice');
 		$this->assertSame([['id' => 11, 'path' => '/Informes/Informes']], $list);
+	}
+
+	public function testPolicySkipsShowNothingToRetryAndPagesCarryTheServersUncertainFlag(): void {
+		$a = $this->app();
+		$a->exec("INSERT INTO aps_search.file_state (file_id, etag, text_state, skip_reason) VALUES (30, 'e1', 'skipped', 'out_of_scope')");
+		$this->nodes[30] = [$this->node('a.pdf')];
+		$this->assertSame(['status' => 'none'], $this->fileText()->text('alice', 30));
+		$this->indexed(31, 'e1', 'texto borroso', 20.0);
+		$out = $this->fileText()->text('alice', 31);
+		$this->assertTrue($out['pages'][0]['uncertain']);
+	}
+
+	public function testTruncationIsReportedForTooManyPagesAndTheTextIsCutInTheDatabase(): void {
+		$a = $this->app();
+		$this->indexed(32, 'e1', 'uno');
+		$a->exec("INSERT INTO aps_search.page (file_id, page_no, text, source) SELECT 32, g, 'x', 'layer' FROM generate_series(2, 1001) g");
+		$out = $this->fileText()->text('alice', 32);
+		$this->assertCount(1000, $out['pages']);
+		$this->assertTrue($out['truncated'], 'a 1001-page file says it is cut');
+		$this->indexed(33, 'e1', str_repeat('a', FileText::MAX_CHARS + 500));
+		$big = $this->fileText()->text('alice', 33);
+		$this->assertTrue($big['truncated']);
+		$this->assertSame(FileText::MAX_CHARS, mb_strlen($big['pages'][0]['text']));
+	}
+
+	public function testTheSkippedCountsNeedNoFileToBeLookedAt(): void {
+		$this->app()->exec("INSERT INTO aps_search.file_state (file_id, etag, text_state, skip_reason) VALUES (1, 'e', 'skipped', 'encrypted'), (2, 'e', 'skipped', 'excluded')");
+		$this->assertSame(['encrypted' => 1], $this->actions()->skippedCounts());
 	}
 }

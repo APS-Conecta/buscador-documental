@@ -19,10 +19,10 @@ suite('describe (Files tab states)', () => {
 	})
 
 	it('flags an uncertain reading from the average confidence', () => {
-		const d = describe({ status: 'indexed', truncated: false, pages: [{ page_no: 1, text: 'a', ocr_conf: 40 }, { page_no: 2, text: 'b', ocr_conf: 70 }] })
+		const d = describe({ status: 'indexed', truncated: false, pages: [{ page_no: 1, text: 'a', ocr_conf: 40, uncertain: true }, { page_no: 2, text: 'b', ocr_conf: 70, uncertain: false }] })
 		expect(d.confidence).toBe(55)
 		expect(d.uncertain).toBe(true)
-		expect(describe({ status: 'indexed', pages: [{ page_no: 1, text: 'a', ocr_conf: 90 }] }).uncertain).toBe(false)
+		expect(describe({ status: 'indexed', pages: [{ page_no: 1, text: 'a', ocr_conf: 90, uncertain: false }] }).uncertain).toBe(false)
 		expect(describe({ status: 'indexed', pages: [{ page_no: 1, text: 'a', ocr_conf: null }] }).confidence).toBeNull()
 	})
 

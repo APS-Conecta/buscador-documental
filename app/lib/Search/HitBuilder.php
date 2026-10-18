@@ -71,7 +71,8 @@ class HitBuilder {
 				$hit['path'] = self::relativePath($r->node);
 				$hit['mtime'] = (int)$r->node->getMTime();
 				$hit['owner'] = self::ownerName($r->node);
-				$c = $conf[(int)$row['chunk_id']] ?? null;
+				// How well the matched page was read is part of its content: it travels with the snippet, never alone.
+				$c = $this->snippetServable($row, $r) ? ($conf[(int)$row['chunk_id']] ?? null) : null;
 				$hit['uncertain'] = $c !== null && $c < $uncertainBelow;
 			}
 			$chunk = $chunks[(int)$row['chunk_id']] ?? null;
