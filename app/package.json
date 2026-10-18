@@ -1,0 +1,39 @@
+{
+	"name": "buscador_documental",
+	"description": "Búsqueda de texto completo en los documentos de la organización, dentro de Nextcloud",
+	"version": "0.1.0",
+	"license": "AGPL-3.0-or-later",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "vite --mode production build",
+		"dev": "vite --mode development build",
+		"test": "vitest run",
+		"size": "node tools/check-size.mjs"
+	},
+	"browserslist": [
+		"extends @nextcloud/browserslist-config"
+	],
+	"dependencies": {
+		"@nextcloud/axios": "^2.5.1",
+		"@nextcloud/initial-state": "^3.0.0",
+		"@nextcloud/router": "^3.0.1",
+		"@nextcloud/vue": "^9.8.2",
+		"vue": "^3.5.35"
+	},
+	"devDependencies": {
+		"@nextcloud/browserslist-config": "^3.1.2",
+		"@nextcloud/vite-config": "^2.5.4",
+		"@vitejs/plugin-vue": "^6.0.1",
+		"@vue/test-utils": "^2.4.6",
+		"axe-core": "^4.10.3",
+		"jsdom": "^26.1.0",
+		"typescript": "^5.9.3",
+		"vite": "^7.3.6",
+		"vitest": "^4.1.10"
+	},
+	"engines": {
+		"node": "^24.0.0",
+		"npm": "^11.3.0"
+	}
+}
