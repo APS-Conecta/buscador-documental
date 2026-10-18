@@ -216,6 +216,17 @@ class SearcherPgTest extends DbTestCase {
 		$this->assertSame(['semantic' => false, 'reason' => 'not_validated', 'coverage' => 1.0], $this->searcher()->readiness(), 'the page learns only the aggregate state');
 	}
 
+	public function testTheFolderFilterOnlyAcceptsFoldersThePersonCanRead(): void {
+		$this->boot();
+		$this->doc(1, ['u:b'], 'hemoglobina glicosilada', [1, 0, 0]);          // its ancestors are [1]; node 1 is readable in this fixture
+		$this->app()->exec('UPDATE aps_search.file_meta SET ancestors = ARRAY[1, 4242]::bigint[] WHERE file_id = 1');   // 4242: the owner's folder, not readable here
+		$ok = $this->searcher()->search('b', $this->req(['mode' => 'exacta', 'filters' => ['folder_id' => 1]]));
+		$this->assertSame([1], $this->ids($ok));
+		$probe = $this->searcher()->search('b', $this->req(['mode' => 'exacta', 'filters' => ['folder_id' => 4242]]));
+		$this->assertSame([], $this->ids($probe), 'an unreadable folder id answers like a folder with no matches');
+		$this->assertSame('ok', $probe['status']);
+	}
+
 	public function testTheUncertainFlagIsNotRevealedWhenTheSnippetIsWithheld(): void {
 		$this->boot();
 		$this->nodes[1] = [$this->node('f1.pdf', 'newer')];
