@@ -42,5 +42,7 @@
         <command>OCA\BuscadorDocumental\Command\Profile</command>
         <command>OCA\BuscadorDocumental\Command\Window</command>
         <command>OCA\BuscadorDocumental\Command\Throttle</command>
+        <command>OCA\BuscadorDocumental\Command\Doctor</command>
+        <command>OCA\BuscadorDocumental\Command\RotateSecret</command>
     </commands>
 </info>

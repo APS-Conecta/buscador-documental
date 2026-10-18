@@ -70,11 +70,20 @@ class WorkerAuth {
 		if (strlen($secret) < 32) {
 			throw new WorkerAuthException('secret_not_configured');
 		}
-		$expected = self::sign($secret, self::signedString(
+		$signed = self::signedString(
 			$r['method'], $r['path'], $r['query'], $r['range'], $r['ifMatch'],
 			$workerId, $r['body'], $ts, $r['nonce'], $r['jobId'], $r['epoch'],
-		));
-		if (!hash_equals($expected, $mac)) {
+		);
+		$ok = hash_equals(self::sign($secret, $signed), $mac);
+		if (!$ok) {
+			// After a rotation the previous secret still works until its expiry, so a running worker is not cut off (ADR-0015).
+			$prev = $this->config->getValueString(self::APP_ID, 'worker_secret_prev', '');
+			$until = $this->config->getValueString(self::APP_ID, 'worker_secret_prev_until', '');
+			if (strlen($prev) >= 32 && preg_match('/^[0-9]{1,12}$/', $until) === 1 && (int)$until > $this->time->getTime()) {
+				$ok = hash_equals(self::sign($prev, $signed), $mac);
+			}
+		}
+		if (!$ok) {
 			throw new WorkerAuthException('bad_mac');
 		}
 		$this->rememberNonce($workerId, $r['nonce']);

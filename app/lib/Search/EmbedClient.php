@@ -109,6 +109,30 @@ class EmbedClient {
 		return ['digest' => $digest, 'dim' => count($unit)];
 	}
 
+	/**
+	 * The digest the endpoint reports for a model, for the health check (no embedding is computed).
+	 *
+	 * @throws ProbeFailed not_configured, unreachable or model_not_found
+	 */
+	public function currentDigest(string $model, int $timeoutMs): string {
+		$base = $this->endpoint() ?? throw new ProbeFailed('not_configured');
+		try {
+			$r = $this->http->newClient()->get($base . '/api/tags', $this->options($timeoutMs));
+			$data = $r->getStatusCode() === 200 ? json_decode((string)$r->getBody(), true) : null;
+		} catch (Throwable) {
+			throw new ProbeFailed('unreachable');
+		}
+		if (!is_array($data)) {
+			throw new ProbeFailed('unreachable');
+		}
+		foreach ($data['models'] ?? [] as $m) {
+			if (is_array($m) && ($m['name'] ?? null) === $model && ($m['digest'] ?? '') !== '') {
+				return (string)$m['digest'];
+			}
+		}
+		throw new ProbeFailed('model_not_found');
+	}
+
 	private function endpoint(): ?string {
 		$url = trim($this->config->getValueString(self::APP, 'embed_url', ''));
 		$parts = parse_url($url);
