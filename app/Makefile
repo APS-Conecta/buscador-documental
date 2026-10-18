@@ -9,7 +9,7 @@ NET := bd-s1_default
 DOCKER := docker run --rm -v "$(CURDIR)":/app -w /app $(IMG)
 DOCKER_NET := docker run --rm --network $(NET) -v "$(CURDIR)":/app -w /app -e BD_PG_HOST=db $(IMG)
 
-.PHONY: instance-reset-schema test-e2e-rbac test-e2e-logs bench-reconcile test-e2e-reconcile test-e2e-erasure test-e2e-events test-e2e-scope test-e2e-groupfolder test-e2e-formats test-e2e-one test-e2e-ui test-contract test-search test-canary build-test-image deps test-unit test-db up down clean instance-migrate node-image npm-install build-js test-js check-js-drift
+.PHONY: instance-reset-schema test-e2e-rbac test-e2e-logs bench-reconcile test-e2e-reconcile test-e2e-erasure test-e2e-events test-e2e-scope test-e2e-groupfolder test-e2e-formats test-e2e-one test-e2e-ui test-contract test-search test-canary build-test-image deps test-unit test-db up down clean instance-migrate release test-e2e-install node-image npm-install build-js test-js check-js-drift
 
 build-test-image:
 	docker build -q -f Dockerfile.test -t $(IMG) . >/dev/null
@@ -152,3 +152,15 @@ check-js-drift: build-js
 
 test-e2e-ui: build-js
 	bash tests/e2e/ui.sh
+
+# Release tarball (A-OPS-5): tracked runtime files only, in a top-level buscador_documental/ folder as the app store expects.
+VERSION := $(shell sed -n 's:.*<version>\(.*\)</version>.*:\1:p' appinfo/info.xml | head -1)
+release: check-js-drift
+	rm -rf dist && mkdir -p dist
+	cd $(ROOT) && git ls-files app/appinfo app/lib app/templates app/img app/js app/css app/openapi app/ops LICENSE THIRD-PARTY-NOTICES.md | grep -v '\.map$$' > app/dist/files.txt
+	cd $(ROOT) && tar --transform 's,^app/,buscador_documental/,;s,^LICENSE$$,buscador_documental/LICENSE,;s,^THIRD-PARTY-NOTICES.md$$,buscador_documental/THIRD-PARTY-NOTICES.md,' -czf app/dist/buscador_documental-$(VERSION).tar.gz -T app/dist/files.txt
+	cd dist && sha256sum buscador_documental-$(VERSION).tar.gz > buscador_documental-$(VERSION).tar.gz.sha256 && rm -f files.txt
+	@ls -l dist
+
+test-e2e-install: release
+	bash tests/e2e/install.sh

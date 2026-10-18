@@ -73,3 +73,26 @@ jobs:
         run: docker compose -f compose.yaml logs --no-color --tail=200
       - run: make -C app clean
         if: always()
+
+  install:
+    name: install (release tarball on a clean Nextcloud 34)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    needs: [php, worker, js]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - run: make -C app test-e2e-install
+      - run: docker compose -f compose.install.yaml --profile worker down -v --remove-orphans
+        if: always()
+
+  nc35:
+    name: nc35 (same install on Nextcloud 35, not blocking)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    continue-on-error: true
+    needs: [php, worker, js]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - run: NC_IMAGE=nextcloud:35-apache NC_FORCE=1 make -C app test-e2e-install
+      - run: docker compose -f compose.install.yaml --profile worker down -v --remove-orphans
+        if: always()
