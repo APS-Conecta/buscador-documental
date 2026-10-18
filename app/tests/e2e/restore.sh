@@ -98,6 +98,12 @@ DBX cp /tmp/x.bak.sha256 /tmp/x.sha.keep; DBX rm -f /tmp/x.bak.sha256
 BAD=$(DBX bash /tmp/restore.sh /tmp/x.bak bd_restore_test 2>&1 || true); grep -q "checksum file" <<<"$BAD" || die "a backup without its checksum was accepted: $BAD"
 DBX mv /tmp/x.sha.keep /tmp/x.bak.sha256
 ok "a backup without its checksum file is refused"
+# a backup of another schema version is refused (the live schema here is the version the script supports)
+$PSQL -c "UPDATE aps_search.schema_meta SET schema_ver = 99" >/dev/null
+DBX bash /tmp/backup.sh /tmp/newer.bak >/dev/null
+$PSQL -c "UPDATE aps_search.schema_meta SET schema_ver = 5" >/dev/null
+BAD=$(DBX bash /tmp/restore.sh /tmp/newer.bak bd_restore_test2 2>&1 || true); grep -q "holds schema version 99" <<<"$BAD" || die "a backup of a newer schema was not refused: $BAD"
+ok "a backup of a newer schema version is refused before anything is created"
 # a file altered by someone WITHOUT the key is refused even if they recompute the plain checksum
 DBX sh -c 'cp /tmp/x.bak /tmp/t.bak && printf "\x01" | dd of=/tmp/t.bak bs=1 seek=100 conv=notrunc 2>/dev/null && sha256sum /tmp/t.bak | cut -d" " -f1 > /tmp/t.bak.sha256 && cp /tmp/x.bak.hmac /tmp/t.bak.hmac'
 BAD=$(DBX bash /tmp/restore.sh /tmp/t.bak bd_restore_test 2>&1 || true); grep -q "keyed checksum does not match" <<<"$BAD" || die "an altered backup with a recomputed plain checksum was accepted: $BAD"

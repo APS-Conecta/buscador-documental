@@ -9,7 +9,7 @@ NET := bd-s1_default
 DOCKER := docker run --rm -v "$(CURDIR)":/app -w /app $(IMG)
 DOCKER_NET := docker run --rm --network $(NET) -v "$(CURDIR)":/app -w /app -e BD_PG_HOST=db $(IMG)
 
-.PHONY: instance-reset-schema test-e2e-rbac test-e2e-logs bench-reconcile test-e2e-reconcile test-e2e-erasure test-e2e-events test-e2e-scope test-e2e-groupfolder test-e2e-formats test-e2e-one test-e2e-ui test-contract test-search test-canary build-test-image deps test-unit test-db up down clean instance-migrate release test-e2e-install node-image npm-install build-js test-js check-js-drift
+.PHONY: instance-reset-schema test-e2e-rbac test-e2e-logs bench-reconcile test-e2e-reconcile test-e2e-erasure test-e2e-events test-e2e-scope test-e2e-groupfolder test-e2e-formats test-e2e-one test-e2e-ui test-e2e-failures test-contract test-search test-canary build-test-image deps test-unit test-db up down clean instance-migrate release test-e2e-install node-image npm-install build-js test-js check-js-drift
 
 build-test-image:
 	docker build -q -f Dockerfile.test -t $(IMG) . >/dev/null
@@ -164,3 +164,6 @@ release: check-js-drift
 
 test-e2e-install: release
 	bash tests/e2e/install.sh
+
+test-e2e-failures:
+	bash tests/e2e/failures.sh

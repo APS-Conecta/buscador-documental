@@ -15,6 +15,9 @@ set -euo pipefail
 IN=${1:?usage: restore.sh IN.bak TARGET_DATABASE}
 DB=${2:?usage: restore.sh IN.bak TARGET_DATABASE}
 KEY=${BD_BACKUP_KEY_FILE:?set BD_BACKUP_KEY_FILE to the file holding the encryption key}
+# The schema version this script (and the app that ships it) writes and reads. A backup of any other version is refused: restore
+# it with the app version that made it, then upgrade the app (a newer schema would be read by code that does not know it).
+SUPPORTED_SCHEMA=5
 fail() { echo "restore: $*" >&2; exit 2; }
 [ -f "$IN" ] || fail "the backup file does not exist"
 [ -f "$KEY" ] && [ ! -L "$KEY" ] || fail "the key file does not exist (or is a symbolic link)"
@@ -36,6 +39,9 @@ BD_BACKUP_PASS=$(openssl dgst -sha256 -r < "$KEY" | cut -d' ' -f1)
 export BD_BACKUP_PASS
 openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -pass env:BD_BACKUP_PASS < "$IN" > "$TMP" 2>/dev/null || fail "cannot decrypt: wrong key or damaged backup"
 TOC=$(pg_restore -l "$TMP" 2>/dev/null) || fail "the decrypted data is not a valid backup: wrong key or damaged backup"
+
+DUMP_VER=$(pg_restore -a -n aps_search -t schema_meta -f - "$TMP" 2>/dev/null | awk '/^COPY /{f=1; next} f{print $1; exit}')
+[ "$DUMP_VER" = "$SUPPORTED_SCHEMA" ] || fail "the backup holds schema version ${DUMP_VER:-unknown} and this restore script supports version $SUPPORTED_SCHEMA: restore it with the app version that made it, then upgrade"
 
 q() { psql -qAt -d "$DB" -c "$1"; }
 [ "$(q "select 1 from pg_database where datname = current_database()")" = 1 ] || fail "cannot connect to the target database"
