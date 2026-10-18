@@ -128,6 +128,15 @@ class WorkerFunctionsTest extends DbTestCase {
 		$this->assertSame(0, $this->rowCount('page'));
 	}
 
+	public function testALeaseOnTheVectorLaneDoesNotOpenTheFileBytes(): void {
+		$this->seedFile(10);
+		$a = $this->app();
+		$a->exec("INSERT INTO aps_search.job (lane, file_id, idem_key, claimed_by, claimed_etag, lease_epoch, lease_until, gen) VALUES ('vec', 10, '10:e1:1', 'w1', 'e1', 1, now() + interval '5 minutes', 1)");
+		$jobId = (int)$a->query("SELECT id FROM aps_search.job WHERE lane = 'vec'")->fetchColumn();
+		$guard = new \OCA\BuscadorDocumental\Worker\ClaimGuard(new \OCA\BuscadorDocumental\Db\IndexDb($this->connection($a)));
+		$this->assertNull($guard->activeClaim('w1', $jobId, 1, 10), 'only the text lane reads the file bytes through the channel');
+	}
+
 	public function testConcurrencyCapIsFourActiveClaimsPerWorker(): void {
 		for ($i = 1; $i <= 6; $i++) {
 			$this->seedFile($i);

@@ -18,8 +18,8 @@ class ClaimGuard {
 	/** @return array{etag:string}|null null when there is no such active claim */
 	public function activeClaim(string $workerId, int $jobId, int $epoch, int $fileId): ?array {
 		$rows = $this->db->rows(
-			'SELECT claimed_etag FROM aps_search.job
-			 WHERE id = ? AND file_id = ? AND claimed_by = ? AND lease_epoch = ? AND lease_until > clock_timestamp()',
+			"SELECT claimed_etag FROM aps_search.job
+			 WHERE id = ? AND lane = 'text' AND file_id = ? AND claimed_by = ? AND lease_epoch = ? AND lease_until > clock_timestamp()",
 			[$jobId, $fileId, $workerId, $epoch],
 		);
 		return $rows === [] ? null : ['etag' => (string)$rows[0]['claimed_etag']];
