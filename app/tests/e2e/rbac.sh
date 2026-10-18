@@ -24,7 +24,7 @@ $OCC config:app:set buscador_documental worker_secret --value="$SECRET" --sensit
 $C exec -T nextcloud chown www-data:www-data /var/www/html/custom_apps
 $OCC app:list 2>/dev/null | grep -q groupfolders || $OCC app:install groupfolders >/dev/null
 $OCC app:enable groupfolders >/dev/null 2>&1 || true
-$PSQL -c "TRUNCATE aps_search.job, aps_search.page, aps_search.chunk, aps_search.file_state, aps_search.file_meta, aps_search.file_acl, aps_search.outbox, aps_search.tombstone, aps_search.scope_rule, aps_search.audit_log, aps_search.settings, aps_search.pseudonym, aps_search.reconcile_run, aps_search.reconcile_node RESTART IDENTITY"
+$PSQL -c "TRUNCATE aps_search.job, aps_search.page, aps_search.chunk, aps_search.file_state, aps_search.file_meta, aps_search.file_acl, aps_search.outbox, aps_search.tombstone, aps_search.scope_rule, aps_search.audit_log, aps_search.settings, aps_search.pseudonym, aps_search.reconcile_run, aps_search.reconcile_node RESTART IDENTITY CASCADE"
 $C --profile worker build worker >/dev/null
 $C --profile worker up -d --wait parser >/dev/null
 for id in $($PSQL -c "select id from oc_systemtag where name = 'rag-excluded'"); do $OCC tag:delete "$id" >/dev/null; done

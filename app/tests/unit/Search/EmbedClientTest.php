@@ -12,7 +12,7 @@ use OCP\Http\Client\IClientService;
 use OCP\Http\Client\IResponse;
 use OCP\ICache;
 use OCP\ICacheFactory;
-use OCP\IConfig;
+use OCP\IAppConfig;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 
@@ -41,8 +41,8 @@ class EmbedClientTest extends TestCase {
 		}
 		$svc = $this->createMock(IClientService::class);
 		$svc->method('newClient')->willReturn($http);
-		$cfg = $this->createMock(IConfig::class);
-		$cfg->method('getAppValue')->willReturnCallback(static fn (string $app, string $key, string $default = ''): string => (string)($config[$key] ?? $default));
+		$cfg = $this->createMock(IAppConfig::class);
+		$cfg->method('getValueString')->willReturnCallback(static fn (string $app, string $key, string $default = '', bool $lazy = false): string => (string)($config[$key] ?? $default));
 		$store = [];
 		$cache = $this->createMock(ICache::class);
 		$cache->method('get')->willReturnCallback(static function ($k) use (&$store) { return $store[$k] ?? null; });
@@ -135,5 +135,46 @@ class EmbedClientTest extends TestCase {
 		$this->assertNotNull($good->embedQuery('y', self::PROFILE, 1000));
 		$gets = array_filter($this->calls, static fn ($c) => $c[0] === 'get');
 		$this->assertCount(1, $gets, 'one /api/tags call serves both queries');
+	}
+
+	public function testInspectReturnsTheDigestAndTheRealDimension(): void {
+		$c = $this->client($this->ok([0.0, 3.0, 4.0]));
+		$this->assertSame(['digest' => 'sha256:abc', 'dim' => 3], $c->inspect('bge-m3:567m', 8192, 'prueba', 3000));
+	}
+
+	/** @dataProvider probeFailures */
+	public function testInspectNamesWhatWentWrongWithoutLeakingAnything(callable $answer, array $config, string $reason): void {
+		$c = $this->client($answer, $config);
+		try {
+			$c->inspect('bge-m3:567m', 8192, 'prueba', 3000);
+			$this->fail('should have failed');
+		} catch (\OCA\BuscadorDocumental\Search\ProbeFailed $e) {
+			$this->assertSame($reason, $e->reason);
+			$this->assertStringNotContainsString('ollama', $e->getMessage());
+		}
+	}
+
+	public static function probeFailures(): array {
+		return [
+			'not configured' => [static fn () => throw new \LogicException('never called'), ['embed_url' => ''], 'not_configured'],
+		];
+	}
+
+	public function testInspectReasonsForUnreachableMissingModelAndBadAnswer(): void {
+		$down = $this->client(static function (): IResponse { throw new \RuntimeException('down http://ollama:11434'); });
+		$this->assertSame('unreachable', $this->reasonOf($down));
+		$missing = $this->client(fn (string $m): IResponse => $this->response(200, ['models' => [['name' => 'otro:1b', 'digest' => 'x']]]));
+		$this->assertSame('model_not_found', $this->reasonOf($missing));
+		$bad = $this->client(fn (string $m): IResponse => $m === 'get' ? $this->response(200, ['models' => [['name' => 'bge-m3:567m', 'digest' => 'sha256:abc']]]) : $this->response(200, ['embeddings' => 'x']));
+		$this->assertSame('bad_answer', $this->reasonOf($bad));
+	}
+
+	private function reasonOf(EmbedClient $c): string {
+		try {
+			$c->inspect('bge-m3:567m', 8192, 'prueba', 3000);
+		} catch (\OCA\BuscadorDocumental\Search\ProbeFailed $e) {
+			return $e->reason;
+		}
+		return 'no failure';
 	}
 }

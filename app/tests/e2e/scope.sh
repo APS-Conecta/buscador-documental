@@ -18,7 +18,7 @@ expect() { # expect <label> <substring> <command...>: the command's combined out
 
 $C up -d --build --wait
 $OCC app:enable buscador_documental >/dev/null
-$PSQL -c "TRUNCATE aps_search.scope_rule, aps_search.audit_log, aps_search.settings, aps_search.pseudonym RESTART IDENTITY"
+$PSQL -c "TRUNCATE aps_search.scope_rule, aps_search.audit_log, aps_search.settings, aps_search.pseudonym RESTART IDENTITY CASCADE"
 $C exec -T --user www-data -e OC_PASS=scope-pass-12345 nextcloud php occ user:add --password-from-env scope_a >/dev/null 2>&1 || true
 $C exec -T --user www-data nextcloud mkdir -p /var/www/html/data/scope_a/files/Informes/2026
 $C exec -T --user www-data nextcloud bash -c 'echo hola > /var/www/html/data/scope_a/files/Informes/2026/a.txt; echo chao > /var/www/html/data/scope_a/files/suelto.txt'

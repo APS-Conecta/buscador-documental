@@ -17,7 +17,8 @@ class StatusReport {
 	/**
 	 * @return array{mode: string, paused: bool, notice_ack_at: ?string, jobs: array{queued: int, claimed: int},
 	 *               states: array<string, int>, skipped: array<string, int>, outbox: array{pending: int, parked: int},
-	 *               acl_backlog_seconds: ?int, last_reconcile: ?array{finished_at: string, counts: array}}
+	 *               acl_backlog_seconds: ?int, last_reconcile: ?array{finished_at: string, counts: array},
+	 *               vectors: array{generations: list<array{gen: int, profile: string, state: string, coverage: float}>, queued: int, failed: int}}
 	 */
 	public function snapshot(): array {
 		$settings = new Settings($this->db);
@@ -38,8 +39,21 @@ class StatusReport {
 			'skipped' => $this->counts("SELECT skip_reason AS k, count(*) AS n FROM aps_search.file_state WHERE text_state = 'skipped' AND skip_reason IS NOT NULL GROUP BY 1 ORDER BY 1"),
 			'outbox' => ['pending' => (int)$outbox['pending'], 'parked' => (int)$outbox['parked']],
 			'acl_backlog_seconds' => $backlog === null ? null : (int)round((float)$backlog),
+			'vectors' => $this->vectors($settings),
 			'last_reconcile' => $last === [] ? null : ['finished_at' => (string)$last[0]['finished_at'], 'counts' => json_decode((string)$last[0]['counts'], true, 8, JSON_THROW_ON_ERROR)],
 		];
+	}
+
+	/** @return array{generations: list<array{gen: int, profile: string, state: string, coverage: float}>, queued: int, failed: int} */
+	private function vectors(Settings $settings): array {
+		$gens = [];
+		foreach ($this->db->rows("SELECT gen, profile_id, state FROM aps_search.embedding_profile WHERE state <> 'retired' ORDER BY gen") as $g) {
+			$gens[] = ['gen' => (int)$g['gen'], 'profile' => (string)$g['profile_id'], 'state' => (string)$g['state'], 'coverage' => (float)($settings->get('vec_coverage_' . $g['gen']) ?? 0)];
+		}
+		$n = $this->db->rows("SELECT
+			(SELECT count(*) FROM aps_search.job WHERE lane = 'vec') AS queued,
+			(SELECT count(*) FROM aps_search.file_state WHERE vec_state = 'failed') AS failed")[0];
+		return ['generations' => $gens, 'queued' => (int)$n['queued'], 'failed' => (int)$n['failed']];
 	}
 
 	/** @return array<string, int> */

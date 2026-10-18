@@ -15,6 +15,7 @@ declare(strict_types=1);
  *   php ctl.php acl <fileId>             write file_acl for the file (the S3 listener is a stub)
  *   php ctl.php erase <fileId> <reason>
  *   php ctl.php search <uid> <query>     prints {"status","message","hits","dropped"}
+ *   php ctl.php api <uid> <json body>    the S4 search API: prints the Searcher result as JSON
  */
 
 use OCA\BuscadorDocumental\Acl\PrincipalWriter;
@@ -106,6 +107,17 @@ switch ($cmd) {
 
 	case 'erase':
 		Server::get(IndexEraser::class)->erase((int)$argv[2], $argv[3] ?? 'excluded');
+		break;
+
+	case 'api':
+		try {
+			$request = \OCA\BuscadorDocumental\Search\SearchRequest::fromArray(json_decode($argv[3], true, 16, JSON_THROW_ON_ERROR));
+		} catch (\OCA\BuscadorDocumental\Search\InvalidSearch $e) {       // Nextcloud's own handler would swallow the exit code
+			fwrite(STDERR, 'invalid: ' . $e->getMessage() . "\n");
+			exit(3);
+		}
+		$out = Server::get(\OCA\BuscadorDocumental\Search\Searcher::class)->search($argv[2], $request);
+		echo json_encode($out, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), "\n";
 		break;
 
 	case 'search':

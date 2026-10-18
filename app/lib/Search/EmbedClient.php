@@ -9,7 +9,7 @@ namespace OCA\BuscadorDocumental\Search;
 use OCP\Http\Client\IClientService;
 use OCP\ICache;
 use OCP\ICacheFactory;
-use OCP\IConfig;
+use OCP\IAppConfig;
 use Psr\Log\LoggerInterface;
 use Throwable;
 
@@ -25,7 +25,7 @@ class EmbedClient {
 
 	public function __construct(
 		private IClientService $http,
-		private IConfig $config,
+		private IAppConfig $config,
 		ICacheFactory $cacheFactory,
 		private LoggerInterface $logger,
 	) {
@@ -68,8 +68,49 @@ class EmbedClient {
 		}
 	}
 
+	/**
+	 * What the administrator's setup command needs: the digest the endpoint reports for the model and the real vector size.
+	 *
+	 * @return array{digest: string, dim: int}
+	 * @throws ProbeFailed with a reason code, never the address or the token
+	 */
+	public function inspect(string $model, int $maxTokens, string $sample, int $timeoutMs): array {
+		$base = $this->endpoint();
+		if ($base === null) {
+			throw new ProbeFailed('not_configured');
+		}
+		$options = $this->options($timeoutMs);
+		try {
+			$tags = $this->http->newClient()->get($base . '/api/tags', $options);
+			$data = $tags->getStatusCode() === 200 ? json_decode((string)$tags->getBody(), true) : null;
+		} catch (Throwable) {
+			throw new ProbeFailed('unreachable');
+		}
+		$digest = null;
+		foreach (is_array($data) ? ($data['models'] ?? []) : [] as $m) {
+			if (is_array($m) && ($m['name'] ?? null) === $model) {
+				$digest = (string)($m['digest'] ?? '');
+			}
+		}
+		if ($digest === null || $digest === '') {
+			throw new ProbeFailed($data === null ? 'unreachable' : 'model_not_found');
+		}
+		try {
+			$body = json_encode(['model' => $model, 'input' => [$sample], 'truncate' => false, 'keep_alive' => -1, 'options' => ['num_ctx' => $maxTokens]], JSON_THROW_ON_ERROR);
+			$r = $this->http->newClient()->post($base . '/api/embed', $options + ['body' => $body]);
+			$vec = $r->getStatusCode() === 200 ? (json_decode((string)$r->getBody(), true)['embeddings'][0] ?? null) : null;
+		} catch (Throwable) {
+			throw new ProbeFailed('unreachable');
+		}
+		$unit = is_array($vec) ? $this->unit($vec, count($vec)) : null;
+		if ($unit === null) {
+			throw new ProbeFailed('bad_answer');
+		}
+		return ['digest' => $digest, 'dim' => count($unit)];
+	}
+
 	private function endpoint(): ?string {
-		$url = trim($this->config->getAppValue(self::APP, 'embed_url', ''));
+		$url = trim($this->config->getValueString(self::APP, 'embed_url', ''));
 		$parts = parse_url($url);
 		if ($parts === false || !isset($parts['scheme'], $parts['host']) || !in_array(strtolower($parts['scheme']), ['http', 'https'], true)
 			|| isset($parts['user']) || isset($parts['pass'])) {
@@ -81,7 +122,7 @@ class EmbedClient {
 	/** @return array<string, mixed> */
 	private function options(int $timeoutMs): array {
 		$headers = ['Content-Type' => 'application/json'];
-		$token = $this->config->getAppValue(self::APP, 'embed_token', '');
+		$token = $this->config->getValueString(self::APP, 'embed_token', '');
 		if ($token !== '') {
 			$headers['Authorization'] = 'Bearer ' . $token;
 		}

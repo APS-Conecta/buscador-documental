@@ -58,6 +58,9 @@ clean:
 test-e2e-one:
 	bash tests/e2e/one.sh
 
+test-e2e-vectors:
+	bash tests/e2e/vectors.sh
+
 # The adversarial permission matrix with the real mechanisms (circles, team-folder ACL, expiry, moves, multi-mount, deletion).
 test-e2e-rbac:
 	bash tests/e2e/rbac.sh

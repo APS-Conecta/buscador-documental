@@ -20,6 +20,7 @@ class Application extends App implements IBootstrap {
 
 	public function register(IRegistrationContext $context): void {
 		$context->registerService(\OCA\BuscadorDocumental\Search\Glossary::class, static fn () => \OCA\BuscadorDocumental\Search\Glossary::fromFile(__DIR__ . '/../Search/glossary.json'));
+		$context->registerService(\OCA\BuscadorDocumental\Search\ProfileCatalog::class, static fn () => \OCA\BuscadorDocumental\Search\ProfileCatalog::shipped());
 		$context->registerService(\OCA\BuscadorDocumental\Search\Cursor::class, static fn ($c) => new \OCA\BuscadorDocumental\Search\Cursor($c->get(\OCP\IConfig::class)->getSystemValueString('secret')));
 		foreach ([
 			\OCP\Files\Cache\CacheEntryInsertedEvent::class, \OCP\Files\Cache\CacheEntryUpdatedEvent::class,

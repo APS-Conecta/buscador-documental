@@ -98,7 +98,7 @@ services:
     pids_limit: 64
     mem_limit: 256m
     environment:
-      BD_STUB_DIM: "64"
+      BD_STUB_DIM: "1024"
       PYTHONDONTWRITEBYTECODE: "1"
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:11434/api/tags', timeout=2)"]
