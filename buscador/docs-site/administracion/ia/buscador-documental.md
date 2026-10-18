@@ -15,7 +15,7 @@ Borrador. El identificador `buscador` es provisional.
 Lee los documentos de las carpetas incluidas, reconoce el texto de escaneos y fotografías y permite buscarlos por palabras o por significado, respetando los permisos de Nextcloud en cada consulta.
 
 ## Requisitos
-Nextcloud 34, PostgreSQL con la extensión pgvector (versión 0.8 o posterior) y un contenedor de lectura (worker) con Tesseract. El perfil de significado se recomienda según el equipo (procesador, memoria, GPU opcional) y usted puede cambiarlo.
+Nextcloud 34, PostgreSQL con la extensión pgvector (versión 0.8 o posterior) y un contenedor de lectura (worker) con Tesseract. La búsqueda por significado necesita además un servidor Ollama con un modelo de lectura por significado (vea más abajo); sin él, el buscador funciona por palabras.
 
 ## Capacidad y tiempos (estimaciones)
 ```{note}
@@ -27,7 +27,7 @@ Para un millón de páginas:
 - **Memoria:** los índices y los vectores que se consultan a diario suman unos 7 GB; conviene que quepan en la memoria del servidor.
 - **Primera lectura:** unas 71 horas con los 8 núcleos dedicados, es decir, unas 9 noches de 8 horas si se limita a una ventana nocturna. La búsqueda por palabras queda disponible antes, tras unas 45 horas, y la búsqueda por significado se completa después.
 - **Reconocimiento de texto:** entre 2 y 3 segundos por página con el motor solo; en la medición de la etapa S2, con la comprobación de confianza y una página a la vez, unos 13 segundos por página leída desde imagen. Las páginas con una imagen del tamaño de un escaneo se leen siempre desde la imagen, aunque tengan texto; las fotografías y los escaneos torcidos tardan más.
-- **Perfil de lectura por significado:** en un servidor sin GPU se recomienda el perfil pequeño; el perfil grande no es apto para ese equipo.
+- **Lectura por significado (vectores):** medida con Ollama en CPU (4 núcleos, sin GPU) y fragmentos de unas 170 palabras, el modelo bge-m3 procesa **alrededor de 1 fragmento por segundo**. Eso son unas 83 horas para 100 000 páginas y unos 33 días para un millón de páginas; con 8 núcleos el tiempo debería reducirse a la mitad y una GPU lo reduce mucho más. Cada fragmento ocupa 2 kB de vectores, más el índice (unos 6 GB y 8 GB para 3 millones de fragmentos). La búsqueda por palabras no espera a los vectores. Consultar una frase por significado agrega unos 0,2 a 0,3 segundos para calcular su vector.
 
 ## Archivos que no se leen
 Cada archivo omitido queda con un motivo visible: **protegido con contraseña** (se necesita una contraseña para abrirlo; los PDF que solo tienen contraseña de edición sí se leen), **dañado**, **demasiado grande** (más de 250 MB, 300 páginas o 1 000 000 de celdas, o más fragmentos de los que admite el índice), **peligroso** (por ejemplo, un archivo comprimido que se expande de forma desmedida o una imagen de tamaño desproporcionado) y **formato no admitido**. Los archivos peligrosos se leen en un contenedor aislado, sin red, sin acceso a la base de datos ni a las claves del servicio y con memoria y procesos limitados. La lectura de cada archivo tiene un tiempo máximo; si se agota, el trabajo se reintenta y, tras cinco intentos, se omite con el motivo «interno».
@@ -57,8 +57,22 @@ Los permisos guardados en el índice solo preseleccionan resultados; cada result
 
 La comprobación de 50 resultados tarda unos 380 ms en el percentil 95 en la medición de la etapa S1 (el objetivo era 300 ms); la ADR-0010 acepta ese resultado.
 
-## Perfil de lectura por significado
-Se recomienda al instalar y no cambia solo. Para cambiarlo use la pantalla de administración o `occ buscador:profile`; el cambio prepara un índice nuevo y la búsqueda por palabras sigue funcionando.
+## Búsqueda por significado
+La búsqueda por significado y la mixta necesitan un servidor Ollama que usted instala y mantiene; el buscador no incluye ningún modelo. Puede estar en el mismo servidor o en otro de la red.
+
+1. En el servidor Ollama descargue el modelo: `ollama pull bge-m3:567m`. Los perfiles disponibles se ven con `occ buscador:profile list` (`bge-m3` y `qwen3-embedding-0.6b`).
+2. Registre el perfil: `occ buscador:profile set bge-m3 --url=http://servidor:11434`. Si el servidor exige un token, guárdelo en un archivo y use `--token-file=ruta` (se guarda cifrado). El comando comprueba que el modelo existe, anota su identificador y su tamaño de vector, y crea una **generación** de vectores.
+3. Los vectores se calculan en segundo plano, después de la lectura de texto. `occ buscador:status` y `occ buscador:profile show` muestran el avance (cobertura). `occ buscador:profile refresh` fuerza la medición.
+4. Cuando la cobertura llega al mínimo (95 % por omisión) la generación queda **lista** y se construye su índice. Nada cambia solo: para usarla ejecute `occ buscador:profile activate 1`.
+5. Active los modos con `occ buscador:profile semantic on`. Hágalo después de revisar los resultados con documentos reales: en la evaluación con texto sintético la búsqueda mixta superó a la de palabras y a la de significado, pero esa prueba debe repetirse con sus documentos. Con `semantic off` los modos se desactivan y el buscador vuelve a las palabras.
+
+Si cambia de modelo o el servidor Ollama actualiza el modelo con el mismo nombre, el identificador cambia: el proceso de lectura se detiene con el motivo «el modelo cambió» en lugar de mezclar vectores incompatibles, y usted debe registrar el perfil de nuevo (se crea una generación nueva; la anterior sigue sirviendo hasta que active la nueva y puede eliminarla después con `occ buscador:profile drop <generación>`).
+
+Mientras no haya un perfil activo, la cobertura sea baja o el servidor Ollama no responda, las búsquedas por significado y mixta muestran los resultados por palabras con un aviso; nunca devuelven una lista vacía por ese motivo.
+
+**Privacidad y seguridad.** El texto de los documentos y las consultas viajan al servidor Ollama que usted configuró. Si no está en el mismo servidor, use una dirección https detrás de un proxy que pida autenticación y que solo permita `/api/embed`, `/api/tags` y `/api/show` (Ollama no tiene autenticación propia). Eso debe constar en la evaluación de impacto. Nextcloud bloquea por omisión las conexiones a direcciones locales; el buscador las permite solo hacia la dirección que usted registró. Los registros no contienen la dirección, el token, las consultas ni el texto de los documentos.
+
+**Siglas y términos.** El buscador incluye un diccionario de unas 400 siglas de la atención primaria chilena (REM, HTA, CESFAM, EMPAM…). Al buscar una sigla también se busca su nombre completo y al revés. Las siglas ambiguas (por ejemplo SS o PCR) no se expanden.
 
 ## Respaldo, actualización y recuperación
 El respaldo debe incluir el esquema de búsqueda (contiene el texto reconocido). Procedimientos de instalación, actualización, reversión, reconstrucción y restauración: pendientes.
