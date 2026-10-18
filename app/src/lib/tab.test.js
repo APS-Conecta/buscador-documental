@@ -14,7 +14,7 @@ suite('describe (Files tab states)', () => {
 
 	it('explains a skipped file in plain words and offers a new reading', () => {
 		const d = describe({ status: 'skipped', reason: 'encrypted' })
-		expect(d.text).toContain('Protegido con contraseña')
+		expect(d.text).toBe('No se pudo leer el documento: está protegido con contraseña.')
 		expect(d.reread).toBe(true)
 	})
 

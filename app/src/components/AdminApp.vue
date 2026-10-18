@@ -88,7 +88,7 @@
 							<tr v-for="r in data.rules" :key="r.id">
 								<td>{{ ruleName(r) }}</td>
 								<td>
-									<NcButton variant="tertiary" :disabled="busy" @click="confirming = r">
+									<NcButton variant="tertiary" :disabled="busy" :aria-label="`Excluir ${ruleName(r)}`" @click="confirming = r">
 										Excluir
 									</NcButton>
 								</td>
@@ -106,7 +106,7 @@
 					<label class="bd-field">Mostrar
 						<select :value="reason" @change="pickReason($event.target.value)">
 							<option value="">Todos los motivos</option>
-							<option v-for="(n, k) in data.skipped" :key="k" :value="k">{{ REASONS[k] ?? k }} ({{ n }})</option>
+							<option v-for="(n, k) in data.skipped" :key="k" :value="k">{{ REASONS[k] ?? k }} ({{ number(n) }})</option>
 						</select>
 					</label>
 					<div class="bd-overflow">
@@ -129,7 +129,7 @@
 									<td>{{ i.name ?? 'Documento de otra persona' }}</td>
 									<td>{{ REASONS[i.reason] ?? i.reason }}</td>
 									<td>
-										<NcButton variant="tertiary" :disabled="busy" @click="retry(i)">
+										<NcButton variant="tertiary" :disabled="busy" :aria-label="`Reintentar ${i.name ?? 'documento de otra persona'}`" @click="retry(i)">
 											Reintentar
 										</NcButton>
 									</td>

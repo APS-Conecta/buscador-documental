@@ -66,7 +66,7 @@ const toggleType = (id, on) => set({ types: on ? [...props.modelValue.types, id]
 .bd-filters fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; }
 .bd-filters legend { font-size: 13px; color: var(--color-text-maxcontrast); padding: 0; }
 .bd-field { display: inline-flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--color-text-maxcontrast); }
-.bd-field select, .bd-field input { min-height: var(--default-clickable-area); }
+.bd-field select, .bd-field input { min-height: var(--default-clickable-area); max-width: 100%; }
 .bd-check { display: inline-flex; align-items: center; gap: 8px; min-height: var(--default-clickable-area); color: var(--color-main-text); font-size: 15px; }
 .bd-check input { width: 20px; height: 20px; }
 </style>

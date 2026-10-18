@@ -6,9 +6,11 @@
 			:aria-pressed="String(effective === m.id)"
 			:aria-disabled="disabled(m) ? 'true' : undefined"
 			:title="disabled(m) ? reason : undefined"
+			:aria-describedby="disabled(m) ? 'bd-mode-reason' : undefined"
 			@click="pick(m)">
 			{{ m.label }}
 		</button>
+		<span v-if="!semantic" id="bd-mode-reason" class="bd-sr">{{ reason }}</span>
 	</div>
 </template>
 
@@ -30,5 +32,6 @@ const pick = (m) => { if (!disabled(m)) emit('update:modelValue', m.id) }
 .bd-seg button { min-height: var(--default-clickable-area); padding: 0 14px; border: 0; background: transparent; cursor: pointer; color: inherit; font: inherit; }
 .bd-seg button[aria-pressed="true"] { background: var(--color-primary-element); color: var(--color-primary-element-text); font-weight: 700; }
 .bd-seg button[aria-disabled="true"] { color: var(--color-text-maxcontrast); cursor: not-allowed; }
+.bd-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .bd-seg button:focus-visible { outline: 3px solid var(--color-primary-element); outline-offset: -3px; }
 </style>

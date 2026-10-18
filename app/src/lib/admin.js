@@ -10,6 +10,18 @@ export const REASONS = {
 	unsafe: 'Archivo no seguro',
 }
 
+// For a sentence: "No se pudo leer el documento: <phrase>."
+export const REASON_PHRASES = {
+	encrypted: 'está protegido con contraseña',
+	too_large: 'es demasiado grande',
+	corrupt: 'está dañado',
+	unsupported: 'su formato no es admitido',
+	ocr_failed: 'no se pudo reconocer su texto',
+	timeout: 'tardó demasiado en leerse',
+	internal: 'falló la lectura; puede pedir que se vuelva a leer',
+	unsafe: 'parece peligroso',
+}
+
 export const CHECKS = {
 	schema: 'Versión de la base de datos',
 	database_roles: 'Permisos de la base de datos',

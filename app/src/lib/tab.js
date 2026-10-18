@@ -1,4 +1,4 @@
-import { REASONS } from './admin.js'
+import { REASON_PHRASES } from './admin.js'
 
 /** What the tab shows for each answer of /file/{id}/text. Pure: returns a description, the element renders it. */
 export function describe(answer, uncertainBelow = 60) {
@@ -8,7 +8,7 @@ export function describe(answer, uncertainBelow = 60) {
 	case 'restricted': return { kind: 'message', tone: 'info', text: 'El texto no se muestra porque este recurso no permite descargar.' }
 	case 'pending': return { kind: 'message', tone: 'info', text: 'Este documento aún no se ha leído o cambió hace poco. Estará listo en unos minutos.' }
 	case 'none': return { kind: 'message', tone: 'info', text: 'Este documento no tiene texto reconocido.' }
-	case 'skipped': return { kind: 'message', tone: 'warning', text: `No se pudo leer: ${REASONS[answer.reason] ?? 'motivo desconocido'}.`, reread: true }
+	case 'skipped': return { kind: 'message', tone: 'warning', text: `No se pudo leer el documento: ${REASON_PHRASES[answer.reason] ?? 'motivo desconocido'}.`, reread: true }
 	case 'indexed': {
 		const confs = answer.pages.map((p) => p.ocr_conf).filter((c) => c !== null)
 		const avg = confs.length ? confs.reduce((a, b) => a + b, 0) / confs.length : null

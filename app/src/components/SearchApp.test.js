@@ -86,6 +86,7 @@ describe('SearchApp states', () => {
 		api.search.mockResolvedValue({ status: 'rate_limited', retryAfter: 12 })
 		const w = await open('?q=x')
 		expect(w.text()).toContain('Espere 12 s')
+		expect(w.find('[role="alert"]').exists()).toBe(true)
 		w.unmount()
 	})
 
@@ -129,6 +130,23 @@ describe('SearchApp interaction', () => {
 		await next.trigger('click')
 		await flushPromises()
 		expect(api.search.mock.calls.at(-1)[0].cursor).toBe('CUR2')
+		w.unmount()
+	})
+
+	it('moves the focus to the results after paging, so keyboard users do not start over from the top', async () => {
+		api.search.mockResolvedValue(ok([hit(1)], { cursors: { first: null, prev: null, next: 'CUR2', last: null }, page: { from: 1, to: 25, total: 60, capped: false, size: 25 } }))
+		const w = await open('?q=x')
+		await w.findAll('button').find((b) => b.text() === 'Siguiente').trigger('click')
+		await flushPromises()
+		expect(document.activeElement).toBe(w.find('.bd-region').element)
+		w.unmount()
+	})
+
+	it('gives the right reason for a disabled meaning mode when it is not about preparation', async () => {
+		api.search.mockResolvedValue(ok([hit(1)]))
+		const w = await open('?q=x', { semantic: false, reason: 'no_profile', coverage: 0 })
+		expect(w.find('.bd-seg button[aria-disabled="true"]').attributes('title')).toContain('no responde')
+		expect(w.find('#bd-mode-reason').text()).toContain('no responde')
 		w.unmount()
 	})
 

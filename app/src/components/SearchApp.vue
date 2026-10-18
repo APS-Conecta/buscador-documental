@@ -25,7 +25,7 @@
 					</NcButton>
 				</form>
 
-				<NcNoteCard v-if="!readiness.semantic" type="info">
+				<NcNoteCard v-if="!readiness.semantic" type="info" role="status">
 					<template v-if="readiness.reason === 'coverage'">
 						<strong>Preparando: {{ percent }} %</strong> · la búsqueda por palabras está lista; la búsqueda por significado, pendiente.
 						<progress max="100" :value="percent" aria-label="Avance de preparación" />
@@ -34,15 +34,16 @@
 						La búsqueda por significado aún no está disponible: se usan palabras exactas.
 					</template>
 				</NcNoteCard>
-				<NcNoteCard v-if="result.notice" type="warning">
+				<NcNoteCard v-if="result.notice" type="warning" role="status">
 					{{ result.notice.message }}
 				</NcNoteCard>
 
 				<div class="bd-toolbar">
-					<ModeToggle v-model="state.mode" :semantic="readiness.semantic" :reason="'Disponible cuando termine la preparación'" @update:model-value="changed" />
+					<ModeToggle v-model="state.mode" :semantic="readiness.semantic" :reason="semanticReason" @update:model-value="changed" />
 				</div>
 				<FilterBar v-model="filters" :folders="folders" :active="hasActiveFilters" @update:model-value="changed" @clear="clearFilters" />
 
+				<div ref="region" tabindex="-1" class="bd-region">
 				<div v-if="phase === 'loading'" role="status">
 					<span class="bd-sr">Buscando…</span>
 					<div class="bd-skeleton" aria-hidden="true" />
@@ -53,13 +54,13 @@
 					<strong>Búsqueda no disponible.</strong> Sus archivos están a salvo. Intente de nuevo en unos minutos.
 				</NcNoteCard>
 				<NcNoteCard v-else-if="phase === 'rate_limited'" type="warning" role="alert">
-					Demasiadas búsquedas. Espere {{ countdown }} s.
+					Demasiadas búsquedas. <span v-if="countdown > 0" aria-hidden="true">Espere {{ countdown }} s.</span><span v-else>Ya puede volver a buscar.</span>
 				</NcNoteCard>
 				<NcNoteCard v-else-if="phase === 'too_many' || phase === 'invalid'" type="warning" role="alert">
 					{{ result.message }}
 				</NcNoteCard>
-				<NcEmptyContent v-else-if="phase === 'idle'" name="Escriba palabras o una pregunta" description="Se buscan solo los documentos que usted puede leer." />
-				<NcEmptyContent v-else-if="phase === 'empty'" :name="hasActiveFilters ? 'Sin resultados con estos filtros' : 'Sin resultados'" :description="hasActiveFilters ? 'Quite filtros o pruebe con menos palabras.' : 'Pruebe con menos palabras.'">
+				<NcEmptyContent v-else-if="phase === 'idle'" role="status" name="Escriba palabras o una pregunta" description="Se buscan solo los documentos que usted puede leer." />
+				<NcEmptyContent v-else-if="phase === 'empty'" role="status" :name="hasActiveFilters ? 'Sin resultados con estos filtros' : 'Sin resultados'" :description="hasActiveFilters ? 'Quite filtros o pruebe con menos palabras.' : 'Pruebe con menos palabras.'">
 					<template v-if="hasActiveFilters" #action>
 						<NcButton variant="secondary" @click="clearFilters">
 							Quitar filtros
@@ -90,18 +91,19 @@
 							:key="h.file_id"
 							:hit="h"
 							:selected="selected?.file_id === h.file_id"
-							@select="selected = $event" />
+							@select="select" />
 					</ul>
 					<ResultPager :cursors="result.cursors" @go="go" />
 				</template>
+				</div>
 			</div>
 		</NcAppContent>
-		<DocumentSidebar v-if="selected" :hit="selected" @close="selected = null" />
+		<DocumentSidebar v-if="selected" :hit="selected" @close="closeDetails" />
 	</NcContent>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import NcAppContent from '@nextcloud/vue/components/NcAppContent'
 import NcAppNavigation from '@nextcloud/vue/components/NcAppNavigation'
 import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
@@ -140,6 +142,8 @@ const phase = ref(state.q ? 'loading' : 'idle')
 const selected = ref(null)
 const folders = ref([])
 const countdown = ref(0)
+const region = ref(null)
+let opener = null
 let seq = 0
 let timer = null
 
@@ -152,6 +156,7 @@ const hasActiveFilters = computed(() => hasFilters(state))
 const scope = computed(() => SCOPES.find((s) => s.patch.owner === state.owner && s.patch.uncertain === state.uncertain)?.id ?? null)
 const defaultSort = computed(() => (state.q ? 'relevance' : 'modified_desc'))
 const summary = computed(() => summaryLine(result.value.page))
+const semanticReason = computed(() => (props.readiness.reason === 'coverage' ? 'Disponible cuando termine la preparación' : 'No disponible por ahora: la búsqueda por significado no responde'))
 const percent = computed(() => Math.round((props.readiness.coverage ?? 0) * 100))
 
 function push() {
@@ -162,7 +167,23 @@ function push() {
 	}
 }
 
-async function run(cursor = null, retried = false) {
+function select(hit) {
+	opener = document.activeElement
+	selected.value = hit
+	nextTick(() => document.querySelector('.app-sidebar button, .app-sidebar a')?.focus())
+}
+
+function closeDetails() {
+	selected.value = null
+	nextTick(() => opener?.focus?.())
+}
+
+// After a search the focus moves to the results region, so keyboard and screen-reader users continue from the new results.
+function focusResults() {
+	nextTick(() => { region.value?.focus({ preventScroll: false }); window.scrollTo?.(0, 0) })
+}
+
+async function run(cursor = null, retried = false, moveFocus = false) {
 	if (!state.q) {
 		result.value = EMPTY()
 		phase.value = 'idle'
@@ -175,9 +196,10 @@ async function run(cursor = null, retried = false) {
 		return
 	}
 	if (r.status === 'cursor_expired' && !retried) {
-		return run(null, true)
+		return run(null, true, moveFocus)
 	}
 	result.value = { ...EMPTY(), ...r }
+	if (moveFocus) focusResults()
 	if (r.status === 'ok') {
 		phase.value = r.hits?.length ? 'results' : 'empty'
 		if (selected.value && !r.hits.some((h) => h.file_id === selected.value.file_id)) {
@@ -209,7 +231,7 @@ function submit() {
 
 function changed() {
 	push()
-	run()
+	run(null, false, true)
 }
 
 function pickScope(s) {
@@ -222,7 +244,7 @@ function clearFilters() {
 	changed()
 }
 
-const go = (cursor) => run(cursor)
+const go = (cursor) => run(cursor, false, true)
 
 function onPop() {
 	Object.assign(state, parseState(window.location.search))
@@ -262,7 +284,8 @@ h1 { font-family: var(--font-face-title, inherit); font-size: 24px; margin: 0 0 
 .bd-summary { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 8px; color: var(--color-text-maxcontrast); margin: 8px 0; }
 .bd-summary__controls { display: flex; gap: 12px; flex-wrap: wrap; }
 .bd-field { display: inline-flex; flex-direction: column; gap: 2px; font-size: 13px; }
-.bd-field select { min-height: var(--default-clickable-area); }
+.bd-field select { min-height: var(--default-clickable-area); max-width: 100%; }
+.bd-region:focus { outline: none; }
 .bd-cap { color: var(--color-text-maxcontrast); }
 .bd-results { margin: 0; padding: 0; display: grid; gap: 8px; }
 .bd-skeleton { height: 84px; margin-bottom: 8px; border-radius: var(--border-radius-large); background: linear-gradient(90deg, var(--color-background-dark), var(--color-background-hover), var(--color-background-dark)); background-size: 200% 100%; animation: bd-shimmer 1.2s infinite; }

@@ -53,7 +53,7 @@ export class RecognisedText extends HTMLElement {
 		style.textContent = STYLE
 		root.append(style)
 		const box = document.createElement('div')
-		box.setAttribute('role', loading ? 'status' : d.tone === 'error' ? 'alert' : 'status')
+		if (d.kind === 'message') box.setAttribute('role', d.tone === 'error' ? 'alert' : 'status')
 		if (d.kind === 'message') {
 			const p = document.createElement('p')
 			p.className = `note ${d.tone}`
