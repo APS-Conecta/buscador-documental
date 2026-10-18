@@ -64,6 +64,12 @@ test-e2e-vectors:
 test-e2e-egress:
 	bash tests/e2e/egress.sh
 
+test-e2e-restore:
+	bash tests/e2e/restore.sh
+
+test-e2e-ops:
+	bash tests/e2e/ops.sh
+
 # The adversarial permission matrix with the real mechanisms (circles, team-folder ACL, expiry, moves, multi-mount, deletion).
 test-e2e-rbac:
 	bash tests/e2e/rbac.sh

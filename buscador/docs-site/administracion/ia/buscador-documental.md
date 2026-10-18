@@ -76,8 +76,35 @@ Mientras no haya un perfil activo, la cobertura sea baja o el servidor Ollama no
 
 **Siglas y términos.** El buscador incluye un diccionario de unas 400 siglas de la atención primaria chilena (REM, HTA, CESFAM, EMPAM…). Al buscar una sigla también se busca su nombre completo y al revés. Las siglas ambiguas (por ejemplo SS o PCR) no se expanden.
 
-## Respaldo, actualización y recuperación
-El respaldo debe incluir el esquema de búsqueda (contiene el texto reconocido). Procedimientos de instalación, actualización, reversión, reconstrucción y restauración: pendientes.
+## Operación diaria
+- **Estado y estimación.** `occ buscador:status` muestra por carril (lectura de texto y vectores) cuánto falta y en cuánto tiempo terminará al ritmo de la última hora, con un margen de ±30 % cuando el ritmo es estable. Si hay menos de 10 archivos terminados en la última hora, la pausa está activa o la ventana nocturna está cerrada, lo dice en lugar de inventar una cifra.
+- **Revisión de salud.** `occ buscador:doctor` comprueba el esquema, los roles y las extensiones de la base de datos, el secreto del proceso de lectura, si hay un proceso de lectura activo cuando hay trabajo pendiente, los eventos detenidos, la antigüedad de los cambios de permisos, la última conciliación, el modo de tareas de fondo (debe ser Cron), el servidor Ollama y el índice de vectores. Termina con código 1 solo si algo falla (las advertencias no lo hacen), de modo que sirve como sonda de monitoreo; `--json` entrega el resultado para máquinas. Nunca imprime secretos, direcciones, nombres de modelos ni texto.
+- **Ventana nocturna.** `occ buscador:window set 01:00-05:00` limita el cálculo de vectores a esa franja (hora del servidor de Nextcloud); la lectura de archivos nuevos o editados sigue de día. Con `--lanes=all` la ventana también detiene la lectura de texto. `occ buscador:window off` la quita; `occ buscador:window show` dice si está abierta.
+- **Concurrencia.** `occ buscador:throttle set --text=2 --vec=1` fija cuántos archivos lee y cuántos vectoriza a la vez cada proceso de lectura (de 1 a 16; por omisión 4 y 2). `occ buscador:throttle reset` vuelve a los valores iniciales. Los cambios rigen desde la siguiente solicitud de trabajo, sin reiniciar nada.
+- **Pausa.** `occ buscador:pause` y `occ buscador:resume` sobreviven al reinicio de la base de datos, de Nextcloud y del proceso de lectura: la cola vive en PostgreSQL.
+- **Alertas.** `occ buscador:status --prometheus` imprime solo números y etiquetas fijas; el archivo `ops/alerts.yml` de la aplicación trae reglas de ejemplo (proceso de lectura callado, eventos detenidos, cambios de permisos atrasados, conciliación vencida, vectores fallidos, cobertura estancada, cola demasiado lenta). Ejecute el comando desde Cron hacia el recolector de archivos de texto de su agente de monitoreo.
+
+## Rotar el secreto del proceso de lectura
+1. `occ buscador:rotate-secret --to-file=/ruta/segura/nuevo.secret --grace=24` crea un secreto nuevo de 48 caracteres, lo guarda en un archivo de uso privado (0600) y mantiene válido el anterior durante 24 horas. Sin `--to-file` lo imprime una sola vez.
+2. Copie el valor a `BD_WORKER_SECRET` del proceso de lectura y reinícielo dentro del plazo. Nextcloud conserva su configuración en memoria hasta 3 segundos, de modo que el cambio se nota en pocos segundos.
+3. Pasado el plazo el secreto anterior deja de valer. Con `--grace=0` deja de valer de inmediato: use esa opción si sospecha que se filtró; el trabajo en curso se detendrá hasta que el proceso de lectura tenga el valor nuevo y sus asignaciones venzan (hasta 15 minutos).
+El secreto nunca aparece en los registros ni en la auditoría (esta solo guarda el plazo de gracia).
+
+## Sin salida a internet
+El proceso de lectura corre en una red interna sin ruta a internet: llega a la base de datos, a Nextcloud y al servidor Ollama por su nombre y a nada más; el contenedor de lectura aislado no tiene red. La prueba `make -C app test-e2e-egress` lo demuestra intentando salir y comprobando que un archivo se lee y se encuentra igualmente. Un servidor Ollama remoto es la única excepción y es una decisión de su red. El código de la aplicación no llama a ningún otro servidor (una prueba estática lo verifica).
+
+## Respaldo y restauración
+- **Respaldo.** `BD_BACKUP_KEY_FILE=/ruta/clave.key PGHOST=... PGUSER=... PGDATABASE=nextcloud tools/backup.sh /ruta/buscador.bak` guarda el esquema `aps_search` (incluye el texto de las páginas y los vectores) cifrado con AES-256, más un archivo `.sha256` que detecta daños y un archivo `.meta` solo con contadores. La clave debe tener al menos 32 bytes, ser legible solo por su dueño y guardarse **aparte** del respaldo: quien tenga ambos lee todo lo indexado. El archivo no se sobrescribe. El `.sha256` detecta corrupción, no manipulación deliberada: proteja también el lugar donde guarda los respaldos.
+- **Restauración.** En la base de destino deben existir los roles `bd_owner` y `bd_worker`, el usuario de base de datos de Nextcloud y las extensiones `unaccent` (y `vector` si el respaldo tiene vectores). `BD_BACKUP_KEY_FILE=... PGUSER=<superusuario> tools/restore.sh /ruta/buscador.bak base_destino` comprueba todo antes de cambiar nada, rechaza una clave equivocada o un respaldo dañado, no pisa un esquema existente y restaura en una sola transacción; al final imprime los contadores para compararlos con el `.meta`.
+- **Ensayo.** `make -C app test-e2e-restore` repite el procedimiento en la pila de pruebas: con un corpus de tres archivos el respaldo tardó unos 0,6 s y la restauración unos 1,1 s. Son tiempos del procedimiento, no del volumen; el ensayo con un millón de páginas se mide en la etapa S7.
+- **Incluya el respaldo en su política de cifrado en reposo** (las páginas y los fragmentos son texto de sus documentos).
+
+## Instalación, actualización, reversión y reconstrucción
+- **Instalación.** Cree los roles y extensiones que pide la migración (el error nombra el paso que falta), active la aplicación, configure el secreto del proceso de lectura, incluya carpetas (`occ buscador:scope:add`) y, si quiere búsqueda por significado, registre el perfil. Verifique con `occ buscador:doctor`.
+- **Actualización.** Respalde, actualice los archivos de la aplicación y vuelva a activarla: las migraciones de esquema son idempotentes y se aplican solas. El proceso de lectura se niega a trabajar con un esquema que no conoce; actualícelo con la misma versión. Verifique con `occ buscador:doctor`.
+- **Reversión.** Un esquema nuevo no se deshace: restaure el respaldo previo a la actualización en una base limpia (vea Restauración) y reinstale la versión anterior de la aplicación y del proceso de lectura.
+- **Reconstrucción.** Si el índice se pierde o se sospecha dañado, restáurelo desde un respaldo; si no hay respaldo, `occ buscador:reindex` vuelve a poner en cola todos los archivos incluidos. El tiempo es el de la primera lectura (vea Capacidad y tiempos): la lectura de texto no espera a los vectores.
+- **Cambiar de perfil o de modelo.** Vea Búsqueda por significado: se crea una generación nueva y la anterior sigue sirviendo hasta que usted active la nueva.
 
 ## Referencia
 Comandos `occ`, ajustes y rutas: se generan automáticamente en la página de desarrollo del repositorio.

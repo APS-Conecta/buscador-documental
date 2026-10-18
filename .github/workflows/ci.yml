@@ -55,6 +55,9 @@ jobs:
       - run: make -C app test-e2e-logs
       - run: make -C app test-e2e-rbac
       - run: make -C app test-e2e-vectors
+      - run: make -C app test-e2e-egress
+      - run: make -C app test-e2e-restore
+      - run: make -C app test-e2e-ops
       - name: Logs on failure
         if: failure()
         run: docker compose -f compose.yaml logs --no-color --tail=200

@@ -63,3 +63,8 @@ Consequences:
 - Keyword search is available long before vectors: the vector lane runs after the text lane and never blocks it.
 - qwen3-embedding:0.6b was slower than bge-m3 on this Ollama build and no better on the quality set, so bge-m3 is the first profile.
 - 1024 dimensions double the vector storage of the 384-d model used in S0: for 3M chunks about 6 GB of vectors plus about 8 GB of HNSW index.
+
+## S5 additions (2026-10-18)
+- Restore rehearsal on the test stack (3 small files, stub embedder): backup 0.6 s, restore 1.1 s, read and embed 6 s (`spikes/s5/results-s5/restore_rehearsal.json`). Backup and restore are bounded by the size of `aps_search`; expect minutes per 10 GB. The 1M-page rehearsal is S7.
+- Rebuilding without a backup costs the first-read time: OCR pages about 13 s each, text and born-digital documents seconds, vectors about 1 chunk/s per 4 CPUs with bge-m3 (see S4 additions). The text lane never waits for vectors.
+- Status queries read counters and two small time windows; the Prometheus output adds `buscador_schema_bytes` (database size of the schema) for capacity tracking.
