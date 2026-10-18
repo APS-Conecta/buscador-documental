@@ -1,1 +1,1 @@
-{"files":3,"chunks":3,"vectors":3,"backup_ms":602,"restore_ms":1094,"read_and_embed_seconds":6,"note":"3 small text files on the test stack; the stub embedder; indicative of the procedure, not of volume"}
+{"files":3,"chunks":3,"vectors":3,"backup_ms":585,"restore_ms":1094,"read_and_embed_seconds":6,"note":"3 small text files on the test stack; the stub embedder; indicative of the procedure, not of volume"}

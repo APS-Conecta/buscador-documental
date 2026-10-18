@@ -116,6 +116,18 @@ class WorkerFunctionsTest extends DbTestCase {
 		$this->assertSame(0, $this->rowCount('chunk'));
 	}
 
+	public function testVersionStringsAndHashAreBoundedBecauseEveryRowCopiesThem(): void {
+		$this->seedFile(10);
+		$w = $this->worker();
+		$c = $this->claim($w);
+		foreach (['ocr_ver' => str_repeat('o', 301), 'chunker_ver' => str_repeat('c', 101), 'hash' => str_repeat('h', 129)] as $k => $v) {
+			$this->assertStringContainsString('payload_too_large', $this->failure(fn () => $this->write($w, $c, [$k => $v])), $k);
+		}
+		$page = json_encode([['page_no' => 1, 'text' => str_repeat('p', 2000001), 'ocr_conf' => 0.9, 'source' => 'ocr']]);
+		$this->assertStringContainsString('payload_too_large', $this->failure(fn () => $this->write($w, $c, ['pages' => $page])), 'one page of 2 MB of text is the most');
+		$this->assertSame(0, $this->rowCount('page'));
+	}
+
 	public function testConcurrencyCapIsFourActiveClaimsPerWorker(): void {
 		for ($i = 1; $i <= 6; $i++) {
 			$this->seedFile($i);

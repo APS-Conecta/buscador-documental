@@ -70,7 +70,7 @@ ok "a target without the extensions is refused and left untouched"
 DBX psql -q -d bd_restore_test -c "CREATE EXTENSION unaccent; CREATE EXTENSION vector"
 # 2. wrong key
 DBX sh -c 'head -c 48 /dev/urandom | base64 -w0 > /tmp/other.key; chmod 600 /tmp/other.key'
-BAD=$($C exec -T -e PGUSER=postgres -e BD_BACKUP_KEY_FILE=/tmp/other.key db bash /tmp/restore.sh /tmp/x.bak bd_restore_test 2>&1 || true); grep -q "wrong key" <<<"$BAD" || die "a wrong key was not refused: $BAD"
+BAD=$($C exec -T -e PGUSER=postgres -e BD_BACKUP_KEY_FILE=/tmp/other.key db bash /tmp/restore.sh /tmp/x.bak bd_restore_test 2>&1 || true); grep -qE "wrong key|keyed checksum does not match" <<<"$BAD" || die "a wrong key was not refused: $BAD"
 [ -z "$(DBX psql -qAt -d bd_restore_test -c "select 1 from pg_namespace where nspname='aps_search'")" ] || die "a refused restore left a schema behind"
 ok "a wrong key is refused and nothing is restored"
 # 3. the real restore
@@ -91,17 +91,26 @@ ok "everything restored belongs to bd_owner (the restore ran as that role, not a
 [ -z "$(DBX psql -qAt -d bd_restore_test -c "select 1 from pg_roles where rolname = 'bd_owner' and (rolsuper or rolcreaterole or rolcreatedb)")" ] || die "bd_owner has powers it should not have"
 if DBX psql -q -d bd_restore_test -c "set role bd_owner; copy (select 1) to program 'id > /tmp/pwned'" >/dev/null 2>&1; then die "bd_owner can run programs on the server"; fi
 if DBX psql -q -d bd_restore_test -c "set role bd_owner; alter role nextcloud superuser" >/dev/null 2>&1; then die "bd_owner can change roles"; fi
-ok "bd_owner cannot run server programs or change roles, so a tampered archive is confined to the search schema"
+ok "bd_owner cannot run server programs or change roles (what a dump made with your own key may do is limited to the search schema)"
 BAD=$(DBX bash /tmp/restore.sh /tmp/x.bak bd_restore_test 2>&1 || true); grep -q "already has an aps_search schema" <<<"$BAD" || die "a second restore over the first was not refused: $BAD"
 ok "restoring over an existing schema is refused"
 DBX cp /tmp/x.bak.sha256 /tmp/x.sha.keep; DBX rm -f /tmp/x.bak.sha256
 BAD=$(DBX bash /tmp/restore.sh /tmp/x.bak bd_restore_test 2>&1 || true); grep -q "checksum file" <<<"$BAD" || die "a backup without its checksum was accepted: $BAD"
 DBX mv /tmp/x.sha.keep /tmp/x.bak.sha256
 ok "a backup without its checksum file is refused"
+# a file altered by someone WITHOUT the key is refused even if they recompute the plain checksum
+DBX sh -c 'cp /tmp/x.bak /tmp/t.bak && printf "\x01" | dd of=/tmp/t.bak bs=1 seek=100 conv=notrunc 2>/dev/null && sha256sum /tmp/t.bak | cut -d" " -f1 > /tmp/t.bak.sha256 && cp /tmp/x.bak.hmac /tmp/t.bak.hmac'
+BAD=$(DBX bash /tmp/restore.sh /tmp/t.bak bd_restore_test 2>&1 || true); grep -q "keyed checksum does not match" <<<"$BAD" || die "an altered backup with a recomputed plain checksum was accepted: $BAD"
+DBX sh -c 'openssl dgst -sha256 -hmac attacker-guess -r < /tmp/t.bak | cut -d" " -f1 > /tmp/t.bak.hmac'
+BAD=$(DBX bash /tmp/restore.sh /tmp/t.bak bd_restore_test 2>&1 || true); grep -q "keyed checksum does not match" <<<"$BAD" || die "an altered backup with a forged keyed checksum was accepted: $BAD"
+DBX rm -f /tmp/t.bak.hmac
+BAD=$(DBX bash /tmp/restore.sh /tmp/t.bak bd_restore_test 2>&1 || true); grep -q "keyed checksum .* is missing" <<<"$BAD" || die "a backup without its keyed checksum was accepted: $BAD"
+BAD=$(DBX bash /tmp/restore.sh /tmp/x.bak "dbname=nextcloud host=evil" 2>&1 || true); grep -q "not a connection string" <<<"$BAD" || die "a connection string was accepted as the target: $BAD"
+ok "an altered backup is refused whatever checksum is recomputed without the key; a missing keyed checksum and a connection-string target are refused too"
 DBX sh -c 'head -c 3 /dev/urandom | od -An -tx1 > /dev/null; printf "abc\n%s\n" "$(head -c 60 /dev/urandom | base64 -w0)" > /tmp/twoline.key; chmod 600 /tmp/twoline.key'
-BAD=$($C exec -T -e PGUSER=postgres -e BD_BACKUP_KEY_FILE=/tmp/twoline.key db bash /tmp/restore.sh /tmp/x.bak bd_restore_test 2>&1 || true); grep -qE "wrong key|already has" <<<"$BAD" || die "unexpected: $BAD"
+BAD=$($C exec -T -e PGUSER=postgres -e BD_BACKUP_KEY_FILE=/tmp/twoline.key db bash /tmp/restore.sh /tmp/x.bak bd_restore_test 2>&1 || true); grep -qE "wrong key|already has|keyed checksum does not match" <<<"$BAD" || die "unexpected: $BAD"
 DBX dropdb --if-exists bd_restore_test2; DBX createdb bd_restore_test2; DBX psql -q -d bd_restore_test2 -c "CREATE EXTENSION unaccent; CREATE EXTENSION vector"
-BAD=$($C exec -T -e PGUSER=postgres -e BD_BACKUP_KEY_FILE=/tmp/twoline.key db bash /tmp/restore.sh /tmp/x.bak bd_restore_test2 2>&1 || true); grep -q "wrong key" <<<"$BAD" || die "a key that merely shares the first line decrypted the backup: $BAD"
+BAD=$($C exec -T -e PGUSER=postgres -e BD_BACKUP_KEY_FILE=/tmp/twoline.key db bash /tmp/restore.sh /tmp/x.bak bd_restore_test2 2>&1 || true); grep -qE "wrong key|keyed checksum does not match" <<<"$BAD" || die "a key that merely shares the first line decrypted the backup: $BAD"
 DBX dropdb --if-exists bd_restore_test2
 ok "the whole key file is the passphrase: a file that only shares the first line does not decrypt"
 

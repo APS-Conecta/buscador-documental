@@ -4,7 +4,12 @@
 CREATE ROLE nextcloud LOGIN PASSWORD 'dev' CREATEDB;
 ALTER DATABASE nextcloud OWNER TO nextcloud;
 CREATE ROLE bd_owner NOLOGIN;                       -- owns aps_search and its functions; nothing outside it
-CREATE ROLE bd_worker LOGIN PASSWORD 'dev-worker';  -- no table privileges; EXECUTE on four functions only
+CREATE ROLE bd_worker LOGIN PASSWORD 'dev-worker' CONNECTION LIMIT 20;  -- no table privileges; EXECUTE on the worker functions only
+-- A compromised worker must not be able to fill the disk or hold the database: bounded statements, temp files and idle transactions
+-- (S7 STRIDE review; the install guide gives the same three lines for a production database).
+ALTER ROLE bd_worker SET statement_timeout = '10min';
+ALTER ROLE bd_worker SET temp_file_limit = '2GB';
+ALTER ROLE bd_worker SET idle_in_transaction_session_timeout = '5min';
 -- Nextcloud's installer revokes PUBLIC privileges on its database, so the worker needs an explicit CONNECT.
 GRANT CONNECT ON DATABASE nextcloud TO bd_worker;
 GRANT bd_owner TO nextcloud WITH INHERIT FALSE, SET TRUE;  -- lets the migration create the schema AUTHORIZATION bd_owner

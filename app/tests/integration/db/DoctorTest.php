@@ -64,6 +64,18 @@ class DoctorTest extends DbTestCase {
 		$this->assertCount(0, array_filter($this->doctor()->run(), static fn (array $c): bool => !in_array($c['status'], ['ok', 'warn', 'fail'], true)));
 	}
 
+	public function testAnUnboundedWorkerRoleIsAWarning(): void {
+		$su = self::connect('postgres', 'dev', self::$dbName);
+		$this->assertSame('ok', $this->statusOf('worker_role_limits'));
+		try {
+			$su->exec('ALTER ROLE bd_worker RESET temp_file_limit');
+			$this->assertSame('warn', $this->statusOf('worker_role_limits'));
+		} finally {
+			$su->exec("ALTER ROLE bd_worker SET temp_file_limit = '2GB'");
+		}
+		$this->assertSame('ok', $this->statusOf('worker_role_limits'));
+	}
+
 	public function testEachBrokenPreconditionIsNamed(): void {
 		$this->app['worker_secret'] = 'short';
 		$this->assertSame('fail', $this->statusOf('worker_secret'));
