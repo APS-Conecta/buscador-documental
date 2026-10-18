@@ -1,0 +1,244 @@
+{
+    "model": "qwen3-embedding:0.6b",
+    "digest": "ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50eb581914a15621d",
+    "dim": 1024,
+    "documents": 168,
+    "queries": 108,
+    "embedding": {
+        "model": "qwen3-embedding:0.6b",
+        "digest": "ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50eb581914a15621d",
+        "dim": 1024,
+        "documents": 168,
+        "documents_seconds": 84.77,
+        "documents_per_second": 1.98,
+        "long_chunks": 32,
+        "long_chunk_words": 170,
+        "long_chunks_per_second": 0.49,
+        "query_embed_ms_p50": 490.2,
+        "query_embed_ms_p95": 609.8,
+        "queries": 108
+    },
+    "metrics": {
+        "exacta": {
+            "all": {
+                "recall@10": 0.5347,
+                "mrr": 0.9769,
+                "ndcg@10": 0.6139,
+                "queries": 108
+            },
+            "lexical": {
+                "recall@10": 0.6111,
+                "mrr": 1,
+                "ndcg@10": 0.6829,
+                "queries": 27
+            },
+            "acronym": {
+                "recall@10": 0.4167,
+                "mrr": 0.9074,
+                "ndcg@10": 0.5175,
+                "queries": 27
+            },
+            "paraphrase": {
+                "recall@10": 0.5,
+                "mrr": 1,
+                "ndcg@10": 0.569,
+                "queries": 27
+            },
+            "accentless": {
+                "recall@10": 0.6111,
+                "mrr": 1,
+                "ndcg@10": 0.6862,
+                "queries": 27
+            }
+        },
+        "exacta_sin_glosario": {
+            "all": {
+                "recall@10": 0.4884,
+                "mrr": 0.9921,
+                "ndcg@10": 0.5727,
+                "queries": 108
+            },
+            "lexical": {
+                "recall@10": 0.5648,
+                "mrr": 1,
+                "ndcg@10": 0.6413,
+                "queries": 27
+            },
+            "acronym": {
+                "recall@10": 0.3056,
+                "mrr": 0.9683,
+                "ndcg@10": 0.4309,
+                "queries": 27
+            },
+            "paraphrase": {
+                "recall@10": 0.5,
+                "mrr": 1,
+                "ndcg@10": 0.569,
+                "queries": 27
+            },
+            "accentless": {
+                "recall@10": 0.5833,
+                "mrr": 1,
+                "ndcg@10": 0.6495,
+                "queries": 27
+            }
+        },
+        "significado": {
+            "all": {
+                "recall@10": 0.7731,
+                "mrr": 0.9938,
+                "ndcg@10": 0.7966,
+                "queries": 108
+            },
+            "lexical": {
+                "recall@10": 0.9074,
+                "mrr": 1,
+                "ndcg@10": 0.9174,
+                "queries": 27
+            },
+            "acronym": {
+                "recall@10": 0.3889,
+                "mrr": 0.9753,
+                "ndcg@10": 0.4723,
+                "queries": 27
+            },
+            "paraphrase": {
+                "recall@10": 0.8981,
+                "mrr": 1,
+                "ndcg@10": 0.8923,
+                "queries": 27
+            },
+            "accentless": {
+                "recall@10": 0.8981,
+                "mrr": 1,
+                "ndcg@10": 0.9045,
+                "queries": 27
+            }
+        },
+        "mixta": {
+            "all": {
+                "recall@10": 0.8056,
+                "mrr": 0.9907,
+                "ndcg@10": 0.8264,
+                "queries": 108
+            },
+            "lexical": {
+                "recall@10": 0.9352,
+                "mrr": 1,
+                "ndcg@10": 0.93,
+                "queries": 27
+            },
+            "acronym": {
+                "recall@10": 0.4722,
+                "mrr": 0.963,
+                "ndcg@10": 0.5638,
+                "queries": 27
+            },
+            "paraphrase": {
+                "recall@10": 0.8981,
+                "mrr": 1,
+                "ndcg@10": 0.8923,
+                "queries": 27
+            },
+            "accentless": {
+                "recall@10": 0.9167,
+                "mrr": 1,
+                "ndcg@10": 0.9195,
+                "queries": 27
+            }
+        },
+        "mixta_relajada": {
+            "all": {
+                "recall@10": 0.669,
+                "mrr": 0.9954,
+                "ndcg@10": 0.7136,
+                "queries": 108
+            },
+            "lexical": {
+                "recall@10": 0.7593,
+                "mrr": 1,
+                "ndcg@10": 0.7921,
+                "queries": 27
+            },
+            "acronym": {
+                "recall@10": 0.4722,
+                "mrr": 0.9815,
+                "ndcg@10": 0.556,
+                "queries": 27
+            },
+            "paraphrase": {
+                "recall@10": 0.7037,
+                "mrr": 1,
+                "ndcg@10": 0.7234,
+                "queries": 27
+            },
+            "accentless": {
+                "recall@10": 0.7407,
+                "mrr": 1,
+                "ndcg@10": 0.7827,
+                "queries": 27
+            }
+        }
+    },
+    "filtered": {
+        "queries": 8,
+        "ann_vs_exact_overlap": 1,
+        "narrow_recall_exact": 1,
+        "narrow_recall_ann": 1,
+        "admin_recall_exact": 0.9063,
+        "narrow_ann_minus_admin_exact_points": 9.37
+    },
+    "latency_sql_stage": {
+        "exacta": {
+            "25": {
+                "p50_ms": 1.49,
+                "p95_ms": 2.21
+            },
+            "50": {
+                "p50_ms": 1.62,
+                "p95_ms": 2.27
+            },
+            "100": {
+                "p50_ms": 1.71,
+                "p95_ms": 2.5
+            }
+        },
+        "significado": {
+            "25": {
+                "p50_ms": 3.33,
+                "p95_ms": 4.84
+            },
+            "50": {
+                "p50_ms": 3.22,
+                "p95_ms": 4.52
+            },
+            "100": {
+                "p50_ms": 3.52,
+                "p95_ms": 5.27
+            }
+        },
+        "mixta": {
+            "25": {
+                "p50_ms": 4.81,
+                "p95_ms": 6.68
+            },
+            "50": {
+                "p50_ms": 4.6,
+                "p95_ms": 6.69
+            },
+            "100": {
+                "p50_ms": 4.15,
+                "p95_ms": 6.84
+            }
+        }
+    },
+    "gate": {
+        "hybrid_beats_both_recall": true,
+        "hybrid_beats_both_mrr": false,
+        "semantic_beats_keyword_on_paraphrase": true,
+        "glossary_helps_acronym_queries": true,
+        "hybrid_with_or_relaxation_beats_both_recall": false,
+        "filtered_shortfall_within_5_points": true
+    },
+    "note": "Synthetic Spanish APS corpus (spikes\/s4\/topics.py); indicative for quality and latency. Head-term pre-limit effect, 1M-page latency and filtered recall at scale are S7."
+}

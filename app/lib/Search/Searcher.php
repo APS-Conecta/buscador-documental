@@ -108,7 +108,9 @@ class Searcher {
 				}
 			}
 		}
-		$keyword = $mode === 'significado' ? [] : $this->candidates->exacta($r->query, $this->glossary->alternatives($r->query), $set, $r->filters, self::CAP);
+		// Mixta keeps the keyword leg strict: the OR relaxation of plain keyword search only adds common-word noise that dilutes the
+		// fusion, while the vector leg already covers the fuzzy matches (S4 evaluation: recall@10 0.67 with it, 0.79 without).
+		$keyword = $mode === 'significado' ? [] : $this->candidates->exacta($r->query, $this->glossary->alternatives($r->query), $set, $r->filters, self::CAP, $mode === 'mixta' ? false : null);
 		$semantic = [];
 		if ($mode !== 'exacta') {
 			$exact = !$this->candidates->hasAnnIndex($profile['gen'])

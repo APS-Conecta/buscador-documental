@@ -47,3 +47,19 @@ Status: **indicative**. Measured by the S0 harness on a synthetic Spanish corpus
 - **Per-window cost:** forward window of 5 000 files 28 ms (index-driven), permission window 19 ms, eligible set 1.85 s for 300 000 files. **The reverse pass is the one to watch**: its window plan scans `oc_filecache` in full every time (149 ms per window at 300 000 files), so its cost grows with files x windows.
 - **At 1 000 000 files (extrapolation, not measured):** the linear passes would take about 35 s; the reverse pass up to about 11 times its 4.2 s (about 45 s) if its plan does not change, so roughly one to two minutes in all. Real `oc_filecache` rows carry more columns and indexes than these synthetic ones, and a real instance is not one rule over one flat tree: measure on a real instance before relying on this (S5/S7).
 - **Outbox processing:** the job drains for up to 45 s per run in batches of 200 instead of one batch a minute; an initial scan that queues 300 000 events is no longer an 80-hour backlog (event handling speed itself is measured per file in the live suites, not benchmarked at scale).
+
+## S4 additions (2026-10-18)
+Measured with Ollama on CPU (4 cores allowed, no GPU), batch 16, `make -C app eval-search`; raw numbers in `spikes/s4/results-s4/`.
+
+| Item | bge-m3 (1024-d) | qwen3-embedding:0.6b (1024-d) |
+|---|---|---|
+| Embedding throughput, 170-word chunks (about 250-300 tokens) | **1.06 chunks/s** | 0.51 chunks/s |
+| Embedding throughput, 45-word documents | 4.6 /s | 1.9 /s |
+| Query embedding, p50 / p95 | 165 / 300 ms | 460 / 680 ms |
+| Vector storage per chunk (`halfvec(1024)`) | 2 KB (+ HNSW about 1.3x) | same |
+
+Consequences:
+- **Backfill is dominated by embedding on a CPU-only box.** At 1 chunk/s, 100 000 pages (about 300 000 chunks) take about 83 hours on 4 cores, 1 000 000 pages (about 3 000 000 chunks) about 33 days. Eight cores should roughly halve that; a GPU is the realistic route for large corpora. ADR-0004's rule that the preflight must not recommend a profile the box cannot finish stays in force; `occ buscador:profile` does not yet measure eligibility, S5 adds it.
+- Keyword search is available long before vectors: the vector lane runs after the text lane and never blocks it.
+- qwen3-embedding:0.6b was slower than bge-m3 on this Ollama build and no better on the quality set, so bge-m3 is the first profile.
+- 1024 dimensions double the vector storage of the 384-d model used in S0: for 3M chunks about 6 GB of vectors plus about 8 GB of HNSW index.

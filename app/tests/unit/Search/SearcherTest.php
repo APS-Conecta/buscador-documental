@@ -79,8 +79,8 @@ class SearcherTest extends TestCase {
 
 		/** @var CandidateQuery&MockObject $cand */
 		$cand = $this->createMock(CandidateQuery::class);
-		$cand->method('exacta')->willReturnCallback(function (string $q, array $alt, string $set, Filters $f, int $limit) {
-			$this->seen[] = ['exacta', [$q, $alt, $f, $limit]];
+		$cand->method('exacta')->willReturnCallback(function (string $q, array $alt, string $set, Filters $f, int $limit, ?bool $relax = null) {
+			$this->seen[] = ['exacta', [$q, $alt, $f, $limit, $relax]];
 			return array_slice($this->keywordRows, 0, $limit);
 		});
 		$cand->method('significado')->willReturnCallback(function (array $v, int $gen, string $set, Filters $f, int $limit, bool $exact) {
@@ -230,6 +230,16 @@ class SearcherTest extends TestCase {
 			$this->assertSame(7, $f->folderId);
 			$this->assertSame(['application/pdf'], $f->mimes);
 		}
+	}
+
+	public function testOnlyTheKeywordModeRelaxesToOr(): void {
+		$this->corpus(3);
+		$this->vectorRows = [['file_id' => 1, 'chunk_id' => 10]];
+		$this->searcher()->search('b', $this->req(['mode' => 'exacta']));
+		$this->assertNull($this->seen[0][1][4], 'exacta: relax when the strict pass is thin');
+		$this->seen = [];
+		$this->searcher()->search('b', $this->req(['mode' => 'mixta']));
+		$this->assertFalse($this->seen[0][1][4], 'mixta: strict keyword leg, the vector leg covers the fuzzy part (S4 evaluation)');
 	}
 
 	public function testSignificadoUsesOnlyTheVectorLeg(): void {
