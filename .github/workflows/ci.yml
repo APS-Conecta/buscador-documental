@@ -37,11 +37,20 @@ jobs:
       - run: make -C worker test
       - run: make -C worker test-glossary
 
+  js:
+    name: js (vitest + axe, committed bundle matches sources, size budget)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - run: make -C app test-js
+      - run: make -C app check-js-drift
+
   smoke:
     name: smoke (permission canary)
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
-    needs: [php, worker]
+    timeout-minutes: 50
+    needs: [php, worker, js]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - run: make -C app test-canary
@@ -58,6 +67,7 @@ jobs:
       - run: make -C app test-e2e-egress
       - run: make -C app test-e2e-restore
       - run: make -C app test-e2e-ops
+      - run: make -C app test-e2e-ui
       - name: Logs on failure
         if: failure()
         run: docker compose -f compose.yaml logs --no-color --tail=200

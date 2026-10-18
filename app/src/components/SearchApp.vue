@@ -244,6 +244,14 @@ onBeforeUnmount(() => {
 })
 </script>
 
+<style>
+/* 3 px focus ring on everything focusable inside the app (guidelines: WCAG 2.2 AA, visible focus) */
+.app-buscador_documental a:focus-visible,
+.app-buscador_documental button:focus-visible,
+.app-buscador_documental input:focus-visible,
+.app-buscador_documental select:focus-visible { outline: 3px solid var(--color-primary-element); outline-offset: 2px; }
+</style>
+
 <style scoped>
 .bd-main { padding: 20px 24px; max-width: 1100px; }
 h1 { font-family: var(--font-face-title, inherit); font-size: 24px; margin: 0 0 14px; }

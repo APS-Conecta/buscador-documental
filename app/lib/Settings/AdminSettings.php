@@ -14,6 +14,7 @@ use OCP\Util;
 class AdminSettings implements ISettings {
 	public function getForm(): TemplateResponse {
 		Util::addScript('buscador_documental', 'buscador_documental-admin');
+		Util::addStyle('buscador_documental', 'buscador_documental-style');
 		return new TemplateResponse('buscador_documental', 'admin', [], '');
 	}
 

@@ -31,6 +31,7 @@ class PageController extends Controller {
 		$this->state->provideInitialState('readiness', $this->searcher->readiness());
 		$this->state->provideInitialState('is_admin', $uid !== '' && $this->groups->isAdmin($uid));
 		Util::addScript('buscador_documental', 'buscador_documental-main');
+		Util::addStyle('buscador_documental', 'buscador_documental-style');
 		return new TemplateResponse('buscador_documental', 'index');
 	}
 }

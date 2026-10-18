@@ -9,7 +9,7 @@ NET := bd-s1_default
 DOCKER := docker run --rm -v "$(CURDIR)":/app -w /app $(IMG)
 DOCKER_NET := docker run --rm --network $(NET) -v "$(CURDIR)":/app -w /app -e BD_PG_HOST=db $(IMG)
 
-.PHONY: instance-reset-schema test-e2e-rbac test-e2e-logs bench-reconcile test-e2e-reconcile test-e2e-erasure test-e2e-events test-e2e-scope test-e2e-groupfolder test-e2e-formats test-e2e-one test-contract test-search test-canary build-test-image deps test-unit test-db up down clean instance-migrate node-image npm-install build-js test-js check-js-drift
+.PHONY: instance-reset-schema test-e2e-rbac test-e2e-logs bench-reconcile test-e2e-reconcile test-e2e-erasure test-e2e-events test-e2e-scope test-e2e-groupfolder test-e2e-formats test-e2e-one test-e2e-ui test-contract test-search test-canary build-test-image deps test-unit test-db up down clean instance-migrate node-image npm-install build-js test-js check-js-drift
 
 build-test-image:
 	docker build -q -f Dockerfile.test -t $(IMG) . >/dev/null
@@ -149,3 +149,6 @@ test-js: npm-install
 check-js-drift: build-js
 	@git -C $(ROOT) diff --exit-code --stat -- app/js app/css || (echo "js/ or css/ is not what the sources build to: run make -C app build-js and commit" >&2; exit 1)
 	@test -z "$$(git -C $(ROOT) ls-files --others --exclude-standard -- app/js app/css)" || (echo "untracked build output" >&2; exit 1)
+
+test-e2e-ui: build-js
+	bash tests/e2e/ui.sh
