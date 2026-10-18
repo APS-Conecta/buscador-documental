@@ -12,6 +12,7 @@ use OCA\BuscadorDocumental\Search\SearchRequest;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
+use OCP\AppFramework\Http\Attribute\UserRateLimit;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IRequest;
 use OCP\IUserSession;
@@ -30,6 +31,7 @@ class SearchController extends Controller {
 	}
 
 	#[NoAdminRequired]
+	#[UserRateLimit(limit: 60, period: 60)]
 	public function search(): JSONResponse {
 		$uid = $this->session->getUser()?->getUID();
 		if ($uid === null) {

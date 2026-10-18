@@ -25,12 +25,22 @@ final class Cursor {
 		return hash('sha256', 'buscador-documental-cursor:' . $uid);
 	}
 
-	public function make(string $qid, int $pos, string $uid): string {
-		$body = self::b64(json_encode(['q' => $qid, 'p' => $pos, 'u' => self::uidHash($uid)], JSON_THROW_ON_ERROR));
+	/** The signing key is derived from the instance secret, never the secret itself. */
+	public static function forInstance(string $instanceSecret): self {
+		return new self(hash_hmac('sha256', 'buscador-documental-cursor-v1', $instanceSecret));
+	}
+
+	/** @param ?int $back where the page before this one started (refills make pages uneven, so Previous cannot be computed) */
+	public function make(string $qid, int $pos, string $uid, ?int $back = null): string {
+		$payload = ['q' => $qid, 'p' => $pos, 'u' => self::uidHash($uid)];
+		if ($back !== null) {
+			$payload['b'] = $back;
+		}
+		$body = self::b64(json_encode($payload, JSON_THROW_ON_ERROR));
 		return $body . '.' . $this->mac($body);
 	}
 
-	/** @return array{qid: string, pos: int}|null */
+	/** @return array{qid: string, pos: int, back: ?int}|null */
 	public function read(string $token, string $uid): ?array {
 		if ($token === '' || strlen($token) > self::MAX_LENGTH || substr_count($token, '.') !== 1) {
 			return null;
@@ -44,7 +54,11 @@ final class Cursor {
 			|| !hash_equals(self::uidHash($uid), (string)($data['u'] ?? ''))) {
 			return null;
 		}
-		return ['qid' => $data['q'], 'pos' => $data['p']];
+		$back = $data['b'] ?? null;
+		if ($back !== null && (!is_int($back) || $back < 0)) {
+			return null;
+		}
+		return ['qid' => $data['q'], 'pos' => $data['p'], 'back' => $back];
 	}
 
 	private function mac(string $body): string {

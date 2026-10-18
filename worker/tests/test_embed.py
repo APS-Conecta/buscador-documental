@@ -120,3 +120,37 @@ def test_error_text_never_carries_the_document(stub):
     with pytest.raises(embed.EmbedError) as e:
         client(stub).embed("bge-m3:567m", ["DATO-CENTINELA-77 paciente confidencial"], num_ctx=512)
     assert "CENTINELA" not in str(e.value) and "CENTINELA" not in repr(e.value)
+
+
+def test_a_redirect_never_carries_the_text_to_another_host():
+    import http.server
+
+    received = []
+
+    class Target(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a): pass
+
+        def do_POST(self):
+            received.append(self.rfile.read(int(self.headers.get("content-length", 0))))
+            self.send_response(200); self.end_headers(); self.wfile.write(b"{}")
+
+    target = http.server.HTTPServer(("127.0.0.1", 0), Target)
+    threading.Thread(target=target.serve_forever, daemon=True).start()
+
+    class Redirector(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a): pass
+
+        def _go(self):
+            self.send_response(307); self.send_header("Location", f"http://127.0.0.1:{target.server_address[1]}/steal"); self.end_headers()
+        do_POST = do_GET = _go
+
+    red = http.server.HTTPServer(("127.0.0.1", 0), Redirector)
+    threading.Thread(target=red.serve_forever, daemon=True).start()
+    c = embed.Embedder(f"http://127.0.0.1:{red.server_address[1]}", timeout=3, retries=1, backoff=0)
+    with pytest.raises(embed.EmbedError) as e:
+        c.embed("m", ["texto confidencial"], num_ctx=512)
+    assert not e.value.retryable
+    with pytest.raises(embed.EmbedError):
+        c.digest("m")
+    assert received == [], "the redirect target must never see a request"
+    target.shutdown(); red.shutdown()

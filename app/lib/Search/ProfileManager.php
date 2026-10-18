@@ -32,7 +32,7 @@ class ProfileManager {
 
 	/**
 	 * @param ?string $token null keeps the stored token, '' clears it
-	 * @return array{gen: int, digest: string, dim: int, model: string}
+	 * @return array{gen: int, digest: string, dim: int, model: string, warnings: list<string>}
 	 * @throws ProfileException
 	 */
 	public function set(string $profileId, string $url, ?string $token): array {
@@ -79,7 +79,14 @@ class ProfileManager {
 		}
 		$this->settings->set('vec_coverage_' . $gen, '0.0000');
 		$this->audit->record('occ', 'profile.set', null, ['gen' => $gen, 'profile' => $profile['id']]);
-		return ['gen' => $gen, 'digest' => $probe['digest'], 'dim' => $probe['dim'], 'model' => $profile['model']];
+		$host = strtolower(trim((string)$parts['host'], '[]'));
+		$loopback = in_array($host, ['localhost', '127.0.0.1', '::1'], true);
+		$sameNetworkName = !str_contains($host, '.') && !str_contains($host, ':');       // a service name such as `ollama`
+		$warnings = [];
+		if (strtolower((string)$parts['scheme']) === 'http' && !$loopback && !$sameNetworkName) {
+			$warnings[] = 'The address is plain http beyond this machine: document text and the token travel unencrypted. Use https behind a proxy that asks for authentication.';
+		}
+		return ['gen' => $gen, 'digest' => $probe['digest'], 'dim' => $probe['dim'], 'model' => $profile['model'], 'warnings' => $warnings];
 	}
 
 	/** @throws ProfileException */

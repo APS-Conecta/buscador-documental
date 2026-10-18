@@ -11,6 +11,8 @@ use OCA\BuscadorDocumental\Db\IndexDb;
 /** The ranked candidate list a search pages through: ids only, tied to a hashed user, short-lived (S4 design section 3). */
 class SnapshotStore {
 	public const TTL_SECONDS = 600;
+	/** A user keeps at most this many snapshots; the oldest go first. */
+	public const PER_USER = 20;
 
 	public function __construct(private IndexDb $db) {
 	}
@@ -19,6 +21,10 @@ class SnapshotStore {
 	public function save(string $uid, array $fileIds, array $chunkIds): string {
 		$qid = self::uuid();
 		$this->db->execute("DELETE FROM aps_search.search_snapshot WHERE created_at < now() - interval '20 minutes'");
+		$this->db->execute(
+			'DELETE FROM aps_search.search_snapshot WHERE uid_hash = ? AND qid NOT IN (SELECT qid FROM aps_search.search_snapshot WHERE uid_hash = ? ORDER BY created_at DESC, qid LIMIT ?)',
+			[Cursor::uidHash($uid), Cursor::uidHash($uid), self::PER_USER - 1],
+		);
 		$this->db->execute(
 			'INSERT INTO aps_search.search_snapshot (qid, uid_hash, file_ids, chunk_ids) VALUES (?::uuid, ?, ?::bigint[], ?::bigint[])',
 			[$qid, Cursor::uidHash($uid), IndexDb::textArray(array_map('strval', $fileIds)), IndexDb::textArray(array_map('strval', $chunkIds))],

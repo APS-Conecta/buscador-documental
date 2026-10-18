@@ -133,10 +133,10 @@ def test_losing_the_lease_or_changing_the_etag_abandons_quietly():
         assert db.failed == []
 
 
-def test_the_database_refusing_a_vector_fails_the_job_without_retry():
+def test_a_refused_vector_means_the_chunks_changed_under_us_so_the_job_is_left_to_run_again():
     db = FakeDb(chunks=[(1, None, "x")], raise_on=("write_vectors", psycopg.errors.RaiseException("bad_vector")))
-    assert go(db, FakeEmbedder()) == "failed:internal"
-    assert db.failed == [("internal", False)]
+    assert go(db, FakeEmbedder()) == "abandoned"
+    assert db.failed == [], "not a permanent failure: the reindex that replaced the chunks queues a fresh job"
 
 
 def test_a_lost_heartbeat_abandons_before_writing(monkeypatch):

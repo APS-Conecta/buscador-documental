@@ -30,6 +30,7 @@ class Profile extends Command {
 			->addArgument('action', InputArgument::REQUIRED, implode(' | ', self::ACTIONS))
 			->addArgument('value', InputArgument::OPTIONAL, 'set: profile id; activate and drop: generation number; semantic: on or off')
 			->addOption('url', null, InputOption::VALUE_REQUIRED, 'set: address of the Ollama endpoint (http or https)')
+			->addOption('retry-failed', null, InputOption::VALUE_NONE, 'refresh: also retry the files whose vectors the worker gave up on')
 			->addOption('token-file', null, InputOption::VALUE_REQUIRED, 'set: file holding the endpoint token ("-" clears the stored one)');
 	}
 
@@ -46,6 +47,9 @@ class Profile extends Command {
 				case 'show':
 					return $this->show($output);
 				case 'refresh':
+					if ($input->getOption('retry-failed')) {
+						$output->writeln(sprintf('put %d failed files back in the queue', $this->backfill->retryFailed()));
+					}
 					$r = $this->backfill->tick(1000);
 					$output->writeln(sprintf('queued %d files; generations made ready: %s', $r['queued'], $r['ready'] === [] ? 'none' : implode(', ', $r['ready'])));
 					foreach ($r['coverage'] as $gen => $c) {
@@ -99,6 +103,9 @@ class Profile extends Command {
 		}
 		$r = $this->manager->set($profileId, $url, $token);
 		$output->writeln(sprintf('generation %d: %s (%d dimensions) set up; vectors are computed in the background and the generation becomes ready when coverage is high enough', $r['gen'], $r['model'], $r['dim']));
+		foreach ($r['warnings'] as $w) {
+			$output->writeln('<comment>' . $w . '</comment>');
+		}
 		$output->writeln('then: occ buscador:profile activate ' . $r['gen']);
 		return 0;
 	}

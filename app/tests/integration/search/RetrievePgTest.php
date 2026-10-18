@@ -72,6 +72,14 @@ class RetrievePgTest extends DbTestCase {
 		$this->assertSame(1, $recheck->dropped(), 'the SQL stage returned the id and the recheck dropped it');
 	}
 
+	public function testAFileWaitingToBeReindexedGetsTitleOnlyEvenWithTheSameEtag(): void {
+		$this->index(10, ['u:b'], 'La hemoglobina glicosilada del paciente');
+		$this->app()->exec("UPDATE aps_search.file_state SET text_state = 'pending' WHERE file_id = 10");
+		$recheck = ScriptedRecheck::make([10 => [$this->node('a.pdf', 'e1')]], $this->checker());
+		$out = $this->retrieve($recheck)->run('b', 'hemoglobina', 10);
+		$this->assertSame([['file_id' => 10, 'title' => 'a.pdf']], $out['hits']);
+	}
+
 	public function testChangedFileGetsTitleOnlyUntilReindexed(): void {
 		$this->index(10, ['u:b'], 'La hemoglobina glicosilada del paciente');
 		$recheck = ScriptedRecheck::make([10 => [$this->node('a.pdf', 'e2')]], $this->checker());

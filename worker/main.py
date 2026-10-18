@@ -265,7 +265,7 @@ def vec_process(conn, embedder, dsn, job_id, epoch, etag, batch=EMBED_BATCH):
         if any(tag in str(e) for tag in SILENT_DB_ERRORS + ("retired",)):
             return "abandoned"
         if "bad_vector" in str(e):
-            return fail(conn, job_id, epoch, "internal", False)
+            return "abandoned"          # the chunk set changed under us (a reindex); the new job covers it, repeated failures end at the attempts cap
         raise
     except Exception:
         log.error("job %s: unexpected error (%s), lease will expire", job_id, where(sys.exc_info()))

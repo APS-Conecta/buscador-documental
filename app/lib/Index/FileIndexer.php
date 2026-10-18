@@ -55,7 +55,7 @@ class FileIndexer {
 		// Unclaimed jobs for an older etag are obsolete; claimed ones fail with etag_mismatch and are reclaimed.
 		$key = $fileId . ':' . $facts->etag;
 		$this->db->execute(
-			'DELETE FROM aps_search.job WHERE file_id = ? AND idem_key <> ? AND (lease_until IS NULL OR lease_until <= clock_timestamp())',
+			"DELETE FROM aps_search.job WHERE lane = 'text' AND file_id = ? AND idem_key <> ? AND (lease_until IS NULL OR lease_until <= clock_timestamp())",
 			[$fileId, $key],
 		);
 		$this->db->execute(

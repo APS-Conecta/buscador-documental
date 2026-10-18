@@ -120,6 +120,34 @@ class SearcherPgTest extends DbTestCase {
 		$this->assertSame(['file_id', 'title', 'heading', 'page_no', 'snippet'], array_keys($hit));
 	}
 
+	public function testAnUnreadableFileWithUnmodelledAccessChangesNothingTheCallerCanSee(): void {
+		$this->boot();
+		$this->doc(1, ['u:b'], 'hemoglobina glicosilada de b', [1, 0, 0]);
+		$without = $this->searcher()->search('b', $this->req(['mode' => 'mixta']));
+		$this->doc(2, ['u:other', 'x:recheck'], 'hemoglobina glicosilada de otra persona compartida con un círculo', [1, 0, 0]);
+		$this->nodes[2] = [];                                                   // B cannot read it
+		foreach (['exacta', 'significado', 'mixta'] as $mode) {
+			$a = $this->searcher()->search('b', $this->req(['mode' => $mode]));
+			$this->assertSame([1], $this->ids($a), $mode);
+			$this->assertSame(1, $a['page']['total'], "$mode: the unreadable file is not counted");
+			$this->assertSame(1, $a['page']['to'], "$mode: and does not move the page position");
+			$this->assertNull($a['cursors']['next'], $mode);
+		}
+		$with = $this->searcher()->search('b', $this->req(['mode' => 'mixta']));
+		$this->assertSame($without['page'], $with['page']);
+		$this->assertSame($without['cursors'], $with['cursors']);
+	}
+
+	public function testWhileAnEditIsWaitingToBeReindexedOnlyTheTitleIsShown(): void {
+		$this->boot();
+		$this->doc(1, ['u:b'], 'hemoglobina glicosilada versión antigua', [1, 0, 0], etag: 'new');
+		$this->app()->exec("UPDATE aps_search.file_state SET text_state = 'pending' WHERE file_id = 1");      // FileIndexer did this when the etag changed
+		foreach (['exacta', 'mixta'] as $mode) {
+			$out = $this->searcher()->search('b', $this->req(['mode' => $mode]));
+			$this->assertSame([['file_id' => 1, 'title' => 'f1.pdf']], $out['hits'], $mode);
+		}
+	}
+
 	public function testAChangedFileGetsItsTitleOnly(): void {
 		$this->boot();
 		$this->doc(1, ['u:b'], 'hemoglobina glicosilada', [1, 0, 0], etag: 'indexed-etag');

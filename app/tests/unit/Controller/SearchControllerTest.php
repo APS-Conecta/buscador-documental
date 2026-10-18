@@ -74,4 +74,10 @@ class SearchControllerTest extends TestCase {
 		$this->assertSame(200, $r->getStatus());
 		$this->assertSame(['modes' => [['mode' => 'exacta', 'enabled' => true, 'reason' => null]]], $r->getData());
 	}
+
+	public function testSearchIsRateLimitedPerUser(): void {
+		$attrs = (new \ReflectionMethod(SearchController::class, 'search'))->getAttributes(\OCP\AppFramework\Http\Attribute\UserRateLimit::class);
+		$this->assertCount(1, $attrs);
+		$this->assertLessThanOrEqual(120, $attrs[0]->getArguments()['limit']);
+	}
 }

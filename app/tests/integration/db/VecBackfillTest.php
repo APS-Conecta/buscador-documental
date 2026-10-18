@@ -115,4 +115,25 @@ class VecBackfillTest extends DbTestCase {
 		$r = $this->backfill()->tick(100);
 		$this->assertSame(1.0, $r['coverage'][1]);
 	}
+
+	public function testAReadyOrActiveGenerationThatLostItsIndexGetsItBackOnTheNextTick(): void {
+		$this->indexed(1);
+		$this->gen(1, 'ready');
+		$this->backfill()->tick(10);
+		$idx = static fn ($t) => (int)$t->app()->query("SELECT count(*) FROM pg_indexes WHERE tablename = 'chunk_vec_1' AND indexdef ILIKE '%hnsw%'")->fetchColumn();
+		$this->assertSame(1, $idx($this), 'built for a ready generation even though it was not readied by this tick');
+		self::connect('postgres', 'dev', self::$dbName)->exec('DROP INDEX aps_search.chunk_vec_1_hnsw');
+		$this->backfill()->tick(10);
+		$this->assertSame(1, $idx($this));
+	}
+
+	public function testRetryFailedPutsFailedFilesBackInTheQueue(): void {
+		$this->indexed(1);
+		$this->indexed(2);
+		$this->gen(1, 'active');
+		$this->app()->exec("UPDATE aps_search.file_state SET vec_state = 'failed' WHERE file_id = 1");
+		$this->assertSame(1, $this->backfill()->retryFailed());
+		$this->assertSame('pending', $this->app()->query('SELECT vec_state FROM aps_search.file_state WHERE file_id = 1')->fetchColumn());
+		$this->assertSame(0, $this->backfill()->retryFailed());
+	}
 }

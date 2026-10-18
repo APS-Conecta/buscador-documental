@@ -70,13 +70,16 @@ class Searcher {
 				}
 				$qid = $token['qid'];
 				$start = $token['pos'];
+				$back = $token['back'];
 			} else {
 				[$files, $chunks, $notice] = $this->db->withTimeout(self::TIMEOUT_MS, fn (): array => $this->rank($uid, $request));
+				[$files, $chunks] = $this->withoutUnreadableUnmodelled($uid, $files, $chunks);
 				$snap = ['file_ids' => $files, 'chunk_ids' => $chunks];
 				$qid = $this->snapshots->save($uid, $files, $chunks);
 				$start = 0;
+				$back = null;
 			}
-			return $this->page($uid, $request, $snap, $qid, $start, $notice);
+			return $this->page($uid, $request, $snap, $qid, $start, $back, $notice);
 		} catch (ExclusionUnavailable $e) {
 			$this->logger->warning('buscador_documental: exclusion state unavailable, search refused (' . get_class($e) . ')');
 			return $this->empty('unavailable', 'La búsqueda no está disponible en este momento.');
@@ -129,6 +132,30 @@ class Searcher {
 		return [array_map(static fn (array $x): int => (int)$x['file_id'], $ranked), array_map(static fn (array $x): int => (int)$x['chunk_id'], $ranked), $notice];
 	}
 
+	/**
+	 * The stored principals judge most files well, but not the ones with access they cannot model. Those are rechecked now,
+	 * before the list is stored, so the totals, positions and cursors the caller sees never count a file they cannot read.
+	 *
+	 * @param list<int> $files @param list<int> $chunks
+	 * @return array{0: list<int>, 1: list<int>}
+	 */
+	private function withoutUnreadableUnmodelled(string $uid, array $files, array $chunks): array {
+		$unmodelled = array_flip($this->candidates->unmodelledAmong($files));
+		if ($unmodelled === []) {
+			return [$files, $chunks];
+		}
+		$readable = $this->recheck->filter($uid, array_keys($unmodelled));
+		$f = [];
+		$c = [];
+		foreach ($files as $i => $id) {
+			if (!isset($unmodelled[$id]) || isset($readable[$id])) {
+				$f[] = $id;
+				$c[] = $chunks[$i];
+			}
+		}
+		return [$f, $c];
+	}
+
 	/** @param list<array<string, mixed>> $ranked @return list<array<string, mixed>> */
 	private function sorted(array $ranked, string $sort): array {
 		$ids = array_map(static fn (array $x): int => (int)$x['file_id'], $ranked);
@@ -154,7 +181,7 @@ class Searcher {
 	 * @param ?array{code: string, message: string} $notice
 	 * @return array<string, mixed>
 	 */
-	private function page(string $uid, SearchRequest $r, array $snap, string $qid, int $start, ?array $notice): array {
+	private function page(string $uid, SearchRequest $r, array $snap, string $qid, int $start, ?int $back, ?array $notice): array {
 		$total = count($snap['file_ids']);
 		$size = $r->pageSize;
 		$pos = min($start, $total);
@@ -175,7 +202,7 @@ class Searcher {
 		$etags = [];
 		if ($picked !== []) {
 			$ids = array_map(static fn (array $p): int => $p[1]->fileId, $picked);
-			foreach ($this->db->rows('SELECT file_id, etag FROM aps_search.file_state WHERE file_id = ANY(?::bigint[])', [IndexDb::textArray(array_map('strval', $ids))]) as $row) {
+			foreach ($this->db->rows("SELECT file_id, etag FROM aps_search.file_state WHERE file_id = ANY(?::bigint[]) AND text_state = 'indexed'", [IndexDb::textArray(array_map('strval', $ids))]) as $row) {
 				$etags[(int)$row['file_id']] = (string)$row['etag'];
 			}
 		}
@@ -190,8 +217,8 @@ class Searcher {
 			'page' => ['from' => $hits === [] ? 0 : $start + 1, 'to' => $pos, 'total' => $total, 'capped' => $total >= self::CAP, 'size' => $size],
 			'cursors' => [
 				'first' => $start > 0 ? $this->cursor->make($qid, 0, $uid) : null,
-				'prev' => $start > 0 ? $this->cursor->make($qid, max(0, $start - $size), $uid) : null,
-				'next' => $pos < $total ? $this->cursor->make($qid, $pos, $uid) : null,
+				'prev' => $start > 0 ? $this->cursor->make($qid, $back ?? max(0, $start - $size), $uid) : null,
+				'next' => $pos < $total ? $this->cursor->make($qid, $pos, $uid, $start) : null,
 				'last' => $lastStart > $start && $lastStart >= $pos ? $this->cursor->make($qid, $lastStart, $uid) : null,
 			],
 		];

@@ -60,11 +60,27 @@ class ProfileManagerTest extends DbTestCase {
 
 	public function testSetRecordsTheProbedModelAndStartsGenerationOne(): void {
 		$r = $this->manager()->set('bge-m3', 'http://ollama:11434', 's3cr3t');
-		$this->assertSame(['gen' => 1, 'digest' => 'sha256:aaa', 'dim' => 1024, 'model' => 'bge-m3:567m'], $r);
+		$this->assertSame(['gen' => 1, 'digest' => 'sha256:aaa', 'dim' => 1024, 'model' => 'bge-m3:567m', 'warnings' => []], $r);
 		$this->assertSame(['1:building'], $this->states());
 		$this->assertSame('http://ollama:11434', $this->config['embed_url']);
 		$this->assertSame(['s3cr3t', '1'], [$this->config['embed_token'], $this->config['embed_token.sensitive']], 'the token is stored as a sensitive value');
 		$this->assertSame('1024', (string)$this->app()->query('SELECT dim FROM aps_search.embedding_profile WHERE gen = 1')->fetchColumn());
+	}
+
+	public function testPlainHttpBeyondTheMachineIsWarnedAbout(): void {
+		$cases = [
+			'http://ollama.clinic.lan:11434' => true, 'http://10.0.0.5:11434' => true, 'https://ollama.clinic.lan' => false,
+			'http://127.0.0.1:11434' => false, 'http://localhost:11434' => false, 'http://[::1]:11434' => false, 'http://ollama:11434' => false,
+		];
+		$gen = 0;
+		foreach ($cases as $url => $warns) {
+			$this->probe = ['digest' => 'sha256:d' . ++$gen, 'dim' => 1024];
+			$w = $this->manager()->set('bge-m3', $url, null)['warnings'];
+			$this->assertSame($warns, $w !== [], $url);
+			if ($warns) {
+				$this->assertStringContainsString('unencrypted', $w[0]);
+			}
+		}
 	}
 
 	public function testItIsAuditedWithoutTheAddressOrTheToken(): void {

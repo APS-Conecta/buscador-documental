@@ -16,7 +16,20 @@ class CursorTest extends TestCase {
 	public function testARoundTripKeepsPositionAndSnapshot(): void {
 		$c = new Cursor(self::SECRET);
 		$token = $c->make(self::QID, 75, 'uidhash-a');
-		$this->assertSame(['qid' => self::QID, 'pos' => 75], $c->read($token, 'uidhash-a'));
+		$this->assertSame(['qid' => self::QID, 'pos' => 75, 'back' => null], $c->read($token, 'uidhash-a'));
+	}
+
+	public function testTheCursorCanRememberWhereThePreviousPageStarted(): void {
+		$c = new Cursor(self::SECRET);
+		$this->assertSame(['qid' => self::QID, 'pos' => 75, 'back' => 40], $c->read($c->make(self::QID, 75, 'u', 40), 'u'));
+		$this->assertNull($c->read($c->make(self::QID, 75, 'u'), 'u')['back']);
+	}
+
+	public function testTheInstanceKeyIsDerivedNotTheRawSecret(): void {
+		$a = Cursor::forInstance('raw-instance-secret');
+		$token = $a->make(self::QID, 1, 'u');
+		$this->assertNull((new Cursor('raw-instance-secret'))->read($token, 'u'), 'the raw secret is not the signing key');
+		$this->assertNotNull(Cursor::forInstance('raw-instance-secret')->read($token, 'u'));
 	}
 
 	public function testTheTokenIsUrlSafeAndHoldsNoUserNameOrQuery(): void {

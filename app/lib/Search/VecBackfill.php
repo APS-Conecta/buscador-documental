@@ -27,24 +27,36 @@ class VecBackfill {
 		$ready = [];
 		foreach ($this->db->rows("SELECT gen, state FROM aps_search.embedding_profile WHERE state IN ('building', 'ready', 'active') ORDER BY gen") as $g) {
 			$gen = (int)$g['gen'];
-			if (!$paused) {
-				$queued += (int)$this->db->rows('SELECT aps_search.enqueue_vec_backfill(?, ?) AS n', [$gen, $batch])[0]['n'];
-			}
-			$c = $this->db->rows('SELECT files, embedded FROM aps_search.vec_coverage(?)', [$gen])[0];
-			$ratio = (int)$c['files'] === 0 ? 1.0 : (float)$c['embedded'] / (float)$c['files'];
-			$coverage[$gen] = $ratio;
-			$text = sprintf('%.4f', $ratio);
-			$this->settings->set('vec_coverage_' . $gen, $text);
-			if ($g['state'] === 'active') {
-				$this->settings->set('vec_coverage', $text);
-			}
-			if ($g['state'] === 'building' && $ratio >= $min) {
-				$this->db->rows('SELECT aps_search.mark_generation_ready(?)', [$gen]);
-				$this->db->rows('SELECT aps_search.build_vec_index(?)', [$gen]);
-				$ready[] = $gen;
+			try {
+				if (!$paused) {
+					$queued += (int)$this->db->rows('SELECT aps_search.enqueue_vec_backfill(?, ?) AS n', [$gen, $batch])[0]['n'];
+				}
+				$c = $this->db->rows('SELECT files, embedded FROM aps_search.vec_coverage(?)', [$gen])[0];
+				$ratio = (int)$c['files'] === 0 ? 1.0 : (float)$c['embedded'] / (float)$c['files'];
+				$coverage[$gen] = $ratio;
+				$text = sprintf('%.4f', $ratio);
+				$this->settings->set('vec_coverage_' . $gen, $text);
+				if ($g['state'] === 'active') {
+					$this->settings->set('vec_coverage', $text);
+				}
+				if ($g['state'] === 'building' && $ratio >= $min) {
+					$this->db->rows('SELECT aps_search.mark_generation_ready(?)', [$gen]);
+					$ready[] = $gen;
+				}
+				// A ready or active generation without its index would be searched by full scan: (re)build it, whatever stopped it before.
+				if ($g['state'] !== 'building' || in_array($gen, $ready, true)) {
+					$this->db->rows('SELECT aps_search.build_vec_index(?)', [$gen]);
+				}
+			} catch (\Throwable) {
+				continue;                                          // one generation's trouble must not stop the others; the next tick tries again
 			}
 		}
 		return ['queued' => $queued, 'coverage' => $coverage, 'ready' => $ready];
+	}
+
+	/** @return int files put back in the queue: those the worker gave up on (see `occ buscador:profile refresh --retry-failed`) */
+	public function retryFailed(): int {
+		return $this->db->execute("UPDATE aps_search.file_state SET vec_state = 'pending', updated_at = now() WHERE vec_state = 'failed'");
 	}
 
 	private function minCoverage(): float {

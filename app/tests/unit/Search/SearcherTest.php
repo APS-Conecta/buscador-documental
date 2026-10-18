@@ -42,6 +42,8 @@ class SearcherTest extends TestCase {
 	private ?array $queryVector = [1.0, 0.0, 0.0];
 	private int $accessible = 50;
 	private bool $ann = true;
+	/** @var list<int> files stored with x:recheck (access the prefilter cannot model) */
+	private array $unmodelled = [];
 	/** @var array<int, list<Node>> */
 	private array $nodes = [];
 
@@ -87,6 +89,7 @@ class SearcherTest extends TestCase {
 			$this->seen[] = ['significado', [$gen, $f, $limit, $exact]];
 			return array_slice($this->vectorRows, 0, $limit);
 		});
+		$cand->method('unmodelledAmong')->willReturnCallback(fn (array $ids) => array_values(array_intersect($ids, $this->unmodelled)));
 		$cand->method('accessibleFiles')->willReturnCallback(fn () => $this->accessible);
 		$cand->method('hasAnnIndex')->willReturnCallback(fn () => $this->ann);
 
@@ -149,6 +152,33 @@ class SearcherTest extends TestCase {
 		$this->assertSame(range(1, 25), $this->ids($first));
 		$last = $s->search('b', $this->req(['cursor' => $p1['cursors']['last']]));
 		$this->assertSame(range(51, 60), $this->ids($last));
+	}
+
+	public function testFilesTheStoredPrincipalsCannotJudgeAreRecheckedBeforeAnythingIsCounted(): void {
+		$this->corpus(30);
+		$this->unmodelled = [2, 5, 7];                                         // e.g. shared with a circle or a Talk room
+		$this->nodes[2] = [];                                                  // B cannot read file 2 or 5
+		$this->nodes[5] = [];
+		$s = $this->searcher();
+		$out = $s->search('b', $this->req());
+		$this->assertSame(28, $out['page']['total'], 'unreadable unmodelled files are not in the total');
+		$this->assertNotContains(2, $this->ids($out));
+		$this->assertContains(7, $this->ids($out), 'a readable unmodelled file stays');
+	}
+
+	public function testPreviousGoesBackToWhereThePreviousPageReallyStarted(): void {
+		$this->corpus(80);
+		foreach (range(1, 10) as $gone) {
+			$this->nodes[$gone] = [];                                           // page 1 will use 35 positions to show 25 hits
+		}
+		$s = $this->searcher();
+		$p1 = $s->search('b', $this->req());
+		$this->assertSame(range(11, 35), $this->ids($p1));
+		$p2 = $s->search('b', $this->req(['cursor' => $p1['cursors']['next']]));
+		$this->assertSame(range(36, 60), $this->ids($p2));
+		$back = $s->search('b', $this->req(['cursor' => $p2['cursors']['prev']]));
+		$this->assertSame(range(11, 35), $this->ids($back), 'not a page that starts inside page 1');
+		$this->assertSame([], array_intersect($this->ids($back), $this->ids($p2)));
 	}
 
 	public function testHitsDroppedByTheRecheckAreRefilledFromLaterPositions(): void {

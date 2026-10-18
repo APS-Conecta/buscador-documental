@@ -97,4 +97,15 @@ class FileIndexerTest extends DbTestCase {
 		$ids = $this->app()->query('SELECT file_id FROM aps_search.file_meta WHERE ancestors @> ARRAY[3]::bigint[] ORDER BY 1')->fetchAll(\PDO::FETCH_COLUMN);
 		$this->assertSame([41], array_map('intval', $ids));
 	}
+
+	public function testEnqueueNeverDropsTheVectorLanesJobs(): void {
+		$this->indexer()->enqueue(50);
+		$this->app()->exec("INSERT INTO aps_search.job (lane, file_id, idem_key, gen, attempts, not_before) VALUES ('vec', 50, '50:e1:1', 1, 3, now() + interval '1 hour')");
+		$this->indexer()->enqueue(50);                                       // same etag: nothing to replace
+		$this->etag = 'e2';
+		$this->indexer()->enqueue(50);                                       // new etag: the idle TEXT job of the old etag goes, the vector job is not this method's to touch
+		$row = $this->app()->query("SELECT attempts FROM aps_search.job WHERE lane = 'vec' AND file_id = 50")->fetchColumn();
+		$this->assertSame(3, (int)$row, 'a backing-off vector job keeps its attempts');
+		$this->assertSame(1, (int)$this->app()->query("SELECT count(*) FROM aps_search.job WHERE lane = 'text' AND file_id = 50")->fetchColumn());
+	}
 }

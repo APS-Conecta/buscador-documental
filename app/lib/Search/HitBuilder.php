@@ -41,7 +41,7 @@ class HitBuilder {
 				$tq .= ' || websearch_to_tsquery(\'aps_search.spanish_unaccent\'::regconfig, ?)';
 			}
 			$rows = $this->db->withTimeout(self::TIMEOUT_MS, fn (): array => $this->db->rows(
-				"SELECT chunk_id, page_no, heading,
+				"SELECT chunk_id, file_id, page_no, heading,
 					ts_headline('aps_search.spanish_unaccent'::regconfig, text, $tq,
 						'StartSel=" . $open . ", StopSel=" . $close . ", MaxWords=35, MinWords=15, MaxFragments=1') AS snippet
 				 FROM aps_search.chunk WHERE chunk_id = ANY(?::bigint[])",
@@ -56,7 +56,8 @@ class HitBuilder {
 		foreach ($survivors as [$row, $r]) {
 			$hit = ['file_id' => $r->fileId, 'title' => $r->node->getName()];
 			$chunk = $chunks[(int)$row['chunk_id']] ?? null;
-			if ($this->snippetServable($row, $r) && $chunk !== null) {
+			// the chunk must belong to this very file (a defence in depth: the snapshot is private and ids are not guessable)
+			if ($this->snippetServable($row, $r) && $chunk !== null && (int)($chunk['file_id'] ?? $r->fileId) === $r->fileId) {
 				$hit['heading'] = $chunk['heading'] === null ? null : (string)$chunk['heading'];
 				$hit['page_no'] = $chunk['page_no'] === null ? null : (int)$chunk['page_no'];
 				$hit['snippet'] = str_replace([$open, $close], ['<mark>', '</mark>'], htmlspecialchars((string)$chunk['snippet'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));

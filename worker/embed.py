@@ -51,10 +51,10 @@ class Embedder:
         return [x / n for x in v]
 
     def _get(self, path):
-        return self._request(lambda: self.session.get(self.base + path, timeout=self.timeout))
+        return self._request(lambda: self.session.get(self.base + path, timeout=self.timeout, allow_redirects=False))
 
     def _post(self, path, body):
-        return self._request(lambda: self.session.post(self.base + path, json=body, timeout=self.timeout))
+        return self._request(lambda: self.session.post(self.base + path, json=body, timeout=self.timeout, allow_redirects=False))
 
     def _request(self, send):
         last = None
@@ -74,6 +74,7 @@ class Embedder:
                 if not isinstance(data, dict):
                     raise EmbedError("answer shape", False)
                 return data
+            # A redirect could carry the document text to another host: it is a refusal, never followed.
             if r.status_code in (429, 500, 502, 503, 504):
                 last = EmbedError(f"endpoint busy ({r.status_code})", True)
                 continue

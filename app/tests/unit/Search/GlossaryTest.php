@@ -78,6 +78,20 @@ class GlossaryTest extends TestCase {
 		Glossary::fromFile($tmp);
 	}
 
+	public function testOtherAccentsFoldLikeTheIndexToo(): void {
+		$this->assertSame('informacao nandu cono aeiou', Glossary::fold('Informação Ñandú çoño ÂÊÎÔÛ'));
+	}
+
+	public function testAOneWordExpansionIsNotAddedBackWhenSomeoneTypesTheCommonWord(): void {
+		$g = new Glossary([
+			['key' => 'enf', 'expansion' => 'enfermera', 'ambiguous' => false],
+			['key' => 'rem', 'expansion' => 'resumen estadistico mensual', 'ambiguous' => false],
+		]);
+		$this->assertSame([], $g->alternatives('la enfermera del turno'), 'enfermera is an ordinary word');
+		$this->assertSame(['enfermera'], $g->alternatives('ENF de sala'), 'the acronym still expands');
+		$this->assertSame(['rem'], $g->alternatives('resumen estadistico mensual'), 'a multi-word expansion still adds its acronym');
+	}
+
 	public function testFoldMatchesTheIndexFolding(): void {
 		$this->assertSame('estadistico nandu atencion 10', Glossary::fold('Estadístico ÑANDÚ Atención 10ª'));
 	}

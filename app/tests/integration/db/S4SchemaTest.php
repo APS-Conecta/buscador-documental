@@ -115,6 +115,7 @@ class S4SchemaTest extends DbTestCase {
 			}
 			$this->assertSame(2, (int)$app->query('SELECT schema_ver FROM aps_search.schema_meta')->fetchColumn());
 			$app->exec("INSERT INTO aps_search.file_state (file_id, etag, text_state) VALUES (1, 'e', 'indexed')");
+			$app->exec("INSERT INTO aps_search.file_meta (file_id, name) VALUES (1, 'a.pdf')");
 			foreach ([1, 2] as $_) {
 				foreach (SqlScript::upgradeToV3() as $st) {
 					$app->exec($st);
@@ -122,9 +123,17 @@ class S4SchemaTest extends DbTestCase {
 			}
 			$this->assertSame(3, (int)$app->query('SELECT schema_ver FROM aps_search.schema_meta')->fetchColumn());
 			$this->assertSame(1, (int)$app->query('SELECT count(*) FROM aps_search.file_state WHERE file_id = 1')->fetchColumn());
+			$this->assertSame(1, (int)$app->query("SELECT count(*) FROM aps_search.outbox WHERE file_id = 1 AND kind = 'file' AND processed_at IS NULL")->fetchColumn(), 'a file indexed before S4 is queued once so its folder chain gets filled in');
 			$this->assertStringContainsString('vector', $this->failure(static fn () => $app->exec("SELECT aps_search.create_generation(1, 'p', 'm', 'd', 3, 'f16', '', '', 512)")), 'a missing pgvector is named when a profile is set, not at install');
 		} finally {
 			self::admin('nextcloud')->exec("DROP DATABASE IF EXISTS $name WITH (FORCE)");
 		}
+	}
+
+	public function testTheWorkerRoleHasNoPrivilegeOnAGenerationTable(): void {
+		$this->newGeneration(1, 3);
+		$admin = self::connect('postgres', 'dev', self::$dbName);
+		$this->assertFalse((bool)$admin->query("SELECT has_table_privilege('bd_worker', 'aps_search.chunk_vec_1', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE')")->fetchColumn());
+		$this->assertStringContainsString('permission denied', $this->failure(fn () => $this->worker()->exec('SELECT * FROM aps_search.chunk_vec_1')));
 	}
 }

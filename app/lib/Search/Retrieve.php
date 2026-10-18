@@ -96,7 +96,7 @@ class Retrieve {
 				FROM cand, q
 				ORDER BY cand.file_id, ts_rank(cand.tsv, q.tq) DESC, cand.chunk_id DESC
 			)
-			SELECT best.file_id, best.chunk_id, fs.etag FROM best JOIN aps_search.file_state fs ON fs.file_id = best.file_id ORDER BY best.rank DESC, best.file_id LIMIT ? OFFSET ?",
+			SELECT best.file_id, best.chunk_id, fs.etag FROM best LEFT JOIN aps_search.file_state fs ON fs.file_id = best.file_id AND fs.text_state = 'indexed' ORDER BY best.rank DESC, best.file_id LIMIT ? OFFSET ?",
 			[$query, $principalSet, $take, $offset],
 		);
 	}

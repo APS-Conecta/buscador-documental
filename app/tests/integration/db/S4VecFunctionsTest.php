@@ -240,4 +240,34 @@ class S4VecFunctionsTest extends DbTestCase {
 		$this->app()->exec("INSERT INTO aps_search.settings (key, value) VALUES ('paused', '1')");
 		$this->assertNull($this->claimVec($this->worker()));
 	}
+
+	public function testDuplicateChunkIdsAreABadVectorNotARawError(): void {
+		$this->generation(1);
+		$this->indexed(10, 1);
+		$w = $this->worker();
+		$c = $this->claimVec($w);
+		$id = $this->chunkIds(10)[0];
+		$this->assertStringContainsString('bad_vector', $this->failure(fn () => $this->writeVec($w, $c, [$id, $id], ['[1,0,0]', '[0,1,0]'])));
+	}
+
+	public function testBackfillLeavesPermanentlyFailedFilesAlone(): void {
+		$this->indexed(10, 1);
+		$this->indexed(11, 1);
+		$this->generation(1, 'building');
+		$this->app()->exec("UPDATE aps_search.file_state SET vec_state = 'failed' WHERE file_id = 10");
+		$this->assertSame(1, (int)$this->app()->query('SELECT aps_search.enqueue_vec_backfill(1, 10)')->fetchColumn(), 'only the file that has not failed');
+		$this->assertSame(0, (int)$this->app()->query("SELECT count(*) FROM aps_search.job WHERE lane = 'vec' AND file_id = 10")->fetchColumn());
+	}
+
+	public function testActivationAndDropAreSerialised(): void {
+		$this->generation(1);
+		$this->generation(2, 'ready');
+		$app = $this->app();
+		$app->beginTransaction();
+		$app->exec('SELECT aps_search.activate_generation(2)');
+		$other = $this->app();
+		$other->exec("SET lock_timeout = '300ms'");
+		$this->assertStringContainsString('lock timeout', $this->failure(static fn () => $other->exec('SELECT aps_search.drop_generation(2)')), 'a drop waits for a concurrent activation instead of racing it');
+		$app->rollBack();
+	}
 }

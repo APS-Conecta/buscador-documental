@@ -44,6 +44,19 @@ class SnapshotAndStatePgTest extends DbTestCase {
 		$this->assertSame(1, (int)$this->app()->query('SELECT count(*) FROM aps_search.search_snapshot')->fetchColumn(), 'saving prunes what is long dead');
 	}
 
+	public function testOneUserCannotPileUpSnapshots(): void {
+		$s = new SnapshotStore($this->db());
+		$ids = [];
+		for ($i = 0; $i < SnapshotStore::PER_USER + 5; $i++) {
+			$ids[] = $s->save('alice', [$i], [$i]);
+		}
+		$s->save('bob', [1], [1]);
+		$this->assertSame(SnapshotStore::PER_USER, (int)$this->app()->query("SELECT count(*) FROM aps_search.search_snapshot WHERE uid_hash = '" . \OCA\BuscadorDocumental\Search\Cursor::uidHash('alice') . "'")->fetchColumn());
+		$this->assertNull($s->load($ids[0], 'alice'), 'the oldest went');
+		$this->assertNotNull($s->load(end($ids), 'alice'), 'the newest stayed');
+		$this->assertSame(1, (int)$this->app()->query("SELECT count(*) FROM aps_search.search_snapshot WHERE uid_hash = '" . \OCA\BuscadorDocumental\Search\Cursor::uidHash('bob') . "'")->fetchColumn());
+	}
+
 	public function testAnEmptyListIsAValidSnapshot(): void {
 		$s = new SnapshotStore($this->db());
 		$this->assertSame(['file_ids' => [], 'chunk_ids' => []], $s->load($s->save('alice', [], []), 'alice'));

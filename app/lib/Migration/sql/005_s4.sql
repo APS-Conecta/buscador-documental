@@ -15,6 +15,9 @@ ALTER TABLE file_meta ADD COLUMN IF NOT EXISTS ancestors bigint[];
 -- @@
 CREATE INDEX IF NOT EXISTS file_meta_ancestors_idx ON file_meta USING gin (ancestors);
 -- @@
+-- Files indexed before this step have no folder chain: queue each once so the outbox processor fills it in (idempotent).
+INSERT INTO outbox (file_id, kind) SELECT file_id, 'file' FROM file_meta WHERE ancestors IS NULL ON CONFLICT DO NOTHING;
+-- @@
 -- The embedding generation a vec job is for (NULL for text jobs).
 ALTER TABLE job ADD COLUMN IF NOT EXISTS gen int;
 -- @@
@@ -131,6 +134,7 @@ LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = aps_search, pg_catalog, pg_temp
 AS $$
 BEGIN
+	PERFORM 1 FROM embedding_profile ORDER BY gen FOR UPDATE;       -- serialises with drop_generation and other activations
 	IF NOT EXISTS (SELECT 1 FROM embedding_profile WHERE gen = p_gen AND state IN ('ready', 'active')) THEN
 		RAISE EXCEPTION 'generation % is not ready', p_gen;
 	END IF;
@@ -145,6 +149,7 @@ LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = aps_search, pg_catalog, pg_temp
 AS $$
 BEGIN
+	PERFORM 1 FROM embedding_profile ORDER BY gen FOR UPDATE;       -- serialises with activate_generation
 	IF EXISTS (SELECT 1 FROM embedding_profile WHERE gen = p_gen AND state = 'active') THEN
 		RAISE EXCEPTION 'generation % is the active generation', p_gen;
 	END IF;
@@ -173,7 +178,7 @@ BEGIN
 	EXECUTE format($f$
 		WITH c AS (
 			SELECT fs.file_id, fs.etag FROM aps_search.file_state fs
-			WHERE fs.text_state = 'indexed'
+			WHERE fs.text_state = 'indexed' AND fs.vec_state <> 'failed'
 			  AND EXISTS (SELECT 1 FROM aps_search.chunk ch WHERE ch.file_id = fs.file_id
 					AND NOT EXISTS (SELECT 1 FROM aps_search.%I v WHERE v.chunk_id = ch.chunk_id))
 			  AND NOT EXISTS (SELECT 1 FROM aps_search.job j WHERE j.lane = 'vec' AND j.file_id = fs.file_id AND j.gen = $1)
@@ -292,6 +297,9 @@ BEGIN
 	IF p_chunk_ids IS NULL OR p_vectors IS NULL OR cardinality(p_chunk_ids) <> cardinality(p_vectors)
 		OR cardinality(p_chunk_ids) > 2000 THEN
 		RAISE EXCEPTION 'bad_vector' USING ERRCODE = 'BD001';
+	END IF;
+	IF (SELECT count(DISTINCT i) FROM unnest(p_chunk_ids) i) <> cardinality(p_chunk_ids) THEN
+		RAISE EXCEPTION 'bad_vector' USING ERRCODE = 'BD001';        -- repeated ids (and NULLs, which count as none)
 	END IF;
 	IF EXISTS (SELECT 1 FROM unnest(p_chunk_ids) i
 			WHERE i IS NULL OR NOT EXISTS (SELECT 1 FROM chunk c WHERE c.chunk_id = i AND c.file_id = j.file_id)) THEN

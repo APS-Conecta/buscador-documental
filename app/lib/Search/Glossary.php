@@ -15,7 +15,8 @@ use RuntimeException;
  */
 final class Glossary {
 	public const MAX_ALTERNATIVES = 5;
-	private const FOLD = ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n', 'à' => 'a', 'è' => 'e', 'ì' => 'i', 'ò' => 'o', 'ù' => 'u'];
+	private const FOLD = ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n', 'à' => 'a', 'è' => 'e', 'ì' => 'i', 'ò' => 'o', 'ù' => 'u',
+		'â' => 'a', 'ã' => 'a', 'ä' => 'a', 'å' => 'a', 'ê' => 'e', 'ë' => 'e', 'î' => 'i', 'ï' => 'i', 'ô' => 'o', 'ö' => 'o', 'õ' => 'o', 'û' => 'u', 'ç' => 'c'];
 
 	/** @var array<string, list<array{0: list<string>, 1: string}>> first token of a key => [key tokens, expansion] */
 	private array $byKey = [];
@@ -39,7 +40,8 @@ final class Glossary {
 			$k = explode(' ', $e['key']);
 			$x = explode(' ', $e['expansion']);
 			$this->byKey[$k[0]][] = [$k, $e['expansion']];
-			if (!isset($ambiguousExpansions[$e['expansion']])) {
+			// A one-word expansion ("enfermera") is an ordinary word: typing it must not add the acronym back.
+			if (count($x) >= 2 && !isset($ambiguousExpansions[$e['expansion']])) {
 				$this->byExpansion[$x[0]][] = [$x, $e['key']];
 			}
 		}
