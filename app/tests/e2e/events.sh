@@ -20,7 +20,7 @@ $C up -d --build --wait
 $OCC app:enable buscador_documental >/dev/null
 $OCC config:system:set trusted_domains 2 --value=nextcloud >/dev/null
 $OCC config:app:set buscador_documental worker_secret --value="$SECRET" --sensitive >/dev/null
-$PSQL -c "TRUNCATE aps_search.job, aps_search.page, aps_search.chunk, aps_search.file_state, aps_search.file_meta, aps_search.file_acl, aps_search.outbox, aps_search.tombstone, aps_search.scope_rule, aps_search.audit_log, aps_search.settings, aps_search.pseudonym RESTART IDENTITY"
+$PSQL -c "TRUNCATE aps_search.job, aps_search.page, aps_search.chunk, aps_search.file_state, aps_search.file_meta, aps_search.file_acl, aps_search.outbox, aps_search.tombstone, aps_search.scope_rule, aps_search.audit_log, aps_search.settings, aps_search.pseudonym RESTART IDENTITY CASCADE"
 $C --profile worker build worker >/dev/null
 $C --profile worker up -d --wait parser >/dev/null
 # The exclusion tag is public and user-assignable (ADR-0013), so a user can apply it over WebDAV like in the interface.

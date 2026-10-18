@@ -58,6 +58,9 @@ clean:
 test-e2e-one:
 	bash tests/e2e/one.sh
 
+test-e2e-vectors:
+	bash tests/e2e/vectors.sh
+
 # The adversarial permission matrix with the real mechanisms (circles, team-folder ACL, expiry, moves, multi-mount, deletion).
 test-e2e-rbac:
 	bash tests/e2e/rbac.sh
@@ -97,3 +100,22 @@ test-e2e-formats:
 # The permission canary against the bd-s1 stack: one scanned PDF, real worker, six scenarios (S1 plan, phase 4).
 test-canary:
 	bash tests/canary/scenario.sh
+
+# A-QUAL-2/3/4 (indicative) with a REAL embedding model: a throwaway Ollama (project bd-s4-ollama, no published port) pulls
+# EVAL_MODEL on first use (about 1.2 GB for bge-m3), the Spanish corpus is embedded with the product's own worker client, and the
+# product's SQL, glossary and fusion are evaluated in a scratch database. Results land in spikes/s4/results-s4/.
+EVAL_PROFILE ?= bge-m3
+EVAL_MODEL ?= bge-m3:567m
+S4 := $(ROOT)/spikes/s4
+OLLAMA := docker compose -f $(S4)/compose.yaml
+eval-search: deps up
+	@set -e; D=$$(mktemp -d /tmp/bd-s4-eval.XXXXXX); trap 'rm -rf $$D' EXIT; chmod 777 $$D; \
+	$(OLLAMA) up -d --wait ollama; \
+	$(OLLAMA) exec -T ollama ollama pull $(EVAL_MODEL); \
+	docker run --rm -v "$$D":/out -v "$(S4)":/s4:ro -w /s4 -e PYTHONDONTWRITEBYTECODE=1 bd-s1-worker python3 corpus.py /out; \
+	docker run --rm --network bd-s4-ollama_default -v "$$D":/out -v "$(S4)":/s4:ro -v "$(ROOT)/worker":/worker:ro -v "$(ROOT)/app/lib/Search/profiles.json":/profiles.json:ro \
+	  -w /s4 -e PYTHONDONTWRITEBYTECODE=1 bd-s1-worker python3 embed_corpus.py /out http://ollama:11434 $(EVAL_PROFILE); \
+	docker run --rm --network $(NET) -v "$(CURDIR)":/app -v "$$D":/eval -w /app -e BD_PG_HOST=db -e BD_EVAL_DIR=/eval -e BD_EVAL_OUT=/eval/result.json $(IMG) \
+	  vendor/bin/phpunit --configuration phpunit.eval.xml --testdox; \
+	mkdir -p $(S4)/results-s4; cp "$$D/result.json" "$(S4)/results-s4/eval_search_$(EVAL_PROFILE).json"; \
+	cat "$(S4)/results-s4/eval_search_$(EVAL_PROFILE).json"

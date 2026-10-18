@@ -2,7 +2,7 @@
 
 | # | Question | Default used | Owner | Needed by |
 |---|---|---|---|---|
-| 1 | Who owns the starter synonym/acronym list (APS, CESFAM, REM, RUT, folios…)? 50-100 real terms | static versioned file, ~60 terms drafted | TBD (user) | S4 |
+| 1 | ~~Who owns the starter synonym/acronym list~~ **Closed 2026-10-17 (S4):** the user supplied a 1 000-entry Chilean APS dictionary; it ships as a versioned query-time glossary. The verbatim file still has to be saved at `buscador/data/aps-glosario-chile.md` | glossary | user | closed |
 | 2 | De-identified real folder for S0 and its scanned share | synthetic Spanish corpus | user | S0 (re-run on real data later) |
 | 3 | Concurrent searchers per clinic | 5-10; S0 modelled 5, 10 and 20 | user | S0 (closed for the load model) |
 | 4 | Grace period for trash/old versions | 30 days | counsel/user | S3 |

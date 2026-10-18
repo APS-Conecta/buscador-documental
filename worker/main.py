@@ -19,12 +19,13 @@ import requests
 
 import chunk
 import client as bdclient
+import embed
 import jobbox
 
 log = logging.getLogger("bd-worker")
 WORK = os.environ.get("BD_WORK", "/work")
 RETRYABLE = ("timeout", "ocr_failed")
-KNOWN_REASONS = ("timeout", "ocr_failed", "unsafe", "corrupt", "encrypted", "too_large", "unsupported", "internal")
+KNOWN_REASONS = ("timeout", "ocr_failed", "unsafe", "corrupt", "encrypted", "too_large", "unsupported", "internal")   # parser reasons only
 MAX_TEXT_CHARS = 60_000_000          # the write_result payload cap is 64 MB of page JSON
 LEASE_SECONDS = int(os.environ.get("BD_LEASE_SECONDS", "900"))
 MAX_BYTES = 250 * 1024 * 1024        # buscador/02-performance.md: proposed limits, confirmed in S2
@@ -38,7 +39,7 @@ SUPPORTED_MIMES = {
 SILENT_DB_ERRORS = ("stale_lease", "etag_mismatch", "hash_mismatch", "file_skipped")
 
 
-SUPPORTED_SCHEMA = 2           # aps_search.schema_meta.schema_ver this worker was written for (S3 migration)
+SUPPORTED_SCHEMA = 3           # aps_search.schema_meta.schema_ver this worker was written for (S4 migration)
 
 
 def check_schema(conn):
@@ -226,12 +227,66 @@ def fail(conn, job_id, epoch, reason, retryable):
     return f"failed:{reason}"
 
 
-def run_once(conn, api, dsn, worker_id):
+EMBED_BATCH = int(os.environ.get("BD_EMBED_BATCH", "16"))
+
+
+def vec_process(conn, embedder, dsn, job_id, epoch, etag, batch=EMBED_BATCH):
+    """Embeds the chunks of one claimed file into the job's generation. Returns 'embedded', 'abandoned' or 'failed:<reason>'.
+    The vector lane never touches Nextcloud or the document bytes: the chunk text comes through vec_chunks."""
+    hb = Heartbeat(dsn, job_id, epoch)
+    hb.start()
+    try:
+        gen, model, digest, dim, _qprefix, passage_prefix, max_tokens = conn.execute(
+            "SELECT gen, model, digest, dim, query_prefix, passage_prefix, max_tokens FROM aps_search.vec_profile(%s, %s)",
+            (job_id, epoch)).fetchone()
+        if embedder.digest(model) != digest:
+            return fail(conn, job_id, epoch, "model_mismatch", False)     # the model behind the tag changed: vectors would mix
+        rows = conn.execute("SELECT chunk_id, heading, text FROM aps_search.vec_chunks(%s, %s, %s)", (job_id, epoch, etag)).fetchall()
+        if not rows:
+            conn.execute("SELECT aps_search.write_vectors(%s, %s, %s, %s::bigint[], %s::text[])", (job_id, epoch, etag, [], []))
+            return "embedded"
+        complete = False
+        for i in range(0, len(rows), batch):
+            part = rows[i:i + batch]
+            texts = [passage_prefix + (f"{h}\n" if h else "") + t for _id, h, t in part]
+            vectors = embedder.embed(model, texts, max_tokens)
+            if any(len(v) != dim for v in vectors):
+                return fail(conn, job_id, epoch, "model_mismatch", False)
+            if hb.lost:
+                return "abandoned"
+            complete = conn.execute(
+                "SELECT aps_search.write_vectors(%s, %s, %s, %s::bigint[], %s::text[])",
+                (job_id, epoch, etag, [r[0] for r in part], ["[" + ",".join(f"{x:.6g}" for x in v) + "]" for v in vectors])).fetchone()[0]
+        return "embedded" if complete else "abandoned"
+    except embed.EmbedError as e:
+        log.warning("job %s: embedding endpoint (%s)", job_id, "retry later" if e.retryable else "refused")
+        return fail(conn, job_id, epoch, "embed_failed", e.retryable)
+    except psycopg.errors.Error as e:
+        if any(tag in str(e) for tag in SILENT_DB_ERRORS + ("retired",)):
+            return "abandoned"
+        if "bad_vector" in str(e):
+            return "abandoned"          # the chunk set changed under us (a reindex); the new job covers it, repeated failures end at the attempts cap
+        raise
+    except Exception:
+        log.error("job %s: unexpected error (%s), lease will expire", job_id, where(sys.exc_info()))
+        return "abandoned"
+    finally:
+        hb.stop.set()
+
+
+def run_once(conn, api, dsn, worker_id, embedder=None):
     rows = conn.execute("SELECT job_id, lease_epoch, file_id, etag FROM aps_search.claim_job(%s, 1, %s, %s)",
                         ("text", worker_id, LEASE_SECONDS)).fetchall()
     for job_id, epoch, file_id, _etag in rows:
         log.info("job %s file %s: %s", job_id, file_id, process(conn, api, dsn, job_id, epoch, file_id))
-    return len(rows)
+    n = len(rows)
+    if embedder is not None:
+        vrows = conn.execute("SELECT job_id, lease_epoch, file_id, etag FROM aps_search.claim_job(%s, 1, %s, %s)",
+                             ("vec", worker_id, LEASE_SECONDS)).fetchall()
+        for job_id, epoch, file_id, etag in vrows:
+            log.info("job %s file %s: %s", job_id, file_id, vec_process(conn, embedder, dsn, job_id, epoch, etag))
+        n += len(vrows)
+    return n
 
 
 def main():
@@ -240,10 +295,15 @@ def main():
     worker_id = env("BD_WORKER_ID", "worker-1")
     api = bdclient.WorkerClient(env("BD_BASE_URL"), worker_id, env("BD_WORKER_SECRET"))
     once = "--once" in sys.argv
+    embedder = None
+    if os.environ.get("BD_EMBED_URL"):                  # no endpoint, no vector lane: a keyword-only install still works
+        token_file = os.environ.get("BD_EMBED_TOKEN_FILE")
+        token = open(token_file).read().strip() if token_file else None
+        embedder = embed.Embedder(os.environ["BD_EMBED_URL"], token=token, batch=EMBED_BATCH)
     with psycopg.connect(dsn, autocommit=True) as conn:
         check_schema(conn)
         while True:
-            n = run_once(conn, api, dsn, worker_id)
+            n = run_once(conn, api, dsn, worker_id, embedder)
             if once:
                 return
             if n == 0:

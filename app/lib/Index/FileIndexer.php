@@ -46,16 +46,16 @@ class FileIndexer {
 			[$fileId, $facts->etag],
 		);
 		$this->db->execute(
-			'INSERT INTO aps_search.file_meta (file_id, name, mime, mtime, storage_id) VALUES (?, ?, ?, ?, ?)
+			'INSERT INTO aps_search.file_meta (file_id, name, mime, mtime, storage_id, ancestors) VALUES (?, ?, ?, ?, ?, ?::bigint[])
 			 ON CONFLICT (file_id) DO UPDATE SET name = EXCLUDED.name, mime = EXCLUDED.mime, mtime = EXCLUDED.mtime,
-				storage_id = EXCLUDED.storage_id',
-			[$fileId, $facts->name, $facts->mime, $facts->mtime, $facts->storageId],
+				storage_id = EXCLUDED.storage_id, ancestors = EXCLUDED.ancestors',
+			[$fileId, $facts->name, $facts->mime, $facts->mtime, $facts->storageId, IndexDb::textArray(array_map('strval', $facts->ancestors))],
 		);
 		$this->acl->writeFacts($facts);
 		// Unclaimed jobs for an older etag are obsolete; claimed ones fail with etag_mismatch and are reclaimed.
 		$key = $fileId . ':' . $facts->etag;
 		$this->db->execute(
-			'DELETE FROM aps_search.job WHERE file_id = ? AND idem_key <> ? AND (lease_until IS NULL OR lease_until <= clock_timestamp())',
+			"DELETE FROM aps_search.job WHERE lane = 'text' AND file_id = ? AND idem_key <> ? AND (lease_until IS NULL OR lease_until <= clock_timestamp())",
 			[$fileId, $key],
 		);
 		$this->db->execute(

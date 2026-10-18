@@ -1,0 +1,18 @@
+# S4 evaluation only: a throwaway Ollama for measuring a real embedding model on CPU. Project `bd-s4-ollama`, no published
+# port (the evaluation reaches it by service name from this project's network). Nothing here is part of the product.
+name: bd-s4-ollama
+services:
+  ollama:
+    image: ollama/ollama:latest
+    restart: "no"
+    volumes:
+      - bd_s4_models:/root/.ollama
+    mem_limit: 6g
+    cpus: 4
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+volumes:
+  bd_s4_models:

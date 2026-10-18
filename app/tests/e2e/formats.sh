@@ -15,7 +15,7 @@ $OCC app:enable buscador_documental >/dev/null
 $OCC config:system:set trusted_domains 2 --value=nextcloud >/dev/null
 $OCC config:app:set buscador_documental worker_secret --value="$SECRET" --sensitive >/dev/null
 $C exec -T --user www-data -e OC_PASS=alice-pass-123 nextcloud php occ user:add --password-from-env --display-name=Alice alice >/dev/null 2>&1 || true
-$PSQL -c "TRUNCATE aps_search.job, aps_search.page, aps_search.chunk, aps_search.file_state, aps_search.file_meta, aps_search.file_acl RESTART IDENTITY"
+$PSQL -c "TRUNCATE aps_search.job, aps_search.page, aps_search.chunk, aps_search.file_state, aps_search.file_meta, aps_search.file_acl RESTART IDENTITY CASCADE"
 $C --profile worker build worker >/dev/null
 $C --profile worker up -d --wait parser >/dev/null
 

@@ -25,6 +25,7 @@
         <job>OCA\BuscadorDocumental\Job\ProcessOutbox</job>
         <job>OCA\BuscadorDocumental\Job\Reconcile</job>
         <job>OCA\BuscadorDocumental\Job\GroupfolderPoll</job>
+        <job>OCA\BuscadorDocumental\Job\VecBackfillJob</job>
     </background-jobs>
     <commands>
         <command>OCA\BuscadorDocumental\Command\DropSchema</command>
@@ -38,5 +39,6 @@
         <command>OCA\BuscadorDocumental\Command\Resume</command>
         <command>OCA\BuscadorDocumental\Command\Reindex</command>
         <command>OCA\BuscadorDocumental\Command\PurgeUser</command>
+        <command>OCA\BuscadorDocumental\Command\Profile</command>
     </commands>
 </info>

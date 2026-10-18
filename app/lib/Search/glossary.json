@@ -1,0 +1,2740 @@
+{
+ "entries": [
+  {
+   "ambiguous": false,
+   "expansion": "acido acetilsalicilico",
+   "key": "aas"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "actividades avanzadas de la vida diaria",
+   "key": "aavd"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "abdomen",
+   "key": "abd"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "actividades basicas de la vida diaria",
+   "key": "abvd"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "asociacion chilena de seguridad",
+   "key": "achs"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "anticonceptivo inyectable",
+   "key": "aci"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "anticonceptivos orales",
+   "key": "aco"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "anticoagulantes orales directos",
+   "key": "acod"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "asthma control test",
+   "key": "act"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "accidente cerebrovascular",
+   "key": "acv"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "arritmia completa por fibrilacion auricular",
+   "key": "acxfa"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "administrativo de salud",
+   "key": "adm"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "anamnesis proxima",
+   "key": "aea"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "adecuado",
+   "key": "aeg"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "antecedentes gineco obstetricos",
+   "key": "agos"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "antiinflamatorio no esterooidal",
+   "key": "aine"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "accidente isquemico transitorio",
+   "key": "ait"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "actividades instrumentales de la vida diaria",
+   "key": "aivd"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "alergias",
+   "key": "alerg"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "alanina aminotransferasa",
+   "key": "alt"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "adulto mayor",
+   "key": "am"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "ambiental",
+   "key": "amb"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "antecedentes morbidos familiares",
+   "key": "amf"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "anamnesis remota personal",
+   "key": "amp"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "antigeno prostatico especifico",
+   "key": "ape"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "atencion primaria de salud",
+   "key": "aps"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "anticoncepcion quirurgica voluntaria",
+   "key": "aqv"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "antecedentes quirurgicos",
+   "key": "aqx"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "artritis reumatoide",
+   "key": "ar"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "alto riesgo obstetrico",
+   "key": "aro"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "asistente social",
+   "key": "as"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "celulas escamosas atipicas de significado indeterminado",
+   "key": "asc us"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "abuso sexual infantil",
+   "key": "asi"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "asma bronquial",
+   "key": "asma"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "alcohol smoking and substance involvement screening test",
+   "key": "assist"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "aspartato aminotransferasa",
+   "key": "ast"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "ayudas tecnicas",
+   "key": "atd"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "altura uterina",
+   "key": "au"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "alcohol use disorders identification test",
+   "key": "audit"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "acceso universal con garantias explicitas",
+   "key": "auge"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "auxiliar de servicio",
+   "key": "aux"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "accidente vascular encefalico",
+   "key": "ave"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "sistema de ficha clinica electronica en aps",
+   "key": "avis"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "blando depresible indoloro",
+   "key": "bdi"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "buen estado general",
+   "key": "beg"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "subunidad beta de la hormona gonadotropina corionica humana",
+   "key": "bhcg"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "betalactamasas de espectro extendido",
+   "key": "blee"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "nitrogeno ureico sanguineo",
+   "key": "bun"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "cancer cervicouterino",
+   "key": "cacu"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "cetoacidosis diabetica",
+   "key": "cad"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "conducto auditivo externo",
+   "key": "cae"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "consultorio adosado de especialidades",
+   "key": "cae"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "cobertura adicional para enfermedades catastroficas",
+   "key": "caec"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "cancer de mama",
+   "key": "cama"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "caja de prevision de la defensa nacional",
+   "key": "capredena"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "capsula",
+   "key": "caps"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "copd assessment test",
+   "key": "cat"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "circunferencia de cintura",
+   "key": "cc"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "circunferencia craneana",
+   "key": "cce"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "centro comunitario de rehabilitacion",
+   "key": "ccr"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "consejo consultivo de usuarios",
+   "key": "ccu"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "cirujano dentista",
+   "key": "cd"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "contraderivacion",
+   "key": "cd"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "consejo de desarrollo local en salud",
+   "key": "cdl"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "centro de diagnostico terapeutico",
+   "key": "cdt"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "comite de etica asistencial",
+   "key": "cea"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "condicion del espectro autista",
+   "key": "cea"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "centro comunitario de salud familiar",
+   "key": "cecosf"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "central de abastecimiento del sistema nacional de servicios de salud",
+   "key": "cenabast"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "indice de dientes cariados obturados y perdidos",
+   "key": "ceo"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "centro de salud familiar",
+   "key": "cesfam"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "consultorio general rural",
+   "key": "cgr"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "contraloria general de la republica",
+   "key": "cgr"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "consultorio general urbano",
+   "key": "cgu"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "enfermedad de chagas",
+   "key": "chagas"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "subsistema de proteccion integral a la infancia chile crece contigo",
+   "key": "chcc"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "concentracion de hemoglobina corpuscular media",
+   "key": "chcm"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "corticoide inhalado",
+   "key": "ci"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "clasificacion internacional de la atencion primaria 2 version",
+   "key": "ciap 2"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "colestasia intrahepatica del embarazo",
+   "key": "cie"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "clasificacion internacional de enfermedades 10 version",
+   "key": "cie 10"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "consejo integrador de la red asistencial",
+   "key": "cira"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "consciente lucido orientado en tiempo y espacio",
+   "key": "clote"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "corporacion municipal de desarrollo social",
+   "key": "cmds"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "consulta nueva de especialidad",
+   "key": "cne"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "control de nino sano",
+   "key": "cns"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "colegio de enfermeras de chile",
+   "key": "coenf"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "colegio de matronas y matrones de chile",
+   "key": "colmat"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "colegio medico de chile",
+   "key": "colmed"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "compromisos de gestion de los servicios de salud",
+   "key": "comges"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "comprimido",
+   "key": "comp"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "comision de medicina preventiva e invalidez",
+   "key": "compin"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "corporacion nacional autonoma de certificacion de especialidades medicas",
+   "key": "conacem"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "corporacion nacional autonoma de certificacion de especialidades odontologicas",
+   "key": "conaceo"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "confederacion nacional de funcionarios de salud municipalizada",
+   "key": "confusam"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "indice de dientes cariados obturados y perdidos",
+   "key": "copd"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "corporacion municipal",
+   "key": "cormup"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "centro de salud mental comunitaria",
+   "key": "cosam"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "consejo de la sociedad civil",
+   "key": "cosoc"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "examen cardiopulmonar",
+   "key": "cp"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "comite paritario de higiene y seguridad",
+   "key": "cphs"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "cuidados paliativos no oncologicos",
+   "key": "cpno"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "cuidados paliativos oncologicos",
+   "key": "cpo"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "centro de referencia de salud",
+   "key": "crs"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "control de salud infantil",
+   "key": "csi"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "control de signos vitales",
+   "key": "csv"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "colesterol total",
+   "key": "ct"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "cateter urinario permanente",
+   "key": "cup"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "capacidad vital forzada",
+   "key": "cvf"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "dermatitis atopica",
+   "key": "da"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "diagnostico ambulatorio de tribunales de familia",
+   "key": "dam"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "departamento de administracion de salud municipal",
+   "key": "das"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "dato de atencion de urgencia",
+   "key": "dau"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "dermatitis de contacto",
+   "key": "dc"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "deterioro cognitivo leve",
+   "key": "dcl"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "desviacion estandar",
+   "key": "de"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "desfibrilador externo automatico",
+   "key": "dea"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "departamento de estadisticas e informacion de salud",
+   "key": "deis"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "trastorno neurocognitivo mayor",
+   "key": "demencia"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "departamento de salud municipal",
+   "key": "desam"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "diagnostico",
+   "key": "dg"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "division de gestion y desarrollo de las personas",
+   "key": "digedep"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "division de gestion de la red asistencial",
+   "key": "digera"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "division de politicas publicas saludables y promocion",
+   "key": "dipol"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "direccion de prevision de carabineros de chile",
+   "key": "dipreca"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "division de prevencion y control de enfermedades",
+   "key": "diprece"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "direccion de salud municipal",
+   "key": "disam"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "dispositivo intrauterino",
+   "key": "diu"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "division de atencion primaria",
+   "key": "divap"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "displasia luxante de caderas",
+   "key": "dlc"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "dislipidemia",
+   "key": "dlp"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "diabetes mellitus",
+   "key": "dm"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "diabetes mellitus tipo 1",
+   "key": "dm1"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "diabetes mellitus tipo 2",
+   "key": "dm2"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "diabetes mellitus gestacional",
+   "key": "dmg"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "diagnostico nutricional integrado",
+   "key": "dni"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "anticoagulantes orales directos",
+   "key": "doac"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "tratamiento acortado estrictamente supervisado",
+   "key": "dots"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "dialisis peritoneal",
+   "key": "dp"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "desviacion estandar",
+   "key": "ds"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "desarrollo psicomotor",
+   "key": "dsm"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "inhibidor de la recaptacion de serotonina y noradrenalina",
+   "key": "duales"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "enfermedad de alzheimer",
+   "key": "ea"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "evento adverso",
+   "key": "ea"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "enfermedad arterial periferica",
+   "key": "eap"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "evento centinela",
+   "key": "ec"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "escala de coma de glasgow",
+   "key": "ecg"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "estrategia de cuidado integral centrado en las personas",
+   "key": "ecicep"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "enfermedades cronicas no transmisibles",
+   "key": "ecnt"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "endoscopia digestiva alta",
+   "key": "eda"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "etapa de destinacion y formacion",
+   "key": "edf"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "escala de depresion postparto de edimburgo",
+   "key": "edimburgo"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "educadora de parvulos",
+   "key": "edp"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "escala de evaluacion del desarrollo psicomotor",
+   "key": "eedp"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "extremidades inferiores",
+   "key": "eeii"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "extremidades superiores",
+   "key": "eess"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "examen fisico",
+   "key": "ef"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "evaluacion funcional del adulto mayor",
+   "key": "efam"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "examen fisico general",
+   "key": "efg"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "examen fisico segmentario",
+   "key": "efs"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "edad gestacional",
+   "key": "eg"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "edad gestacional corregida",
+   "key": "egc"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "establecimiento de larga estadia para adultos mayores",
+   "key": "eleam"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "electrolitos plasmaticos",
+   "key": "elp"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "examen de medicina preventiva",
+   "key": "emp"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "examen de medicina preventiva del adulto",
+   "key": "empa"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "examen de medicina preventiva del adulto mayor",
+   "key": "empam"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "estacion medico rural",
+   "key": "emr"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "escala numerica analoga del dolor",
+   "key": "ena"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "enfermera",
+   "key": "enf"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "enfermedad de notificacion obligatoria",
+   "key": "eno"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "emisiones otoacusticas",
+   "key": "eoa"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "escala de depresion postparto de edimburgo",
+   "key": "epds"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "enfermedad de parkinson idiopatica",
+   "key": "epi"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "enfermedad pulmonar obstructiva cronica",
+   "key": "epoc"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "error programatico en vacunacion",
+   "key": "epro"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "escala de riesgo psicosocial abreviada",
+   "key": "epsa"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "esquizofrenia",
+   "key": "eqz"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "programa de enfermedades respiratorias del adulto",
+   "key": "era"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "enfermedad renal cronica",
+   "key": "erc"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "evento supuestamente atribuible a la vacunacion o inmunizacion",
+   "key": "esavi"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "indice de severidad de emergencia",
+   "key": "esi"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "establecimiento de larga estadia",
+   "key": "etd"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "enfermero universitario",
+   "key": "eu"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "examen unico nacional de conocimientos de medicina",
+   "key": "eunacom"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "via endovenosa",
+   "key": "ev"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "escala visual analogica del dolor",
+   "key": "eva"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "programa elige vida sana",
+   "key": "evs"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "fibrilacion auricular",
+   "key": "fa"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "formula artificial",
+   "key": "fa"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "fosfatasas alcalinas",
+   "key": "fa"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "frecuencia cardiaca",
+   "key": "fc"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "ficha clinica electronica",
+   "key": "fce"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "ficha clinica en papel",
+   "key": "fcp"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "flujo espiratorio maximo",
+   "key": "fem"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "federacion nacional de trabajadores de la salud",
+   "key": "fenats"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "federacion nacional de profesionales universitarios de los servicios de salud",
+   "key": "fenpruss"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "fosa iliaca derecha",
+   "key": "fid"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "fosa iliaca izquierda",
+   "key": "fii"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "fraccion inspirada de oxigeno",
+   "key": "fio2"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "fonoaudiologa",
+   "key": "flgo"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "fondo de farmacia para enfermedades cronicas no transmisibles en aps",
+   "key": "fofar"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "fondo nacional de salud",
+   "key": "fonasa"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "fonoaudiologo",
+   "key": "fono"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "fecha probable de parto",
+   "key": "fpp"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "frecuencia respiratoria",
+   "key": "fr"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "fecha de ultima regla",
+   "key": "fur"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "farmacovigilancia",
+   "key": "fv"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "glicemia de ayuno alterada",
+   "key": "gaa"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "globulos blancos",
+   "key": "gb"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "geriatric depression scale",
+   "key": "gds"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "gastroenteritis aguda",
+   "key": "gea"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "grande para la edad gestacional",
+   "key": "geg"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "garantias explicitas en salud",
+   "key": "ges"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "gamma glutamil transferasa",
+   "key": "ggt"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "cuestionario de salud general de goldberg de 12 items",
+   "key": "ghq 12"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "escala de coma de glasgow",
+   "key": "glasgow"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "cuestionario de salud general de goldberg de 12 items",
+   "key": "goldberg"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "transaminasa glutamico oxalacetica",
+   "key": "got"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "guia de practica clinica",
+   "key": "gpc"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "transaminasa glutamico piruvica",
+   "key": "gpt"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "gastrostomia",
+   "key": "gtt"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "sindrome cardiopulmonar por hantavirus",
+   "key": "hanta"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "hemoglobina",
+   "key": "hb"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "hemoglobina glicosilada",
+   "key": "hba1c"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "hospital de base comunitaria",
+   "key": "hbc"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "antigeno de superficie del virus de la hepatitis b",
+   "key": "hbsag"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "hidroclorotiazida",
+   "key": "hctz"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "hemodialisis",
+   "key": "hd"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "hipocondrio derecho",
+   "key": "hd"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "hospital digital",
+   "key": "hd"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "hemorragia digestiva alta",
+   "key": "hda"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "hemorragia digestiva baja",
+   "key": "hdb"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "hospital de dia",
+   "key": "hdd"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "colesterol de alta densidad",
+   "key": "hdl"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "sindrome de hemolisis enzimas hepaticas elevadas y trombocitopenia en gestantes",
+   "key": "hellp"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "hemoglucotest",
+   "key": "hgt"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "hipocondrio izquierdo",
+   "key": "hi"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "homeostasis model assessment",
+   "key": "homa"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "hiperplasia prostatica benigna",
+   "key": "hpb"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "hipertension arterial",
+   "key": "hta"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "hematocrito",
+   "key": "hto"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "indice de actividad de la atencion primaria de salud",
+   "key": "iaaps"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "infecciones asociadas a la atencion de salud",
+   "key": "iaas"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "infarto agudo al miocardio",
+   "key": "iam"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "insuficiencia cardiaca",
+   "key": "ic"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "interconsulta",
+   "key": "ic"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "insuficiencia cardiaca congestiva",
+   "key": "icc"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "corticoide inhalado",
+   "key": "ics"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "inhalador de dosis medida",
+   "key": "idm"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "inhibidor de la dipeptidil peptidasa 4 o gliptinas",
+   "key": "idpp4"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "inhibidor de la enzima convertidora de angiotensina",
+   "key": "ieca"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "intolerancia a la glucosa oral",
+   "key": "igo"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "via intramuscular",
+   "key": "im"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "indice de masa corporal",
+   "key": "imc"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "via inhalatoria",
+   "key": "inh"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "tiempo de protrombina y razon internacional normalizada",
+   "key": "inr"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "indice paquetes ano",
+   "key": "ipa"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "insuficiencia renal aguda",
+   "key": "ira"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "programa de infecciones respiratorias agudas",
+   "key": "ira"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "inhibidor de la recaptacion de serotonina y noradrenalina",
+   "key": "irsn"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "institucion de salud previsional",
+   "key": "isapre"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "inhibidor del cotransportador sodio glucosa tipo 2 o gliflozinas",
+   "key": "isglt2"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "instituto de seguridad laboral",
+   "key": "isl"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "pupilas iguales redondas y reactivas a la luz y acomodacion",
+   "key": "isocoricas"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "instituto de salud publica de chile",
+   "key": "isp"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "inhibidor selectivo de la recaptacion de serotonina",
+   "key": "isrs"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "instituto de seguridad del trabajo",
+   "key": "ist"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "indice tobillo brazo",
+   "key": "itb"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "infeccion tuberculosa latente",
+   "key": "itl"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "infecciones de transmision sexual",
+   "key": "its"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "infeccion del tracto urinario",
+   "key": "itu"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "intravenosa",
+   "key": "iv"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "insuficiencia venosa cronica",
+   "key": "ivc"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "interrupcion voluntaria del embarazo",
+   "key": "ive"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "jarabe",
+   "key": "jbe"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "junta nacional de auxilio escolar y becas",
+   "key": "junaeb"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "kinesiologa",
+   "key": "kgo"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "kinesiologo",
+   "key": "kin"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "kinesiologia motora",
+   "key": "ktm"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "kinesiologia respiratoria",
+   "key": "ktr"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "agonista beta 2 adrenergico de accion prolongada",
+   "key": "laba"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "antimuscarinico de accion prolongada",
+   "key": "lama"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "anticoncepcion reversible de larga duracion",
+   "key": "larc"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "latidos cardiofetales",
+   "key": "lcf"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "limitacion cronica del flujo aereo",
+   "key": "lcfa"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "colesterol de baja densidad",
+   "key": "ldl"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "lista de espera",
+   "key": "le"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "lupus eritematoso sistemico",
+   "key": "les"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "alto grado",
+   "key": "lieag"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "lesion intraepitelial escamosa de bajo grado",
+   "key": "liebg"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "llene capilar",
+   "key": "llc"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "licencia medica",
+   "key": "lm"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "lactancia materna exclusiva",
+   "key": "lme"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "licencia medica electronica",
+   "key": "lme"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "lactancia materna predominante",
+   "key": "lmp"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "leche purita",
+   "key": "lp"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "leche purita cereal",
+   "key": "lpc"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "leche purita fortificada",
+   "key": "lpf"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "leche purita mama",
+   "key": "lpm"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "lesion por presion",
+   "key": "lpp"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "lesion renal aguda",
+   "key": "lra"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "ley ricarte soto",
+   "key": "lrs"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "metodo anticonceptivo",
+   "key": "mac"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "claritromicina y azitromicina",
+   "key": "macrolidos"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "modalidad de atencion institucional",
+   "key": "mai"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "modelo de atencion integral de salud familiar y comunitaria",
+   "key": "mais"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "monitoreo ambulatorio de presion arterial de 24 horas",
+   "key": "mapa"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "matrona",
+   "key": "mat"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "microalbuminuria",
+   "key": "mau"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "motivo de consulta",
+   "key": "mc"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "medico cirujano",
+   "key": "med"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "mal estado general",
+   "key": "meg"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "medico de familia",
+   "key": "mf"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "medico familiar comunitario",
+   "key": "mfc"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "medico general familiar",
+   "key": "mgf"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "medico general de zona",
+   "key": "mgz"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "mini mental state examination de folstein modificado",
+   "key": "minimental"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "ministerio de salud de chile",
+   "key": "minsal"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "modalidad de libre eleccion",
+   "key": "mle"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "monitoreo materno fetal",
+   "key": "mmf"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "mini mental state examination de folstein modificado",
+   "key": "mmse"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "menopause rating scale",
+   "key": "mrs"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "membrana timpanica",
+   "key": "mt"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "mutual de seguridad cchc",
+   "key": "mutual"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "neumonia adquirida en la comunidad",
+   "key": "nac"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "nebulizacion",
+   "key": "nbz"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "neuropatia diabetica",
+   "key": "nd"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "sigla de taller nadie es perfecto",
+   "key": "nep"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "examen neurologico",
+   "key": "neuro"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "nefropatia diabetica",
+   "key": "nfd"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "neoplasia intraepitelial cervical",
+   "key": "nie"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "numero de identificacion provisorio",
+   "key": "nip"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "no se presenta",
+   "key": "nsp"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "norma tecnica minsal",
+   "key": "nt"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "nutricionista",
+   "key": "nta"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "nitrogeno ureico sanguineo",
+   "key": "nus"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "nutricionista",
+   "key": "nut"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "osteoartritis",
+   "key": "oa"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "observacion",
+   "key": "obs"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "odontologo",
+   "key": "odo"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "otitis externa",
+   "key": "oe"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "orofaringe",
+   "key": "of"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "alcohol",
+   "key": "oh"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "oficina de informacion reclamos y sugerencias",
+   "key": "oirs"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "oficina local de la ninez",
+   "key": "oln"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "otitis media aguda",
+   "key": "oma"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "otitis media con efusion",
+   "key": "ome"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "organizacion mundial de la salud",
+   "key": "oms"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "sistema de registro clinico electronico en aps",
+   "key": "oomi"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "oficina de proteccion de derechos de la infancia",
+   "key": "opd"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "organizacion panamericana de la salud",
+   "key": "ops"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "ordinario",
+   "key": "ord"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "colostomia ileostomia o urostomia",
+   "key": "ostomia"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "orientacion tecnica minsal",
+   "key": "ot"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "otoscopia",
+   "key": "ot"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "obstruccion de la via aerea por cuerpo extrano",
+   "key": "ovace"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "presion arterial",
+   "key": "pa"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "programa de alimentacion complementaria del adulto mayor",
+   "key": "pacam"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "pago asociado a diagnostico",
+   "key": "pad"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "presion arterial diastolica",
+   "key": "pad"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "programa de apoyo al desarrollo biopsicosocial",
+   "key": "padbp"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "programa de atencion domiciliaria a personas con dependencia severa",
+   "key": "padds"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "pildora anticonceptiva de emergencia",
+   "key": "pae"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "programa de apoyo al recien nacido",
+   "key": "pahc"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "presion arterial media",
+   "key": "pam"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "papanicolaou",
+   "key": "pap"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "policlinico de alto riesgo obstetrico",
+   "key": "par"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "presion arterial sistolica",
+   "key": "pas"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "programa de apoyo a la salud mental infantil",
+   "key": "pasmi"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "poblacion bajo control",
+   "key": "pbc"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "perimetro cefalico",
+   "key": "pc"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "paro cardiorrespiratorio",
+   "key": "pcr"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "proteina c reactiva",
+   "key": "pcr"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "preeclampsia",
+   "key": "pe"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "potenciales evocados auditivos",
+   "key": "peatc"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "flujo espiratorio maximo",
+   "key": "pef"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "pequeno",
+   "key": "peg"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "profilaxis post exposicion",
+   "key": "pep"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "programa especial de salud y pueblos indigenas",
+   "key": "pespi"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "cuestionario de actividades funcionales de pfeffer",
+   "key": "pfeffer"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "patient health questionnaire 9",
+   "key": "phq 9"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "pupilas iguales redondas y reactivas a la luz y acomodacion",
+   "key": "pirrla"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "persona mayor",
+   "key": "pm"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "pielonefritis aguda",
+   "key": "pna"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "programa nacional de alimentacion complementaria",
+   "key": "pnac"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "programa nacional de cancer de mama",
+   "key": "pncm"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "programa nacional de cancer cervicouterino",
+   "key": "pncpc"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "programa nacional de inmunizaciones",
+   "key": "pni"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "podologo",
+   "key": "pod"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "procedimiento operativo estandarizado",
+   "key": "poe"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "derivado proteico purificado",
+   "key": "ppd"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "programas de reforzamiento de la atencion primaria de salud",
+   "key": "praps"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "profilaxis pre exposicion para vih",
+   "key": "prep"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "programa de reparacion en maltrato grave",
+   "key": "prm"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "programa nacional de control y eliminacion de la tuberculosis",
+   "key": "procet"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "psicologa",
+   "key": "ps"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "antigeno prostatico especifico",
+   "key": "psa"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "pauta de evaluacion de sintomas pediatricos",
+   "key": "psc"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "programa de salud cardiovascular",
+   "key": "pscv"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "psicologo",
+   "key": "psi"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "programa de salud mental integral en atencion primaria",
+   "key": "psm"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "posta de salud rural",
+   "key": "psr"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "prevencion de la transmision vertical",
+   "key": "ptvi"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "persona viviendo con vih",
+   "key": "pvvih"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "piel y mucosas",
+   "key": "pym"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "quimico farmaceutico",
+   "key": "qf"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "reaccion adversa a medicamentos",
+   "key": "ram"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "reaccion adversa a medicamentos positiva",
+   "key": "ram"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "retencion aguda de orina",
+   "key": "rao"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "sistema de registro clinico electronico mas utilizado en aps chile",
+   "key": "rayen"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "rehabilitacion de base comunitaria",
+   "key": "rbc"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "registro basal no estresante",
+   "key": "rbne"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "registro clinico electronico",
+   "key": "rce"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "restriccion del crecimiento intrauterino",
+   "key": "rciu"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "reanimacion cardiopulmonar",
+   "key": "rcp"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "riesgo cardiovascular",
+   "key": "rcv"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "retinopatia diabetica",
+   "key": "rd"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "regular estado general",
+   "key": "reg"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "resumen estadistico mensual",
+   "key": "rem"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "reflujo gastroesofagico",
+   "key": "rge"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "resistencia a la insulina",
+   "key": "ri"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "ritmo irregular en 2 tiempos",
+   "key": "ri2t"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "recien nacido",
+   "key": "rn"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "registro nacional de inmunizaciones",
+   "key": "rni"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "repositorio nacional de listas de espera",
+   "key": "rnle"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "recien nacido pretermino",
+   "key": "rnpt"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "recien nacido de termino",
+   "key": "rnt"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "receta",
+   "key": "rp"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "ritmo regular en 2 tiempos",
+   "key": "rr2t"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "registro social de hogares",
+   "key": "rsh"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "rol unico nacional",
+   "key": "run"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "rol unico tributario",
+   "key": "rut"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "agonista beta 2 adrenergico de accion corta",
+   "key": "saba"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "antimuscarinico de accion corta",
+   "key": "sama"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "servicio de atencion medica de urgencia",
+   "key": "samu"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "servicio de atencion primaria de urgencia",
+   "key": "sapu"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "servicio de atencion primaria de urgencia de alta resolutividad",
+   "key": "sar"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "sindrome bronquial obstructivo agudo",
+   "key": "sbo"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "sindrome bronquial obstructivo recurrente",
+   "key": "sbor"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "via subcutanea",
+   "key": "sc"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "sindrome coronario agudo",
+   "key": "sca"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "sindrome diarreico agudo",
+   "key": "sda"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "trastorno por deficit de atencion e hiperactividad",
+   "key": "sdah"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "sala de estimulacion",
+   "key": "se"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "servicio dietetico de leche",
+   "key": "sedile"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "servicio nacional de la discapacidad",
+   "key": "senadis"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "servicio nacional del adulto mayor",
+   "key": "senama"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "servicio nacional de menores",
+   "key": "sename"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "secretaria regional ministerial de salud",
+   "key": "seremi"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "servicio nacional de la mujer y la equidad de genero",
+   "key": "sernameg"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "sindrome hipertensivo del embarazo",
+   "key": "she"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "sindrome hiperglicemico hiperosmolar",
+   "key": "shh"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "solicitud de interconsulta",
+   "key": "sic"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "sistema de informacion de la red asistencial",
+   "key": "sidra"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "sistema de gestion de garantias explicitas en salud",
+   "key": "sigges"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "via sublingual",
+   "key": "sl"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "sindrome metabolico",
+   "key": "sm"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "sonda nasogastrica",
+   "key": "sng"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "nomenclatura sistematizada de medicina terminos clinicos",
+   "key": "snomed ct"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "sistema nacional de servicios de salud",
+   "key": "snss"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "servicio de orientacion medico estadistico",
+   "key": "some"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "sintomas de parto prematuro",
+   "key": "spp"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "sintomatico respiratorio",
+   "key": "sr"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "sales de rehidratacion oral",
+   "key": "sro"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "servicio de salud",
+   "key": "ss"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "sin soplos",
+   "key": "ss"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "servicio de salud metropolitano central",
+   "key": "ssmc"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "servicio de salud metropolitano norte",
+   "key": "ssmn"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "servicio de salud metropolitano oriente",
+   "key": "ssmo"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "servicio de salud metropolitano occidente",
+   "key": "ssmoc"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "servicio de salud metropolitano sur",
+   "key": "ssms"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "servicio de salud metropolitano sur oriente",
+   "key": "ssmso"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "sala de toma de muestras",
+   "key": "stm"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "superintendencia de salud",
+   "key": "superdesalud"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "servicio de urgencia rural",
+   "key": "sur"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "superintendencia de seguridad social",
+   "key": "suseso"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "signos vitales",
+   "key": "sv"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "tiroxina libre",
+   "key": "t4l"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "trastorno afectivo bipolar",
+   "key": "tab"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "tratamiento anticoagulante oral",
+   "key": "taco"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "tratamiento acortado estrictamente supervisado",
+   "key": "taes"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "trastorno de ansiedad generalizada",
+   "key": "tag"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "tecnico en alimentacion de nivel superior",
+   "key": "tans"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "terapia antirretroviral para vih",
+   "key": "tar"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "terapia antirretroviral para vih",
+   "key": "tarv"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "tuberculosis",
+   "key": "tbc"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "trastorno por deficit de atencion e hiperactividad",
+   "key": "tdah"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "trastorno del espectro autista",
+   "key": "tea"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "traumatismo encefalo craneano",
+   "key": "tec"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "tecnico en enfermeria de nivel superior",
+   "key": "tens"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "tromboembolismo pulmonar",
+   "key": "tep"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "test de desarrollo psicomotor",
+   "key": "tepsi"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "trastorno de estres postraumatico",
+   "key": "tept"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "tecnico en farmacia",
+   "key": "tf"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "tasa de filtracion glomerular",
+   "key": "tfg"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "trigliceridos",
+   "key": "tg"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "trigliceridos",
+   "key": "tgc"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "terapia hormonal de la menopausia",
+   "key": "thm"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "accidente isquemico transitorio",
+   "key": "tia"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "risperidona quetiapina olanzapina aripiprazol haloperidol clorpromazina",
+   "key": "tipicos"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "trastorno limite de la personalidad",
+   "key": "tlp"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "tecnologo medico",
+   "key": "tm"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "test de marcha de 6 minutos",
+   "key": "tm6m"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "trastorno neurocognitivo mayor",
+   "key": "tnc"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "trastorno neurocognitivo menor",
+   "key": "tncm"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "terapeuta ocupacional",
+   "key": "to"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "tecnico en odontologia de nivel superior",
+   "key": "tons"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "via topica",
+   "key": "top"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "tecnico paramedico",
+   "key": "tp"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "tiempo de protrombina y razon internacional normalizada",
+   "key": "tp"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "trastorno de la personalidad",
+   "key": "tp"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "trastorno de personalidad limitrofe",
+   "key": "tpl"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "traqueostomia",
+   "key": "tqt"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "trakcare",
+   "key": "trak"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "terapia de reemplazo hormonal",
+   "key": "trh"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "trabajador social",
+   "key": "ts"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "hormona estimulante de la tiroides",
+   "key": "tsh"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "test de sangre oculta en deposiciones inmunologico",
+   "key": "tsoh"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "tiempo de tromboplastina parcial activado",
+   "key": "ttpa"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "trastorno por uso de sustancias",
+   "key": "tus"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "tecnovigilancia",
+   "key": "tv"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "trombosis venosa profunda",
+   "key": "tvp"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "unidad de atencion primaria oftalmologica",
+   "key": "uapo"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "unidad de atencion primaria otorrinolaringologica",
+   "key": "uaporrino"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "unidad de emergencia hospitalaria",
+   "key": "ueh"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "urgencia odontologica ambulatoria",
+   "key": "ugoa"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "unidades internacionales",
+   "key": "ui"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "unidad de atencion y control en salud sexual",
+   "key": "unacess"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "unidad de patologia cervical",
+   "key": "upc"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "ulcera del pie diabetico",
+   "key": "upd"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "unidad de patologia mamaria",
+   "key": "upm"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "ulcera por presion",
+   "key": "upp"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "ulcera venosa",
+   "key": "uv"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "violencia basada en genero",
+   "key": "vbg"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "violencia contra la mujer",
+   "key": "vcm"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "volumen corpuscular medio",
+   "key": "vcm"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "visita domiciliaria",
+   "key": "vd"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "visita domiciliaria integral",
+   "key": "vdi"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "velocidad de filtracion glomerular",
+   "key": "vfg"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "velocidad de hemosedimentacion",
+   "key": "vhs"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "violencia intrafamiliar",
+   "key": "vif"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "via oral",
+   "key": "vo"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "virus papiloma humano",
+   "key": "vph"
+  },
+  {
+   "ambiguous": true,
+   "expansion": "via rectal",
+   "key": "vr"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "virus respiratorio sincicial",
+   "key": "vrs"
+  },
+  {
+   "ambiguous": false,
+   "expansion": "escala de depresion geriatrica de yesavage abreviada",
+   "key": "yesavage"
+  }
+ ],
+ "version": "7d83653c84c6"
+}

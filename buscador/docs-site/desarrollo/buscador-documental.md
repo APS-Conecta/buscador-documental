@@ -3,7 +3,7 @@ tipo: referencia
 esqueleto: borrador
 audiencia: desarrollo
 apps: [buscador-documental]
-resumen: "Buscador Documental: estado del diseño, decisiones de las etapas S0 y S1, comprobación de permisos, pruebas y cómo repetir las mediciones con el arnés."
+resumen: "Buscador Documental: estado del diseño, decisiones de las etapas S0 a S4, comprobación de permisos, pruebas y cómo repetir las mediciones con el arnés."
 ---
 # buscador-documental
 
@@ -58,6 +58,15 @@ La etapa S1 entrega el recorrido completo mínimo: una aplicación de Nextcloud 
 - **Cambios de permisos de carpetas de equipo** sin evento tipado: huella cada 15 minutos.
 - **Registros (A-SEC-5).** Ningún registro lleva texto de documentos ni consultas: los mensajes de error se reducen a la clase y el lugar; el detalle del proceso aislado solo se registra con `BD_DEBUG_PARSER=1`. Una prueba con centinelas recorre todo el flujo y busca en todos los registros, con una línea de control en cada uno.
 
+## Decisiones de la etapa S4 (perfiles de lectura por significado y búsqueda híbrida)
+
+- **Modelo de lectura por significado (ADR-0014).** El producto no incluye ningún modelo: un perfil del catálogo (`profiles.json`) nombra una etiqueta de Ollama (`bge-m3:567m`, `qwen3-embedding:0.6b`). `occ buscador:profile set` consulta el servidor, guarda el identificador del modelo y el tamaño del vector y crea una generación; el proceso de lectura se niega a escribir vectores si el identificador cambia.
+- **Esquema 3.** `embedding_profile`, una tabla `chunk_vec_<generación>` por generación (llave foránea con borrado en cascada hacia `chunk`: reindexar un archivo elimina sus vectores en la misma sentencia), `search_snapshot` (solo identificadores) y `file_meta.ancestors` para el filtro de carpeta. pgvector no se exige para instalar: `create_generation` indica la extensión que falta cuando se registra un perfil. `claim_job` y `fail_job` conocen los carriles `text` y `vec` (topes por carril, motivos propios, el abandono de un trabajo de vectores no toca `text_state`).
+- **Carril de vectores.** El proceso de lectura reclama trabajos `vec`, pide el texto de los fragmentos con `vec_chunks`, los envía a Ollama en lotes de 16 (`truncate:false`, contexto explícito, prefijos del perfil) y escribe con `write_vectors` (compare-and-set por trabajo, época y etag; rechaza dimensiones erróneas, valores no finitos y fragmentos ajenos al archivo). Ese contenedor no lee archivos de Nextcloud para este carril.
+- **Búsqueda.** `Searcher` construye en la primera página una lista ordenada de hasta 1 000 archivos (Exacta, Por significado o Mixta con fusión RRF a nivel de archivo, k = 60), la guarda como identificadores y recorre las páginas con un cursor firmado y atado al usuario. Cada página se vuelve a comprobar contra los permisos vigentes y se rellena desde posiciones posteriores si hay descartes. Desviación respecto del diseño original: el orden por fecha y por nombre se aplica a esa lista, no a todos los resultados, porque en los modos semánticos todo fragmento «coincide». En Mixta el tramo de palabras no relaja la consulta a OR: en la evaluación esa relajación bajó el recall@10 de 0,79 a 0,67.
+- **Siglas.** `tools/build_glossary.py` convierte el diccionario aportado (`buscador/data/aps-glosario-chile.md`, 999 entradas) en `glossary.json`; la expansión se hace al consultar, en ambos sentidos, sin reindexar, y las claves ambiguas no se expanden.
+- **Evaluación con un modelo real.** `make -C app eval-search` levanta un Ollama desechable, vectoriza un corpus sintético en español (27 temas, 108 consultas) con el mismo cliente del proceso de lectura y ejecuta el SQL, el glosario y la fusión del producto. Resultados en `spikes/s4/results-s4/`.
+
 ## Pruebas
 
 Todo corre en Docker, en el proyecto de compose `bd-s1`, solo en `127.0.0.1`. Desde el directorio `app/`:
@@ -73,6 +82,9 @@ Todo corre en Docker, en el proyecto de compose `bd-s1`, solo en `127.0.0.1`. De
 | `make -C worker test` | Extractores, política de reconocimiento, fragmentador (con propiedades de Hypothesis) y protocolo entre el proceso de trabajo y el contenedor aislado. `make -C worker test-sandbox`, `test-laws` y `eval-ocr` son comprobaciones aparte. |
 | `make test-e2e-events`, `test-e2e-erasure`, `test-e2e-reconcile`, `test-e2e-scope` | Eventos reales de Nextcloud (crear, editar, mover, etiquetar, compartir, papelera), borrado por etiqueta en carpeta y por eliminación de cuenta, conciliación con eventos perdidos y comandos de alcance. |
 | `make test-e2e-rbac`, `test-e2e-logs` | La matriz adversarial de permisos (equipos, ACL de carpetas de equipo, caducidad, movimiento, varias vías de acceso, propietario eliminado) y la prueba de centinelas en los registros. `make bench-reconcile` mide la conciliación con 300 000 archivos. |
+| `make test-e2e-vectors` | Perfil con el servidor de prueba de Ollama, vectores calculados por el proceso real, cobertura y paso a «lista», activación explícita, los tres modos, filtros, permisos, caída del modelo, borrado de vectores y higiene de registros con controles. |
+| `make -C worker test-glossary` | El constructor del diccionario de siglas y su ejemplo. |
+| `make -C app eval-search` | Evaluación con un modelo real (descarga el modelo la primera vez): recall@10, MRR, filtrado y latencia de la etapa SQL. |
 | `make test-canary` | Veinte comprobaciones con Nextcloud 34 y el trabajador reales: línea base, recurso revocado, descarga desactivada, grupo retirado, etiqueta en carpeta superior, etiqueta duplicada, borrado y rechazo al encolar. |
 
 `make clean` elimina únicamente los recursos de `bd-s1`. Las pruebas de trabajo en Python se ejecutan con `make -C worker test`. La integración continua (`.github/workflows/ci.yml`: `php`, `worker` y `smoke`) está escrita pero aún no se ha ejecutado en GitHub.

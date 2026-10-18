@@ -28,12 +28,15 @@ class Retrieve {
 	public const MAX_QUERY_CHARS = 500;
 	private const MAX_ROUNDS = 5;
 
+	private HitBuilder $builder;
+
 	public function __construct(
 		private IndexDb $db,
 		private PrincipalResolver $principals,
 		private Recheck $recheck,
 		private LoggerInterface $logger,
 	) {
+		$this->builder = new HitBuilder($db);
 	}
 
 	/** @return array{status: string, message: string, hits: list<array<string, mixed>>} */
@@ -93,56 +96,14 @@ class Retrieve {
 				FROM cand, q
 				ORDER BY cand.file_id, ts_rank(cand.tsv, q.tq) DESC, cand.chunk_id DESC
 			)
-			SELECT best.file_id, best.chunk_id, fs.etag FROM best JOIN aps_search.file_state fs ON fs.file_id = best.file_id ORDER BY best.rank DESC, best.file_id LIMIT ? OFFSET ?",
+			SELECT best.file_id, best.chunk_id, fs.etag FROM best LEFT JOIN aps_search.file_state fs ON fs.file_id = best.file_id AND fs.text_state = 'indexed' ORDER BY best.rank DESC, best.file_id LIMIT ? OFFSET ?",
 			[$query, $principalSet, $take, $offset],
 		);
 	}
 
-	/**
-	 * @param list<array{0: array<string, mixed>, 1: RecheckResult}> $survivors
-	 * @return list<array<string, mixed>>
-	 */
+	/** @param list<array{0: array<string, mixed>, 1: RecheckResult}> $survivors @return list<array<string, mixed>> */
 	private function hits(string $query, array $survivors): array {
-		$ids = [];
-		foreach ($survivors as [$row, $r]) {
-			if ($this->snippetServable($row, $r)) {
-				$ids[] = (int)$row['chunk_id'];
-			}
-		}
-		$mark = bin2hex(random_bytes(8)); // a document cannot forge these markers
-		$open = "[[$mark:b]]";
-		$close = "[[$mark:e]]";
-		$chunks = [];
-		if ($ids !== []) {
-			$rows = $this->db->withTimeout(self::TIMEOUT_MS, fn (): array => $this->db->rows(
-				"SELECT chunk_id, page_no, heading,
-					ts_headline('aps_search.spanish_unaccent'::regconfig, text, websearch_to_tsquery('aps_search.spanish_unaccent'::regconfig, ?),
-						'StartSel=" . $open . ", StopSel=" . $close . ", MaxWords=35, MinWords=15, MaxFragments=1') AS snippet
-				 FROM aps_search.chunk WHERE chunk_id = ANY(?::bigint[])",
-				[$query, '{' . implode(',', $ids) . '}'],
-			));
-			foreach ($rows as $row) {
-				$chunks[(int)$row['chunk_id']] = $row;
-			}
-		}
-
-		$hits = [];
-		foreach ($survivors as [$row, $r]) {
-			$hit = ['file_id' => $r->fileId, 'title' => $r->node->getName()];
-			$chunk = $chunks[(int)$row['chunk_id']] ?? null;
-			if ($this->snippetServable($row, $r) && $chunk !== null) {
-				$hit['heading'] = $chunk['heading'] === null ? null : (string)$chunk['heading'];
-				$hit['page_no'] = $chunk['page_no'] === null ? null : (int)$chunk['page_no'];
-				$hit['snippet'] = str_replace([$open, $close], ['<mark>', '</mark>'], htmlspecialchars((string)$chunk['snippet'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
-			}
-			$hits[] = $hit;
-		}
-		return $hits;
-	}
-
-	/** A snippet comes from the indexed text; once the file changed (etag differs) it may no longer be the file's content. */
-	private function snippetServable(array $row, RecheckResult $r): bool {
-		return $r->snippetAllowed && (string)($row['etag'] ?? '') === (string)$r->node->getEtag();
+		return $this->builder->build($query, [], $survivors);
 	}
 
 	/** @param list<array<string, mixed>> $hits */

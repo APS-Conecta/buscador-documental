@@ -20,12 +20,16 @@ El Buscador Documental le permite encontrar documentos por las palabras que cont
    - **Exacta**: busca las palabras tal como las escribió.
    - **Por significado**: encuentra documentos parecidos aunque usen otras palabras.
    - **Mixta** (recomendada): combina ambas.
-4. Use los filtros de tipo, carpeta, fecha y propiedad para acotar los resultados.
+
+   Por significado y Mixta se habilitan cuando la administración las activa. Mientras no estén disponibles, o si el servicio que calcula el significado no responde, el buscador busca por palabras y se lo avisa: nunca muestra una lista vacía por ese motivo.
+4. Use los filtros de **tipo de archivo** (PDF, Word, hoja de cálculo, presentación, texto o imagen), **carpeta** y **fecha de modificación** para acotar los resultados.
 
 5. Ordene los resultados por **Relevancia**, **Más recientes**, **Más antiguos** o por **Nombre** (A-Z o Z-A).
-6. Elija cuántos resultados ver por página: **25**, **50** o **100**, y use **Anterior** y **Siguiente** para recorrer las páginas. Se muestran como máximo los primeros 1 000 resultados; si hay más, afine la búsqueda con los filtros.
+6. Elija cuántos resultados ver por página: **25**, **50** o **100**, y use **Anterior** y **Siguiente** para recorrer las páginas. Se muestran como máximo los 1 000 resultados más relevantes; si hay más, afine la búsqueda con los filtros. Al ordenar por fecha o por nombre se ordenan esos 1 000. Si la búsqueda caduca (pasados unos diez minutos), vuelva a buscar.
 
-Los filtros disponibles son: tipo de archivo, carpeta, fecha de modificación, propiedad (todos, mis archivos o compartidos conmigo) y «Solo con lectura incierta». El menú de la izquierda ofrece atajos: **Todos los documentos**, **Mis archivos**, **Compartidos conmigo** y **Con lectura incierta**.
+Los filtros de esta versión son tipo de archivo, carpeta y fecha de modificación; propiedad (mis archivos o compartidos conmigo) y «Solo con lectura incierta» llegarán más adelante.
+
+Si escribe una sigla habitual de la atención primaria (por ejemplo REM, HTA o EMPAM), el buscador busca también su nombre completo, y al revés. Las siglas con más de un significado (por ejemplo SS) no se expanden.
 
 Cada resultado muestra el nombre, la carpeta, la página y un extracto con las palabras resaltadas. Use **Abrir en la página N** para ir directamente al lugar.
 

@@ -1,6 +1,6 @@
 # Worker tests run in the worker image (no Python deps on the host). The spec is mounted read-only from the app.
 IMG := bd-s1-worker
-.PHONY: image test test-sandbox test-laws eval-ocr
+.PHONY: image test test-sandbox test-laws test-glossary eval-ocr
 image:
 	docker build -q -t $(IMG) . >/dev/null
 test: image
@@ -14,6 +14,10 @@ test-sandbox: image
 LEGAL ?= /root/aps-conecta/Databases/Legal
 test-laws: image
 	docker run --rm -v "$(CURDIR)":/w:ro -v "$(LEGAL)":/legal:ro -w /w -e BD_LEGAL_DIR=/legal -e PYTHONDONTWRITEBYTECODE=1 $(IMG) python3 -m pytest -q -p no:cacheprovider tests/test_chunk.py -k real_laws
+
+# The glossary builder (tools/build_glossary.py) and its fixture, run in the worker image like the other Python tests.
+test-glossary: image
+	docker run --rm -v "$(CURDIR)/../tools":/t:ro -w /t -e PYTHONPATH=/t -e PYTHONDONTWRITEBYTECODE=1 $(IMG) python3 -m pytest -q -p no:cacheprovider tests
 
 # A-QUAL-1: pooled CER/WER of the page-by-page pipeline against the S0 synthetic corpus (regenerated, deterministic).
 # PAGES is the target page count of the corpus; the result lands in spikes/s2/results-s2/ocr_eval.json.

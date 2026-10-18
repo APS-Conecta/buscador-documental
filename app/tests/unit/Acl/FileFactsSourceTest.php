@@ -31,6 +31,24 @@ class FileFactsSourceTest extends TestCase {
 		return new FileFactsSource($db);
 	}
 
+	public function testAncestorsAreTheParentFolderIdsUpToTheRoot(): void {
+		$parents = [5 => 4, 4 => 3, 3 => 1, 1 => -1];                       // file 5 in folder 4 in folder 3 in the storage root 1
+		$db = $this->createMock(IDBConnection::class);
+		$db->method('executeQuery')->willReturnCallback(function (string $sql, array $p = []) use ($parents): IResult {
+			$r = $this->createMock(IResult::class);
+			if (str_contains($sql, 'FROM *PREFIX*filecache f')) {
+				$r->method('fetch')->willReturn(['fileid' => 5, 'name' => 'a.pdf', 'path' => 'files/x/y/a.pdf', 'etag' => 'e', 'mtime' => 1, 'parent' => 4, 'mimetype' => 'application/pdf', 'storage' => 42, 'storage_id' => 'home::alice']);
+			} elseif (str_contains($sql, 'SELECT parent FROM *PREFIX*filecache')) {
+				$r->method('fetchOne')->willReturn($parents[$p[0]] ?? false);
+			} else {
+				$r->method('fetchAll')->willReturn([]);
+			}
+			return $r;
+		});
+		$f = (new FileFactsSource($db))->load(5);
+		$this->assertSame([4, 3, 1], $f->ancestors);
+	}
+
 	public function testTheStorageNumericIdIsCarriedForErasure(): void {
 		$this->assertSame(42, $this->source('files/a.pdf', [])->load(5)->storageId);
 	}

@@ -18,10 +18,13 @@ class FileIndexerTest extends DbTestCase {
 	private string $etag = 'e1';
 	/** @var list<string> */
 	private array $shares = [];
+	/** @var list<int> */
+	private array $ancestors = [3, 1];
+	private string $mime = 'application/pdf';
 
 	private function indexer(): FileIndexer {
 		$facts = $this->createMock(FileFactsSource::class);
-		$facts->method('load')->willReturnCallback(fn (int $id): FileFacts => new FileFacts($id, 'a.pdf', 'application/pdf', 1, $this->etag, 'a', $this->shares, [], [], false, 7));
+		$facts->method('load')->willReturnCallback(fn (int $id): FileFacts => new FileFacts($id, 'a.pdf', $this->mime, 1, $this->etag, 'a', $this->shares, [], [], false, 7, $this->ancestors));
 		$exclusion = $this->createMock(ExclusionChecker::class);
 		$exclusion->method('isExcluded')->willReturn(false);
 		$db = new IndexDb($this->connection($this->app()));
@@ -76,5 +79,33 @@ class FileIndexerTest extends DbTestCase {
 		$this->shares = ['b'];
 		$this->indexer()->enqueue(30);
 		$this->assertSame(2, $ver());
+	}
+
+	public function testTheFolderChainIsStoredAndFollowsAMove(): void {
+		$read = fn (): string => (string)$this->app()->query('SELECT ancestors FROM aps_search.file_meta WHERE file_id = 40')->fetchColumn();
+		$this->indexer()->enqueue(40);
+		$this->assertSame('{3,1}', $read());
+		$this->ancestors = [9, 3, 1];                                        // moved into a new subfolder: same etag, new chain
+		$this->indexer()->enqueue(40);
+		$this->assertSame('{9,3,1}', $read());
+	}
+
+	public function testTheFolderFilterFindsDescendantsThroughTheIndex(): void {
+		$this->indexer()->enqueue(41);
+		$this->ancestors = [8, 1];
+		$this->indexer()->enqueue(42);
+		$ids = $this->app()->query('SELECT file_id FROM aps_search.file_meta WHERE ancestors @> ARRAY[3]::bigint[] ORDER BY 1')->fetchAll(\PDO::FETCH_COLUMN);
+		$this->assertSame([41], array_map('intval', $ids));
+	}
+
+	public function testEnqueueNeverDropsTheVectorLanesJobs(): void {
+		$this->indexer()->enqueue(50);
+		$this->app()->exec("INSERT INTO aps_search.job (lane, file_id, idem_key, gen, attempts, not_before) VALUES ('vec', 50, '50:e1:1', 1, 3, now() + interval '1 hour')");
+		$this->indexer()->enqueue(50);                                       // same etag: nothing to replace
+		$this->etag = 'e2';
+		$this->indexer()->enqueue(50);                                       // new etag: the idle TEXT job of the old etag goes, the vector job is not this method's to touch
+		$row = $this->app()->query("SELECT attempts FROM aps_search.job WHERE lane = 'vec' AND file_id = 50")->fetchColumn();
+		$this->assertSame(3, (int)$row, 'a backing-off vector job keeps its attempts');
+		$this->assertSame(1, (int)$this->app()->query("SELECT count(*) FROM aps_search.job WHERE lane = 'text' AND file_id = 50")->fetchColumn());
 	}
 }

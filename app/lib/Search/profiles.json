@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "note": "Embedding profiles checked against their model cards (ADR-0014). The administrator pulls the model in Ollama; the application stores its digest. The dimension here is what `occ buscador:profile set` expects and verifies.",
+  "profiles": [
+    {
+      "id": "bge-m3",
+      "model": "bge-m3:567m",
+      "dim": 1024,
+      "quant": null,
+      "query_prefix": "",
+      "passage_prefix": "",
+      "max_tokens": 8192,
+      "note": "Multilingual, 8K context, no prefixes (MIT)."
+    },
+    {
+      "id": "qwen3-embedding-0.6b",
+      "model": "qwen3-embedding:0.6b",
+      "dim": 1024,
+      "quant": null,
+      "query_prefix": "Instruct: Given a Spanish search query, retrieve relevant passages that answer the query\nQuery:",
+      "passage_prefix": "",
+      "max_tokens": 8192,
+      "note": "Queries need the instruction template, documents none (Apache-2.0)."
+    }
+  ]
+}

@@ -39,6 +39,12 @@ class Status extends Command {
 			$output->writeln("skipped $reason: $n");
 		}
 		$output->writeln(sprintf('outbox: %d pending, %d parked after repeated failures', $s['outbox']['pending'], $s['outbox']['parked']));
+		foreach ($s['vectors']['generations'] as $g) {
+			$output->writeln(sprintf('vectors generation %d (%s, %s): coverage %.1f%%', $g['gen'], $g['profile'], $g['state'], $g['coverage'] * 100));
+		}
+		if ($s['vectors']['generations'] !== []) {
+			$output->writeln(sprintf('vectors: %d queued, %d failed', $s['vectors']['queued'], $s['vectors']['failed']));
+		}
 		$output->writeln('permission backlog: ' . ($s['acl_backlog_seconds'] === null ? 'none' : $s['acl_backlog_seconds'] . ' s'));
 		$output->writeln('last reconciliation: ' . ($s['last_reconcile'] === null ? 'never' : $s['last_reconcile']['finished_at']));
 		return 0;
