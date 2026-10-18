@@ -52,6 +52,14 @@ def check_schema(conn):
         sys.exit(f"index schema version {found} is not supported by this worker (expected {SUPPORTED_SCHEMA})")
 
 
+def env_or_file(name):
+    """NAME, or the contents of the file named by NAME_FILE (a secret mounted as a file stays out of `docker inspect`)."""
+    path = os.environ.get(name + "_FILE")
+    if path:
+        return open(path, encoding="utf-8").read().strip()
+    return env(name)
+
+
 def env(name, default=None):
     v = os.environ.get(name, default)
     if v is None:
@@ -158,13 +166,14 @@ def process(conn, api, dsn, job_id, epoch, file_id):
             return "abandoned"
         if len(pages) > MAX_PAGES:
             return fail(conn, job_id, epoch, "too_large", False)
+        pages = [chunk.clean(t) for t in pages]
         try:
             chunks = chunk.split(pages)
         except chunk.TooManyChunks:
             return fail(conn, job_id, epoch, "too_large", False)
         confs = answer.get("conf") or [None] * len(pages)
         sources = answer.get("source") or ["ocr"] * len(pages)
-        page_rows = [{"page_no": i, "text": chunk.clean(t), "ocr_conf": confs[i - 1], "source": sources[i - 1]}
+        page_rows = [{"page_no": i, "text": t, "ocr_conf": confs[i - 1], "source": sources[i - 1]}
                      for i, t in enumerate(pages, start=1)]
         conn.execute("SELECT aps_search.write_result(%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s)",
                      (job_id, epoch, meta["etag"], content_hash, json.dumps(page_rows), json.dumps(chunks),
@@ -182,8 +191,15 @@ def process(conn, api, dsn, job_id, epoch, file_id):
         log.warning("job %s: app busy (%s), lease will expire", job_id, e)
         return "abandoned"
     except bdclient.AuthError:
+        # A wrong or rotated-out secret, or a clock off by more than the window: every further claim would burn an attempt of
+        # a file for nothing (five of them skip it for good). Stop the worker; leases expire and the files are read later.
         log.error("job %s: worker channel rejected our credentials", job_id)
-        return "abandoned"
+        raise
+    except psycopg.errors.DataError as e:
+        if "payload_too_large" in str(e):
+            return fail(conn, job_id, epoch, "too_large", False)
+        log.error("job %s: the database refused the extracted text (%s)", job_id, type(e).__name__)       # never its message
+        return fail(conn, job_id, epoch, "corrupt", False)
     except psycopg.errors.Error as e:
         if any(tag in str(e) for tag in SILENT_DB_ERRORS):
             return "abandoned"
@@ -212,6 +228,10 @@ def run_guarded():
         main()
     except SystemExit:
         raise
+    except bdclient.AuthError:
+        print("bd-worker stopped: the app rejected the worker credentials (secret rotated out, or the clocks differ by more than 2 minutes); "
+              "no more work is claimed until it is fixed", file=sys.stderr, flush=True)
+        sys.exit(3)
     except Exception:
         print(f"bd-worker stopped: {where(sys.exc_info())}", file=sys.stderr, flush=True)
         sys.exit(1)
@@ -291,9 +311,9 @@ def run_once(conn, api, dsn, worker_id, embedder=None):
 
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
-    dsn = env("BD_DB_DSN")
+    dsn = env_or_file("BD_DB_DSN")
     worker_id = env("BD_WORKER_ID", "worker-1")
-    api = bdclient.WorkerClient(env("BD_BASE_URL"), worker_id, env("BD_WORKER_SECRET"))
+    api = bdclient.WorkerClient(env("BD_BASE_URL"), worker_id, env_or_file("BD_WORKER_SECRET"))
     once = "--once" in sys.argv
     embedder = None
     if os.environ.get("BD_EMBED_URL"):                  # no endpoint, no vector lane: a keyword-only install still works

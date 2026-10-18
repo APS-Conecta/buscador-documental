@@ -233,3 +233,42 @@ def test_an_unknown_schema_stops_the_worker_with_a_clear_message(version):
 def test_a_missing_schema_function_stops_the_worker_too():
     with pytest.raises(SystemExit):
         main.check_schema(VersionConn(error=psycopg.errors.UndefinedFunction("no such function")))
+
+
+def test_rejected_credentials_stop_the_worker_instead_of_burning_attempts():
+    """A stale secret or a skewed clock must not make the loop claim, fail and re-claim files until they are skipped for good."""
+    with pytest.raises(bdclient.AuthError):
+        run(FakeConn(), FakeApi(meta_exc=bdclient.AuthError()))
+
+
+def test_run_guarded_exits_with_a_clear_one_line_note_on_rejected_credentials(monkeypatch, capsys):
+    monkeypatch.setattr(main, "main", lambda: (_ for _ in ()).throw(bdclient.AuthError()))
+    with pytest.raises(SystemExit) as e:
+        main.run_guarded()
+    assert e.value.code == 3
+    assert "rejected the worker credentials" in capsys.readouterr().err
+
+
+def test_text_with_lone_surrogates_is_cleaned_before_it_reaches_the_database(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(main, "parse", lambda *a: {"status": "ok", "pages": ["hola \ud83d mundo\x00"]})
+    monkeypatch.setattr(main.chunk, "split", lambda pages: seen.setdefault("pages", pages) and [])
+    run(FakeConn(), FakeApi())
+    assert seen["pages"] == ["hola � mundo"]
+
+
+def test_a_database_data_error_fails_the_file_as_corrupt_and_the_worker_goes_on(monkeypatch):
+    monkeypatch.setattr(main, "parse", lambda *a: {"status": "ok", "pages": ["texto"]})
+    conn = FakeConn(raise_on=("write_result", psycopg.errors.InvalidTextRepresentation("invalid input syntax for type json")))
+    assert run(conn, FakeApi()) == "failed:corrupt"
+    assert any("fail_job" in c[0] for c in conn.calls)
+
+
+def test_secrets_can_come_from_files(monkeypatch, tmp_path):
+    f = tmp_path / "s"
+    f.write_text("from-a-file\n")
+    monkeypatch.setenv("BD_X_FILE", str(f))
+    assert main.env_or_file("BD_X") == "from-a-file"
+    monkeypatch.delenv("BD_X_FILE")
+    monkeypatch.setenv("BD_X", "plain")
+    assert main.env_or_file("BD_X") == "plain"

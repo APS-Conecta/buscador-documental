@@ -1,0 +1,34 @@
+{
+  "files": 500,
+  "pages": 10000,
+  "chunks": 30000,
+  "dim": 1024,
+  "seconds": {
+    "load": 5.2,
+    "chunk_tsv_idx": 0.6,
+    "chunk_file_id_idx": 0.0,
+    "file_acl_principals_idx": 0.0,
+    "file_meta_ancestors_idx": 0.0,
+    "file_meta_owner_idx": 0.0,
+    "chunk_vec_1_file_idx": 0.0,
+    "chunk_vec_1_fk": 0.0,
+    "hnsw": 12.7,
+    "analyze": 0.3,
+    "total": 18.9
+  },
+  "database_bytes": 296580799,
+  "largest_relations_bytes": {
+    "chunk_vec_1": 168583168,
+    "chunk": 89833472,
+    "chunk_vec_1_hnsw": 81928192,
+    "page": 28164096,
+    "chunk_tsv_idx": 12926976,
+    "chunk_pkey": 966656,
+    "chunk_vec_1_pkey": 860160,
+    "page_pkey": 344064,
+    "chunk_vec_1_file_idx": 221184,
+    "chunk_file_id_idx": 221184,
+    "file_meta": 180224,
+    "file_state": 139264
+  }
+}

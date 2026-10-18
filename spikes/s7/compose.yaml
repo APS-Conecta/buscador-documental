@@ -1,0 +1,25 @@
+# S7 load test at 1M-page equivalent (A-PERF-1/2/5, A-QUAL-3, A-OPS-2). Own project `bd-s7`, loopback only, toy passwords.
+# `make -C spikes/s7 clean` removes this project and its volume only. Reference box: 8 cores, 31 GB RAM.
+name: bd-s7
+
+services:
+  db:
+    image: pgvector/pgvector:0.8.7-pg18-bookworm@sha256:2358fcba361ed2233a5ed81b5fe4ca779ccb304120ce531a3bf51c0ed7e2bc11
+    restart: "no"
+    shm_size: 2g
+    ports: ["127.0.0.1:5460:5432"]
+    volumes:
+      - bd_s7_pg:/var/lib/postgresql
+      - ../../db/init:/docker-entrypoint-initdb.d:ro
+    environment: {POSTGRES_DB: nextcloud, POSTGRES_USER: postgres, POSTGRES_PASSWORD: dev}
+    command: >
+      postgres -c shared_buffers=4GB -c effective_cache_size=16GB -c work_mem=32MB -c maintenance_work_mem=4GB
+      -c max_wal_size=32GB -c max_parallel_maintenance_workers=6 -c log_statement=none
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d nextcloud"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+
+volumes:
+  bd_s7_pg:
