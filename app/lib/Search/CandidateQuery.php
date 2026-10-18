@@ -17,6 +17,8 @@ class CandidateQuery {
 	public const PRE_LIMIT = 10000;
 	/** Below this many matching files the strict pass is thin and the OR relaxation also runs. */
 	public const THIN = 25;
+	/** Candidates ranked when every word is common and the reader has many files: the newest matches are dense, so fewer are enough, and finding them costs time in proportion (S7: 3.8 s at 10000 for a reader of a tenth of the index). */
+	public const COMMON_PRE_LIMIT = 2000;
 	/** A term in at least this share of all chunks is left out of the OR relaxation: it matches so much that it only adds noise and cost. */
 	public const COMMON_SHARE = 0.02;
 	/** Readers of fewer files than this get the plan that starts from their files, not from the matches of the words. */
@@ -89,7 +91,7 @@ class CandidateQuery {
 		return $this->db->guarded(function () use ($sql, $params, $exactScan): array {
 			if (!$exactScan) {
 				// Iterative scan keeps the index feeding a filtered query until enough rows pass (ADR-0001, S0 settings).
-				$this->db->rows("SELECT set_config('hnsw.iterative_scan', 'relaxed_order', true), set_config('hnsw.max_scan_tuples', '20000', true), set_config('hnsw.ef_search', '200', true)");
+				$this->db->rows("SELECT set_config('hnsw.iterative_scan', 'relaxed_order', true), set_config('hnsw.max_scan_tuples', '20000', true), set_config('hnsw.ef_search', ?, true)", [(string)$this->efSearch]);
 			}
 			return $this->shape($this->db->rows($sql, $params));
 		});
@@ -193,6 +195,9 @@ class CandidateQuery {
 		return array_column($common, 'term');
 	}
 
+	/** hnsw.ef_search for the vector leg: more candidates per search, better recall, more time (S7 measured the trade). */
+	public int $efSearch = 400;
+
 	/** Tests set this to 0 to run the plan for readers of many files on a small corpus. */
 	public int $narrowFiles = self::NARROW_FILES;
 
@@ -218,6 +223,7 @@ class CandidateQuery {
 		// index finds the few matches first. Used when a required word is known not to be common, and for readers of few files
 		// (who start from their files).
 		$lead = $wordsLead || $narrow ? '+ 0' : '';
+		$cap = $wordsLead || $narrow ? self::PRE_LIMIT : self::COMMON_PRE_LIMIT;
 		// The query text is written into the places that use it, not kept in a CTE: with a literal the planner reads the word
 		// statistics, with a CTE value it guesses and may choose to read every chunk of the index (measured: 7 s for a common word).
 		if ($narrow) {
@@ -225,7 +231,7 @@ class CandidateQuery {
 				cand AS MATERIALIZED (
 					SELECT c.chunk_id, c.file_id, c.tsv FROM aps_search.chunk c JOIN acl a ON a.file_id = c.file_id$meta
 					WHERE c.tsv @@ ($qsql)$fsql
-					ORDER BY c.chunk_id $lead DESC LIMIT " . self::PRE_LIMIT . "
+					ORDER BY c.chunk_id $lead DESC LIMIT $cap
 				),
 				best AS (
 					SELECT DISTINCT ON (file_id) file_id, chunk_id, ts_rank(tsv, ($qsql)) AS rank FROM cand
@@ -234,10 +240,17 @@ class CandidateQuery {
 				SELECT file_id, chunk_id FROM best ORDER BY rank DESC, file_id LIMIT ?";
 			$params = [$principalSet, ...$qparams, ...$fparams, ...$qparams, $limit];
 		} else {
+			// Common words and a reader of many files: walk the newest chunks and test each match's file as a row filter. As a join
+			// the planner (which thinks this reader has 500 files, not 5000) reads every chunk of those files first (measured 5 s).
+			// Words that are not common are found through the word index, where the join is cheap.
+			$join = $wordsLead ? ' JOIN aps_search.file_acl a ON a.file_id = c.file_id' : '';
+			$access = $wordsLead
+				? 'a.principals && ?::text[]'
+				: '(SELECT a.principals FROM aps_search.file_acl a WHERE a.file_id = c.file_id) && ?::text[]';
 			$sql = "WITH cand AS MATERIALIZED (
-					SELECT c.chunk_id, c.file_id, c.tsv FROM aps_search.chunk c JOIN aps_search.file_acl a ON a.file_id = c.file_id$meta
-					WHERE c.tsv @@ ($qsql) AND a.principals && ?::text[]$fsql
-					ORDER BY c.chunk_id $lead DESC LIMIT " . self::PRE_LIMIT . "
+					SELECT c.chunk_id, c.file_id, c.tsv FROM aps_search.chunk c$join$meta
+					WHERE c.tsv @@ ($qsql) AND $access$fsql
+					ORDER BY c.chunk_id $lead DESC LIMIT $cap
 				),
 				best AS (
 					SELECT DISTINCT ON (file_id) file_id, chunk_id, ts_rank(tsv, ($qsql)) AS rank FROM cand

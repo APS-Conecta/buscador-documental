@@ -45,6 +45,7 @@ class LoadTest extends DbTestCase {
 		$pdo->exec('SET ROLE bd_owner');
 		$db = new IndexDb($this->connection($pdo));
 		$cq = new CandidateQuery($db);
+		$cq->efSearch = (int)$this->env('S7_EF', '200');
 		$mode = $this->env('S7_MODE', 'exacta');
 		$page = (int)$this->env('S7_PAGE', '25');
 		$part = (int)$this->env('S7_PART', '0');
@@ -62,9 +63,13 @@ class LoadTest extends DbTestCase {
 			}
 			for ($r = 0; $r < $reps; $r++) {
 				if ($mode === 'recall') {
-					$ann = array_column($cq->significado($q['vec'], 1, $set, $filters, 10, false), 'file_id');
+					// What Searcher does: readers of fewer files than the threshold get the exact scan, the others the index.
+					$useExact = $cq->accessibleFiles($set, $filters, $exactFiles) < $exactFiles;
+					$t = microtime(true);
+					$ann = array_column($cq->significado($q['vec'], 1, $set, $filters, 10, $useExact), 'file_id');
+					$ms = round((microtime(true) - $t) * 1000, 1);
 					$exact = array_column($cq->significado($q['vec'], 1, $set, $filters, 10, true), 'file_id');
-					fwrite($out, json_encode(['i' => $i, 'k' => count($exact), 'hit' => count(array_intersect($ann, $exact))]) . "\n");
+					fwrite($out, json_encode(['i' => $i, 'k' => count($exact), 'hit' => count(array_intersect($ann, $exact)), 'ms' => $ms, 'exact_path' => $useExact]) . "\n");
 					continue;
 				}
 				$t = microtime(true);

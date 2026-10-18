@@ -1,0 +1,307 @@
+{
+  "latency": [
+    {
+      "mode": "exacta",
+      "user": "admin200",
+      "concurrency": 10,
+      "page": 25,
+      "samples": 200,
+      "p50_ms": 294.6,
+      "p95_ms": 697.3,
+      "p99_ms": 1008.1,
+      "empty_results": 0
+    },
+    {
+      "mode": "exacta",
+      "user": "admin200",
+      "concurrency": 1,
+      "page": 25,
+      "samples": 200,
+      "p50_ms": 171.1,
+      "p95_ms": 389.1,
+      "p99_ms": 490.8,
+      "empty_results": 0
+    },
+    {
+      "mode": "exacta",
+      "user": "admin200",
+      "concurrency": 20,
+      "page": 25,
+      "samples": 200,
+      "p50_ms": 628.3,
+      "p95_ms": 1914.0,
+      "p99_ms": 2944.9,
+      "empty_results": 0
+    },
+    {
+      "mode": "exacta",
+      "user": "admin200",
+      "concurrency": 5,
+      "page": 100,
+      "samples": 200,
+      "p50_ms": 204.6,
+      "p95_ms": 438.8,
+      "p99_ms": 638.6,
+      "empty_results": 0
+    },
+    {
+      "mode": "exacta",
+      "user": "admin200",
+      "concurrency": 5,
+      "page": 25,
+      "samples": 200,
+      "p50_ms": 186.8,
+      "p95_ms": 397.5,
+      "p99_ms": 517.9,
+      "empty_results": 0
+    },
+    {
+      "mode": "exacta",
+      "user": "admin200",
+      "concurrency": 5,
+      "page": 50,
+      "samples": 200,
+      "p50_ms": 196.4,
+      "p95_ms": 403.6,
+      "p99_ms": 466.8,
+      "empty_results": 0
+    },
+    {
+      "mode": "exacta",
+      "user": "mid",
+      "concurrency": 5,
+      "page": 25,
+      "samples": 200,
+      "p50_ms": 43.2,
+      "p95_ms": 2222.5,
+      "p99_ms": 3267.1,
+      "empty_results": 0
+    },
+    {
+      "mode": "exacta",
+      "user": "narrow",
+      "concurrency": 10,
+      "page": 25,
+      "samples": 200,
+      "p50_ms": 55.0,
+      "p95_ms": 352.5,
+      "p99_ms": 448.3,
+      "empty_results": 0
+    },
+    {
+      "mode": "exacta",
+      "user": "narrow",
+      "concurrency": 1,
+      "page": 25,
+      "samples": 200,
+      "p50_ms": 38.8,
+      "p95_ms": 158.9,
+      "p99_ms": 178.9,
+      "empty_results": 0
+    },
+    {
+      "mode": "exacta",
+      "user": "narrow",
+      "concurrency": 20,
+      "page": 25,
+      "samples": 200,
+      "p50_ms": 112.4,
+      "p95_ms": 872.1,
+      "p99_ms": 1430.7,
+      "empty_results": 0
+    },
+    {
+      "mode": "exacta",
+      "user": "narrow",
+      "concurrency": 5,
+      "page": 100,
+      "samples": 200,
+      "p50_ms": 37.0,
+      "p95_ms": 195.3,
+      "p99_ms": 255.0,
+      "empty_results": 0
+    },
+    {
+      "mode": "exacta",
+      "user": "narrow",
+      "concurrency": 5,
+      "page": 25,
+      "samples": 200,
+      "p50_ms": 34.6,
+      "p95_ms": 184.1,
+      "p99_ms": 266.7,
+      "empty_results": 0
+    },
+    {
+      "mode": "exacta",
+      "user": "narrow",
+      "concurrency": 5,
+      "page": 50,
+      "samples": 200,
+      "p50_ms": 35.0,
+      "p95_ms": 181.7,
+      "p99_ms": 280.9,
+      "empty_results": 0
+    },
+    {
+      "mode": "mixta",
+      "user": "admin200",
+      "concurrency": 10,
+      "page": 25,
+      "samples": 200,
+      "p50_ms": 377.5,
+      "p95_ms": 868.5,
+      "p99_ms": 1153.2,
+      "empty_results": 0
+    },
+    {
+      "mode": "mixta",
+      "user": "admin200",
+      "concurrency": 1,
+      "page": 25,
+      "samples": 200,
+      "p50_ms": 234.3,
+      "p95_ms": 480.3,
+      "p99_ms": 674.3,
+      "empty_results": 0
+    },
+    {
+      "mode": "mixta",
+      "user": "admin200",
+      "concurrency": 20,
+      "page": 25,
+      "samples": 200,
+      "p50_ms": 1171.0,
+      "p95_ms": 2782.5,
+      "p99_ms": 4419.9,
+      "empty_results": 0
+    },
+    {
+      "mode": "mixta",
+      "user": "admin200",
+      "concurrency": 5,
+      "page": 100,
+      "samples": 200,
+      "p50_ms": 242.1,
+      "p95_ms": 498.5,
+      "p99_ms": 672.1,
+      "empty_results": 0
+    },
+    {
+      "mode": "mixta",
+      "user": "admin200",
+      "concurrency": 5,
+      "page": 25,
+      "samples": 200,
+      "p50_ms": 235.4,
+      "p95_ms": 481.4,
+      "p99_ms": 617.0,
+      "empty_results": 0
+    },
+    {
+      "mode": "mixta",
+      "user": "admin200",
+      "concurrency": 5,
+      "page": 50,
+      "samples": 200,
+      "p50_ms": 258.9,
+      "p95_ms": 501.1,
+      "p99_ms": 643.1,
+      "empty_results": 0
+    },
+    {
+      "mode": "mixta",
+      "user": "mid",
+      "concurrency": 5,
+      "page": 25,
+      "samples": 200,
+      "p50_ms": 323.6,
+      "p95_ms": 2471.7,
+      "p99_ms": 3892.2,
+      "empty_results": 0
+    },
+    {
+      "mode": "mixta",
+      "user": "narrow",
+      "concurrency": 10,
+      "page": 25,
+      "samples": 200,
+      "p50_ms": 472.7,
+      "p95_ms": 903.7,
+      "p99_ms": 1075.5,
+      "empty_results": 0
+    },
+    {
+      "mode": "mixta",
+      "user": "narrow",
+      "concurrency": 1,
+      "page": 25,
+      "samples": 200,
+      "p50_ms": 294.5,
+      "p95_ms": 444.8,
+      "p99_ms": 485.9,
+      "empty_results": 0
+    },
+    {
+      "mode": "mixta",
+      "user": "narrow",
+      "concurrency": 20,
+      "page": 25,
+      "samples": 200,
+      "p50_ms": 1116.3,
+      "p95_ms": 2263.4,
+      "p99_ms": 2693.7,
+      "empty_results": 0
+    },
+    {
+      "mode": "mixta",
+      "user": "narrow",
+      "concurrency": 5,
+      "page": 100,
+      "samples": 200,
+      "p50_ms": 334.5,
+      "p95_ms": 498.0,
+      "p99_ms": 567.6,
+      "empty_results": 0
+    },
+    {
+      "mode": "mixta",
+      "user": "narrow",
+      "concurrency": 5,
+      "page": 25,
+      "samples": 200,
+      "p50_ms": 321.6,
+      "p95_ms": 466.6,
+      "p99_ms": 549.8,
+      "empty_results": 0
+    },
+    {
+      "mode": "mixta",
+      "user": "narrow",
+      "concurrency": 5,
+      "page": 50,
+      "samples": 200,
+      "p50_ms": 340.7,
+      "p95_ms": 501.3,
+      "p99_ms": 611.0,
+      "empty_results": 0
+    }
+  ],
+  "recall": [
+    {
+      "user": "admin200",
+      "queries": 200,
+      "recall_at_10": 0.7865
+    },
+    {
+      "user": "mid",
+      "queries": 200,
+      "recall_at_10": 0.7709
+    },
+    {
+      "user": "narrow",
+      "queries": 200,
+      "recall_at_10": 0.3934
+    }
+  ]
+}
