@@ -80,3 +80,6 @@ The worker supervisor (holds DB and HMAC secrets, has network) hands each file t
 
 ## 10. Operations controls (S5, ADR-0015)
 Night window, concurrency caps, worker liveness, secret rotation with a grace period, an internal network for the worker and encrypted schema backups are described in ADR-0015; the runbooks are in the administrator page of the site.
+
+## 11. Frontend (S6, ADR-0016)
+Vue 3 + `@nextcloud/vue` 9 on Vite, built in a pinned Node container, `js/` committed with a drift gate, a 250 KB gzip budget on the first-load chunk, vitest+axe for components and a pinned Playwright image for the live checks. Search hits carry path, modified date, owner name and the uncertain-reading flag, all taken from nodes the caller has just been allowed to read.

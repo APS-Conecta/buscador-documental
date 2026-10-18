@@ -101,7 +101,7 @@ ok "activate and semantic on are explicit administrator acts"
 echo "== 4. the three modes, filters, paging fields"
 check "$(api vec_a '{"query":"cadena de frio vacunas","mode":"exacta"}')" "exacta finds the text file" 'any(h["file_id"] == '"$NOTE"' for h in j["hits"]) and j["notice"] is None'
 check "$(api vec_a '{"query":"vacunas frio informe","mode":"significado"}')" "significado finds it through the vector leg" 'j["hits"][0]["file_id"] == '"$NOTE"' and j["notice"] is None'
-check "$(api vec_a '{"query":"vacunas frio informe","mode":"mixta"}')" "mixta fuses both" 'j["hits"][0]["file_id"] == '"$NOTE"' and sorted(j["hits"][0].keys()) == ["file_id","heading","page_no","snippet","title"]'
+check "$(api vec_a '{"query":"vacunas frio informe","mode":"mixta"}')" "mixta fuses both" 'j["hits"][0]["file_id"] == '"$NOTE"' and sorted(j["hits"][0].keys()) == ["file_id","heading","mtime","owner","page_no","path","snippet","title","uncertain"]'
 check "$(api vec_a '{"query":"vacunas frio","mode":"mixta","filters":{"types":["pdf"]}}')" "the type filter excludes the text file" 'all(h["file_id"] != '"$NOTE"' for h in j["hits"])'
 check "$(api vec_a '{"query":"vacunas frio","mode":"mixta","filters":{"types":["texto"],"modified_from":"2000-01-01","modified_to":"2999-12-31"}}')" "type and date filters keep it" 'any(h["file_id"] == '"$NOTE"' for h in j["hits"])'
 check "$(api vec_a '{"query":"vacunas frio","mode":"mixta","filters":{"modified_to":"2000-01-01"}}')" "an old date range finds nothing" 'j["hits"] == []'

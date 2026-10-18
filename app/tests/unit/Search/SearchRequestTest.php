@@ -33,6 +33,12 @@ class SearchRequestTest extends TestCase {
 		$this->assertSame(42, $r->filters->folderId);
 	}
 
+	public function testPropiedadAndUncertainAreRead(): void {
+		$f = SearchRequest::fromArray(['query' => 'x', 'filters' => ['owner' => 'shared', 'uncertain' => true]])->filters;
+		$this->assertSame(['shared', true], [$f->owner, $f->uncertain]);
+		$this->assertFalse($f->isEmpty());
+	}
+
 	public function testAQueryIsCutToTheLimitByCharactersNotBytes(): void {
 		$r = SearchRequest::fromArray(['query' => str_repeat('á', 900)]);
 		$this->assertSame(SearchRequest::MAX_QUERY_CHARS, mb_strlen($r->query));
@@ -65,6 +71,9 @@ class SearchRequestTest extends TestCase {
 			'range reversed' => [['query' => 'x', 'filters' => ['modified_from' => '2026-02-01', 'modified_to' => '2026-01-01']], 'fecha'],
 			'folder' => [['query' => 'x', 'filters' => ['folder_id' => -3]], 'carpeta'],
 			'folder string' => [['query' => 'x', 'filters' => ['folder_id' => '5 OR 1=1']], 'carpeta'],
+			'owner' => [['query' => 'x', 'filters' => ['owner' => 'bob']], 'propiedad'],
+			'owner not a string' => [['query' => 'x', 'filters' => ['owner' => ['mine']]], 'propiedad'],
+			'uncertain' => [['query' => 'x', 'filters' => ['uncertain' => 'yes']], 'incierta'],
 			'unknown filter' => [['query' => 'x', 'filters' => ['owner' => 'bob']], 'filtro'],
 		];
 	}

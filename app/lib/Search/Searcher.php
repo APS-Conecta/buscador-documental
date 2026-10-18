@@ -95,6 +95,7 @@ class Searcher {
 	/** @return array{0: list<int>, 1: list<int>, 2: ?array{code: string, message: string}} */
 	private function rank(string $uid, SearchRequest $r): array {
 		$set = IndexDb::textArray($this->principals->forUser($uid));
+		$filters = $r->filters->forUser($uid, $this->vectors->uncertainBelow());
 		$mode = $r->mode;
 		$notice = null;
 		$vector = null;
@@ -113,12 +114,12 @@ class Searcher {
 		}
 		// Mixta keeps the keyword leg strict: the OR relaxation of plain keyword search only adds common-word noise that dilutes the
 		// fusion, while the vector leg already covers the fuzzy matches (S4 evaluation: recall@10 0.67 with it, 0.79 without).
-		$keyword = $mode === 'significado' ? [] : $this->candidates->exacta($r->query, $this->glossary->alternatives($r->query), $set, $r->filters, self::CAP, $mode === 'mixta' ? false : null);
+		$keyword = $mode === 'significado' ? [] : $this->candidates->exacta($r->query, $this->glossary->alternatives($r->query), $set, $filters, self::CAP, $mode === 'mixta' ? false : null);
 		$semantic = [];
 		if ($mode !== 'exacta') {
 			$exact = !$this->candidates->hasAnnIndex($profile['gen'])
-				|| $this->candidates->accessibleFiles($set, $r->filters, $this->vectors->exactScanFiles()) < $this->vectors->exactScanFiles();
-			$semantic = $this->candidates->significado($vector, $profile['gen'], $set, $r->filters, self::CAP, $exact);
+				|| $this->candidates->accessibleFiles($set, $filters, $this->vectors->exactScanFiles()) < $this->vectors->exactScanFiles();
+			$semantic = $this->candidates->significado($vector, $profile['gen'], $set, $filters, self::CAP, $exact);
 		}
 		$ranked = match ($mode) {
 			'exacta' => $keyword,
@@ -207,7 +208,7 @@ class Searcher {
 			}
 		}
 		$survivors = array_map(static fn (array $p): array => [['chunk_id' => $snap['chunk_ids'][$p[0]], 'etag' => $etags[$p[1]->fileId] ?? ''], $p[1]], $picked);
-		$hits = $survivors === [] ? [] : $this->hits->build($r->query, $this->glossary->alternatives($r->query), $survivors);
+		$hits = $survivors === [] ? [] : $this->hits->build($r->query, $this->glossary->alternatives($r->query), $survivors, true, $this->vectors->uncertainBelow());
 		$lastStart = $total > 0 ? intdiv($total - 1, $size) * $size : 0;
 		return [
 			'status' => 'ok',

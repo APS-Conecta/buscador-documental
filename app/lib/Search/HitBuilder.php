@@ -22,9 +22,10 @@ class HitBuilder {
 	/**
 	 * @param list<string> $alternatives extra plain phrases ORed with the query for highlighting
 	 * @param list<array{0: array<string, mixed>, 1: RecheckResult}> $survivors rows carry chunk_id and the indexed etag
+	 * @param bool $details add path, mtime, owner and the uncertain-reading flag (the search page; the keyword provider keeps the short shape)
 	 * @return list<array<string, mixed>>
 	 */
-	public function build(string $query, array $alternatives, array $survivors): array {
+	public function build(string $query, array $alternatives, array $survivors, bool $details = false, float $uncertainBelow = 60.0): array {
 		$ids = [];
 		foreach ($survivors as [$row, $r]) {
 			if ($this->snippetServable($row, $r)) {
@@ -52,9 +53,27 @@ class HitBuilder {
 			}
 		}
 
+		$conf = [];
+		if ($details && $survivors !== []) {
+			$all = array_map(static fn (array $s): int => (int)$s[0]['chunk_id'], $survivors);
+			foreach ($this->db->rows(
+				'SELECT c.chunk_id, pg.ocr_conf FROM aps_search.chunk c LEFT JOIN aps_search.page pg ON pg.file_id = c.file_id AND pg.page_no = c.page_no WHERE c.chunk_id = ANY(?::bigint[])',
+				['{' . implode(',', $all) . '}'],
+			) as $row) {
+				$conf[(int)$row['chunk_id']] = $row['ocr_conf'] === null ? null : (float)$row['ocr_conf'];
+			}
+		}
 		$hits = [];
 		foreach ($survivors as [$row, $r]) {
 			$hit = ['file_id' => $r->fileId, 'title' => $r->node->getName()];
+			if ($details) {
+				// All of it comes from the node the caller has just been allowed to read, plus the page's own confidence.
+				$hit['path'] = self::relativePath($r->node);
+				$hit['mtime'] = (int)$r->node->getMTime();
+				$hit['owner'] = self::ownerName($r->node);
+				$c = $conf[(int)$row['chunk_id']] ?? null;
+				$hit['uncertain'] = $c !== null && $c < $uncertainBelow;
+			}
 			$chunk = $chunks[(int)$row['chunk_id']] ?? null;
 			// the chunk must belong to this very file (a defence in depth: the snapshot is private and ids are not guessable)
 			if ($this->snippetServable($row, $r) && $chunk !== null && (int)($chunk['file_id'] ?? $r->fileId) === $r->fileId) {
@@ -65,6 +84,18 @@ class HitBuilder {
 			$hits[] = $hit;
 		}
 		return $hits;
+	}
+
+	private static function relativePath(\OCP\Files\Node $node): string {
+		return preg_match('#^/[^/]+/files(/.*)$#D', (string)$node->getPath(), $m) === 1 ? $m[1] : '/' . $node->getName();
+	}
+
+	private static function ownerName(\OCP\Files\Node $node): ?string {
+		try {
+			return $node->getOwner()?->getDisplayName();
+		} catch (\Throwable) {
+			return null;                                          // a team folder has no owner
+		}
 	}
 
 	/** A snippet comes from the indexed text; once the file changed (etag differs) it may no longer be the file's content. */

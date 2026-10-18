@@ -46,10 +46,10 @@ class FileIndexer {
 			[$fileId, $facts->etag],
 		);
 		$this->db->execute(
-			'INSERT INTO aps_search.file_meta (file_id, name, mime, mtime, storage_id, ancestors) VALUES (?, ?, ?, ?, ?, ?::bigint[])
+			'INSERT INTO aps_search.file_meta (file_id, name, mime, mtime, storage_id, ancestors, owner) VALUES (?, ?, ?, ?, ?, ?::bigint[], ?)
 			 ON CONFLICT (file_id) DO UPDATE SET name = EXCLUDED.name, mime = EXCLUDED.mime, mtime = EXCLUDED.mtime,
-				storage_id = EXCLUDED.storage_id, ancestors = EXCLUDED.ancestors',
-			[$fileId, $facts->name, $facts->mime, $facts->mtime, $facts->storageId, IndexDb::textArray(array_map('strval', $facts->ancestors))],
+				storage_id = EXCLUDED.storage_id, ancestors = EXCLUDED.ancestors, owner = EXCLUDED.owner',
+			[$fileId, $facts->name, $facts->mime, $facts->mtime, $facts->storageId, IndexDb::textArray(array_map('strval', $facts->ancestors)), $facts->ownerUid],
 		);
 		$this->acl->writeFacts($facts);
 		// Unclaimed jobs for an older etag are obsolete; claimed ones fail with etag_mismatch and are reclaimed.

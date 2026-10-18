@@ -21,10 +21,11 @@ class FileIndexerTest extends DbTestCase {
 	/** @var list<int> */
 	private array $ancestors = [3, 1];
 	private string $mime = 'application/pdf';
+	private ?string $owner = 'a';
 
 	private function indexer(): FileIndexer {
 		$facts = $this->createMock(FileFactsSource::class);
-		$facts->method('load')->willReturnCallback(fn (int $id): FileFacts => new FileFacts($id, 'a.pdf', $this->mime, 1, $this->etag, 'a', $this->shares, [], [], false, 7, $this->ancestors));
+		$facts->method('load')->willReturnCallback(fn (int $id): FileFacts => new FileFacts($id, 'a.pdf', $this->mime, 1, $this->etag, $this->owner, $this->shares, [], [], false, 7, $this->ancestors));
 		$exclusion = $this->createMock(ExclusionChecker::class);
 		$exclusion->method('isExcluded')->willReturn(false);
 		$db = new IndexDb($this->connection($this->app()));
@@ -107,5 +108,17 @@ class FileIndexerTest extends DbTestCase {
 		$row = $this->app()->query("SELECT attempts FROM aps_search.job WHERE lane = 'vec' AND file_id = 50")->fetchColumn();
 		$this->assertSame(3, (int)$row, 'a backing-off vector job keeps its attempts');
 		$this->assertSame(1, (int)$this->app()->query("SELECT count(*) FROM aps_search.job WHERE lane = 'text' AND file_id = 50")->fetchColumn());
+	}
+
+	public function testTheOwnerIsStoredForThePropiedadFilterAndTeamFoldersHaveNone(): void {
+		$read = fn (int $id): ?string => $this->app()->query("SELECT owner FROM aps_search.file_meta WHERE file_id = $id")->fetchColumn() ?: null;
+		$this->indexer()->enqueue(60);
+		$this->assertSame('a', $read(60));
+		$this->owner = null;
+		$this->indexer()->enqueue(61);
+		$this->assertNull($read(61));
+		$this->owner = 'b';                                                  // the file changed hands
+		$this->indexer()->enqueue(60);
+		$this->assertSame('b', $read(60));
 	}
 }
