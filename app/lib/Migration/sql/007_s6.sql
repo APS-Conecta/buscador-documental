@@ -68,6 +68,9 @@ BEGIN
 END
 $$;
 -- @@
+-- More detail in the planner's statistics on the search column: the most common terms are read from them (CandidateQuery).
+ALTER TABLE chunk ALTER COLUMN tsv SET STATISTICS 500;
+-- @@
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA aps_search TO SESSION_USER;
 -- @@
 UPDATE schema_meta SET schema_ver = 5 WHERE schema_ver < 5;

@@ -192,4 +192,19 @@ class HybridPgTest extends DbTestCase {
 		$f = (new Filters(owner: 'mine', uncertain: true))->forUser('b', 60.0);
 		$this->assertSame(2, $this->query()->accessibleFiles($this->set(), $f, 100), 'only the file-level part narrows the cheap count');
 	}
+
+	public function testTheRelaxationDropsVeryCommonTermsAndBothPlansAgree(): void {
+		$a = $this->app();
+		for ($i = 1; $i <= 60; $i++) {                                          // 'comunisimo' is in every chunk: far above the common share
+			$this->doc($i, ['u:b'], $i === 7 ? 'comunisimo rarisimo' : 'comunisimo relleno ' . $i);   // vectors are optional in doc()
+		}
+		$a->exec('ANALYZE aps_search.chunk');
+		$q = $this->query();
+		$onlyRare = $this->files($q->exacta('comunisimo rarisimo', [], $this->set(), new Filters(), 100, relax: true));
+		$this->assertSame([7], $onlyRare, 'the very common word is left out of the OR, so only the rare one decides');
+		$broad = $this->query();
+		$broad->narrowFiles = 0;                                               // the plan for readers of many files
+		$this->assertSame($onlyRare, $this->files($broad->exacta('comunisimo rarisimo', [], $this->set(), new Filters(), 100, relax: true)));
+		$this->assertSame($this->files($q->exacta('comunisimo', [], $this->set(), new Filters(), 100, relax: false)), $this->files($broad->exacta('comunisimo', [], $this->set(), new Filters(), 100, relax: false)));
+	}
 }

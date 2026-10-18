@@ -1,0 +1,26 @@
+{
+  "files": 50000,
+  "pages": 1000000,
+  "chunks": 3000000,
+  "dim": 1024,
+  "seconds": {
+    "hnsw": 1571.2,
+    "analyze": 9.4,
+    "total": 1580.6
+  },
+  "database_bytes": 28012197567,
+  "largest_relations_bytes": {
+    "chunk_vec_1": 16833994752,
+    "chunk": 8405024768,
+    "chunk_vec_1_hnsw": 8192008192,
+    "page": 2742525952,
+    "chunk_tsv_idx": 753590272,
+    "chunk_pkey": 104022016,
+    "chunk_vec_1_pkey": 87105536,
+    "page_pkey": 32358400,
+    "chunk_vec_1_file_idx": 20570112,
+    "chunk_file_id_idx": 20570112,
+    "file_meta": 9134080,
+    "file_acl": 6332416
+  }
+}
