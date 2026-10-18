@@ -31,11 +31,13 @@ class HybridPgTest extends DbTestCase {
 	}
 
 	/** @param list<string> $principals @param list<int> $ancestors */
-	private function doc(int $id, array $principals, string $text, ?array $vec = null, string $mime = 'application/pdf', int $mtime = 100, array $ancestors = [1], int $chunk = 0): int {
+	private function doc(int $id, array $principals, string $text, ?array $vec = null, string $mime = 'application/pdf', int $mtime = 100, array $ancestors = [1], int $chunk = 0, ?string $owner = null, ?float $conf = null): int {
 		$a = $this->app();
 		$a->prepare("INSERT INTO aps_search.file_acl (file_id, principals) VALUES (?, ?::text[]) ON CONFLICT DO NOTHING")->execute([$id, IndexDb::textArray($principals)]);
-		$a->prepare("INSERT INTO aps_search.file_meta (file_id, name, mime, mtime, ancestors) VALUES (?, ?, ?, ?, ?::bigint[]) ON CONFLICT DO NOTHING")
-			->execute([$id, "f$id.pdf", $mime, $mtime, IndexDb::textArray(array_map('strval', $ancestors))]);
+		$a->prepare("INSERT INTO aps_search.file_meta (file_id, name, mime, mtime, ancestors, owner) VALUES (?, ?, ?, ?, ?::bigint[], ?) ON CONFLICT DO NOTHING")
+			->execute([$id, "f$id.pdf", $mime, $mtime, IndexDb::textArray(array_map('strval', $ancestors)), $owner]);
+		$a->prepare('INSERT INTO aps_search.page (file_id, page_no, text, ocr_conf, source) VALUES (?, 1, ?, ?, ?) ON CONFLICT DO NOTHING')
+			->execute([$id, $text, $conf, $conf === null ? 'layer' : 'ocr']);
 		$s = $a->prepare('INSERT INTO aps_search.chunk (file_id, page_no, ord, text) VALUES (?, 1, ?, ?) RETURNING chunk_id');
 		$s->execute([$id, $chunk, $text]);
 		$chunkId = (int)$s->fetchColumn();
@@ -152,5 +154,42 @@ class HybridPgTest extends DbTestCase {
 		$this->doc(1, ['u:b'], 'x', [1, 0, 0]);
 		$this->expectException(\InvalidArgumentException::class);
 		$this->query()->significado([1, 0, NAN], 1, $this->set(), new Filters(), 10, true);
+	}
+
+	public function testThePropiedadFilterSplitsMineFromSharedInEveryLeg(): void {
+		$this->generation();
+		$this->doc(1, ['u:b'], 'glucosa mia', [1, 0, 0], owner: 'b');
+		$this->doc(2, ['u:b'], 'glucosa de a compartida', [1, 0, 0], owner: 'a');
+		$this->doc(3, ['u:b', 'g:team'], 'glucosa de carpeta de equipo', [1, 0, 0], owner: null);
+		$q = $this->query();
+		foreach ([['mine', [1]], ['shared', [2, 3]]] as [$which, $want]) {
+			$f = (new Filters(owner: $which))->forUser('b', 60.0);
+			$kw = $this->files($q->exacta('glucosa', [], $this->set(), $f, 10));
+			$vec = $this->files($q->significado([1, 0, 0], 1, $this->set(), $f, 10, true));
+			sort($kw);
+			sort($vec);
+			$this->assertSame($want, $kw, "keyword $which");
+			$this->assertSame($want, $vec, "vector $which");
+		}
+	}
+
+	public function testTheUncertainFilterKeepsOnlyChunksOnLowConfidencePages(): void {
+		$this->generation();
+		$this->doc(1, ['u:b'], 'glucosa en pagina nitida', [1, 0, 0], conf: 95.0);
+		$this->doc(2, ['u:b'], 'glucosa en pagina borrosa', [1, 0, 0], conf: 41.0);
+		$this->doc(3, ['u:b'], 'glucosa con capa de texto', [1, 0, 0]);
+		$q = $this->query();
+		$f = (new Filters(uncertain: true))->forUser('b', 60.0);
+		$this->assertSame([2], $this->files($q->exacta('glucosa', [], $this->set(), $f, 10)));
+		$this->assertSame([2], $this->files($q->significado([1, 0, 0], 1, $this->set(), $f, 10, true)));
+		$strict = (new Filters(uncertain: true))->forUser('b', 30.0);
+		$this->assertSame([], $this->files($q->exacta('glucosa', [], $this->set(), $strict, 10)), 'the threshold is the caller\'s setting');
+	}
+
+	public function testTheExactScanCountIgnoresTheChunkLevelFilter(): void {
+		$this->doc(1, ['u:b'], 'a', null, conf: 10.0, owner: 'b');
+		$this->doc(2, ['u:b'], 'b', null, conf: 99.0, owner: 'b');
+		$f = (new Filters(owner: 'mine', uncertain: true))->forUser('b', 60.0);
+		$this->assertSame(2, $this->query()->accessibleFiles($this->set(), $f, 100), 'only the file-level part narrows the cheap count');
 	}
 }

@@ -1,0 +1,10 @@
+{
+	"name": "buscador-documental-ui-tests",
+	"private": true,
+	"type": "module",
+	"description": "Live browser checks for the search page, the administration view and the Files tab (run by tests/e2e/ui.sh in the pinned Playwright image)",
+	"devDependencies": {
+		"@axe-core/playwright": "4.10.2",
+		"@playwright/test": "1.56.1"
+	}
+}

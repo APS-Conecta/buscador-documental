@@ -22,16 +22,16 @@ El Buscador Documental le permite encontrar documentos por las palabras que cont
    - **Mixta** (recomendada): combina ambas.
 
    Por significado y Mixta se habilitan cuando la administración las activa. Mientras no estén disponibles, o si el servicio que calcula el significado no responde, el buscador busca por palabras y se lo avisa: nunca muestra una lista vacía por ese motivo.
-4. Use los filtros de **tipo de archivo** (PDF, Word, hoja de cálculo, presentación, texto o imagen), **carpeta** y **fecha de modificación** para acotar los resultados.
+4. Use los filtros de **tipo de archivo** (PDF, documentos, planillas, presentaciones, texto o imágenes), **modificado** (última semana, mes, año o un rango de fechas), **carpeta**, **propiedad** (todos, mis archivos o compartidos conmigo) y **Solo con lectura incierta** para acotar los resultados. El menú de la izquierda ofrece atajos: **Todos los documentos**, **Mis archivos**, **Compartidos conmigo** y **Con lectura incierta**. **Quitar filtros** los limpia todos.
 
 5. Ordene los resultados por **Relevancia**, **Más recientes**, **Más antiguos** o por **Nombre** (A-Z o Z-A).
-6. Elija cuántos resultados ver por página: **25**, **50** o **100**, y use **Anterior** y **Siguiente** para recorrer las páginas. Se muestran como máximo los 1 000 resultados más relevantes; si hay más, afine la búsqueda con los filtros. Al ordenar por fecha o por nombre se ordenan esos 1 000. Si la búsqueda caduca (pasados unos diez minutos), vuelva a buscar.
+6. Elija cuántos resultados ver por página: **25**, **50** o **100**, y use **Primera**, **Anterior**, **Siguiente** y **Última** para recorrer las páginas; el resumen dice, por ejemplo, «Mostrando 26–50 de 137 documentos». Se muestran como máximo los 1 000 resultados más relevantes; si hay más, afine la búsqueda con los filtros. Al ordenar por fecha o por nombre se ordenan esos 1 000. Si la búsqueda caduca (pasados unos diez minutos), vuelva a buscar.
 
-Los filtros de esta versión son tipo de archivo, carpeta y fecha de modificación; propiedad (mis archivos o compartidos conmigo) y «Solo con lectura incierta» llegarán más adelante.
+La dirección de la página guarda su búsqueda, el modo, el orden y los filtros: puede copiarla para compartirla o volver atrás con el navegador. Con el teclado: escriba, pulse Intro, recorra los resultados con Tab y abra el detalle con Intro.
 
 Si escribe una sigla habitual de la atención primaria (por ejemplo REM, HTA o EMPAM), el buscador busca también su nombre completo, y al revés. Las siglas con más de un significado (por ejemplo SS) no se expanden.
 
-Cada resultado muestra el nombre, la carpeta, la página y un extracto con las palabras resaltadas. Use **Abrir en la página N** para ir directamente al lugar.
+Cada resultado muestra el nombre, la carpeta, la página, la fecha, la persona propietaria y un extracto con las palabras resaltadas. Al elegir un resultado se abre un panel con el detalle. **Abrir documento (página N)** abre el documento y le indica en qué página está la coincidencia: Nextcloud todavía no permite abrir un PDF directamente en una página.
 
 ## Qué formatos se leen
 
@@ -45,16 +45,16 @@ Para que una carpeta o un archivo no se lea, aplíquele la etiqueta `rag-exclude
 
 ## Documentos escaneados
 
-El buscador lee documentos escaneados y fotografías. Si la lectura no es clara, el resultado muestra **Lectura incierta**. Una foto más nítida y recta mejora el resultado. En la pestaña **Texto reconocido** del panel lateral de Archivos puede ver el texto leído y pedir que se vuelva a leer el documento.
+El buscador lee documentos escaneados y fotografías. Si la lectura no es clara, el resultado muestra **Lectura incierta**. Una foto más nítida y recta mejora el resultado. En la pestaña **Texto reconocido** del panel lateral de Archivos puede ver el texto leído, su confianza y copiarlo; la persona propietaria o un administrador puede pedir que se vuelva a leer el documento (**Volver a leer este documento**). Si el recurso no permite descargar, el texto no se muestra.
 
 ## Mientras se prepara
 
-Cuando se activa por primera vez, la preparación depende de la cantidad de documentos y su avance se muestra en la página del buscador. Durante ese tiempo puede buscar por palabras exactas; la búsqueda por significado se habilita al terminar. El avance se muestra en la página del buscador.
+Cuando se activa por primera vez, la preparación depende de la cantidad de documentos y la página del buscador muestra el avance de la búsqueda por significado («Preparando: 38 %»). Durante ese tiempo puede buscar por palabras exactas; la búsqueda por significado se habilita al terminar. El avance se muestra en la página del buscador.
 
 ## Qué se lee y qué no
 
 - Solo se leen las carpetas que su administrador incluyó. Si no encuentra un documento, pregunte si su carpeta está incluida.
-- La barra de búsqueda de Nextcloud busca solo por palabras exactas; para buscar por significado use la página del Buscador.
+- La barra de búsqueda de Nextcloud muestra los cinco mejores documentos y busca solo por palabras exactas; para buscar por significado use la página del Buscador.
 - Los documentos que requieren una contraseña para abrirse no se leen y aparecen en la lista de omitidos del administrador. Tampoco se leen los archivos dañados, demasiado grandes (más de 250 MB o de 300 páginas) ni los que parecen peligrosos.
 
 ## Privacidad

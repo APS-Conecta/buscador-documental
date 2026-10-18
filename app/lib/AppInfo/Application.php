@@ -22,6 +22,8 @@ class Application extends App implements IBootstrap {
 		$context->registerService(\OCA\BuscadorDocumental\Search\Glossary::class, static fn () => \OCA\BuscadorDocumental\Search\Glossary::fromFile(__DIR__ . '/../Search/glossary.json'));
 		$context->registerService(\OCA\BuscadorDocumental\Search\ProfileCatalog::class, static fn () => \OCA\BuscadorDocumental\Search\ProfileCatalog::shipped());
 		$context->registerService(\OCA\BuscadorDocumental\Search\Cursor::class, static fn ($c) => \OCA\BuscadorDocumental\Search\Cursor::forInstance($c->get(\OCP\IConfig::class)->getSystemValueString('secret')));
+		$context->registerEventListener(\OCA\BuscadorDocumental\Listener\LoadSidebarListener::EVENT, \OCA\BuscadorDocumental\Listener\LoadSidebarListener::class);
+		$context->registerSearchProvider(\OCA\BuscadorDocumental\Search\UnifiedSearchProvider::class);
 		foreach ([
 			\OCP\Files\Cache\CacheEntryInsertedEvent::class, \OCP\Files\Cache\CacheEntryUpdatedEvent::class,
 			\OCP\Files\Cache\CacheEntryRemovedEvent::class, \OCP\Files\Cache\CacheEntriesRemovedEvent::class,

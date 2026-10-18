@@ -54,6 +54,12 @@ class VectorState {
 		return $this->positiveInt('exact_scan_files', 2000);
 	}
 
+	/** OCR confidence (0-100) under which a page counts as "lectura incierta". */
+	public function uncertainBelow(): float {
+		$v = $this->settings->get('uncertain_below');
+		return $v !== null && ctype_digit($v) && (int)$v >= 1 && (int)$v <= 99 ? (float)$v : 60.0;
+	}
+
 	public function embedTimeoutMs(): int {
 		return $this->positiveInt('embed_timeout_ms', 1500);
 	}

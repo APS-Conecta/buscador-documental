@@ -43,6 +43,18 @@ Modo predeterminado: carpetas incluidas. La etiqueta `rag-excluded` en un archiv
 ## Qué carpetas se incluyen
 Mientras no se registren la confirmación jurídica y la evaluación de impacto, el modo es **carpetas incluidas**: no se lee nada fuera de las reglas que usted cree. Una regla incluye una carpeta con todo lo que contiene (archivos nuevos, subcarpetas y movimientos dentro de ella se leen solos), o bien todas las carpetas de equipo, incluidas las futuras. Las reglas se gestionan con `occ buscador:scope:list`, `add`, `remove` y `preview` (esta última solo cuenta archivos y tamaño, sin nombres). El modo **todo lo legible** se rechaza hasta que existan la confirmación y la evaluación. Cada cambio queda en la auditoría con seudónimos.
 
+## Página de administración
+
+En **Administración → Buscador Documental** (solo para administradores) encontrará, en lenguaje sencillo:
+
+- **Estado**: salud del servicio, avance de la preparación con el tiempo estimado, documentos leídos y omitidos, y los botones **Pausar lectura** y **Reanudar lectura**. La primera vez aparece un aviso («Solo se leen las carpetas que usted incluya») con **Entendido**.
+- **Comprobaciones**: las mismas que `occ buscador:doctor`, cada una como Correcto, Atención o Falla.
+- **Perfil por significado**: el perfil en uso y su avance. Cambiarlo se hace con `occ buscador:profile`.
+- **Carpetas incluidas**: con **Excluir** (pide confirmación; los textos ya leídos se retiran en unos minutos y los archivos no se tocan). Incluir una carpeta nueva se hace con `occ buscador:scope:add`. Si no puede leer una carpeta, la lista no revela su nombre.
+- **Documentos omitidos**: por motivo (protegido con contraseña, dañado, demasiado grande…), con **Reintentar**. El nombre aparece solo si usted mismo puede abrir el archivo.
+
+Cada acción queda en el registro de auditoría con su identidad seudonimizada.
+
 ## Pausar, estado y reconstrucción
 `occ buscador:pause` detiene la lectura de documentos nuevos y la entrega de archivos al proceso de lectura; las exclusiones, las eliminaciones y el borrado siguen funcionando. `occ buscador:resume` la reanuda. `occ buscador:status` muestra, solo con números y motivos, los trabajos en cola, los archivos por estado, los omitidos por motivo, los eventos pendientes o detenidos tras varios fallos, la antigüedad de los cambios de permisos pendientes y la última conciliación. `occ buscador:reindex` vuelve a poner en cola un archivo o todos.
 

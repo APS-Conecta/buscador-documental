@@ -67,6 +67,17 @@ La etapa S1 entrega el recorrido completo mínimo: una aplicación de Nextcloud 
 - **Siglas.** `tools/build_glossary.py` convierte el diccionario aportado (`buscador/data/aps-glosario-chile.md`, 999 entradas) en `glossary.json`; la expansión se hace al consultar, en ambos sentidos, sin reindexar, y las claves ambiguas no se expanden.
 - **Evaluación con un modelo real.** `make -C app eval-search` levanta un Ollama desechable, vectoriza un corpus sintético en español (27 temas, 108 consultas) con el mismo cliente del proceso de lectura y ejecuta el SQL, el glosario y la fusión del producto. Resultados en `spikes/s4/results-s4/`.
 
+## Decisiones de la etapa S6 (interfaz)
+
+- **Pila**: Vue 3 con `@nextcloud/vue` 9 por subrutas, construido con Vite 7 y `@nextcloud/vite-config` dentro de una imagen Node 24 fijada por huella; `js/` y `css/` se versionan y CI falla si difieren de lo que producen las fuentes (ADR-0016). Tres puntos de entrada: página de búsqueda, administración y pestaña de Archivos.
+- **Presupuesto**: la primera carga de la página pesa 162 KB comprimidos (límite 250 KB), medido en cada construcción.
+- **Esquema 5**: `file_meta.owner` (propiedad) y el filtro de lectura incierta (`page.ocr_conf` bajo el umbral, 60 por defecto). Los resultados de la página llevan ruta, fecha, propietario e indicador; la barra de Nextcloud conserva la forma corta.
+- **Páginas por cursor**: no hay botones numerados; los cursores firmados (primera, anterior, siguiente, última) mantienen un orden congelado sin repeticiones ni saltos.
+- **Enlace a la página de un PDF**: se probó en vivo (`spikes/s6`) y Nextcloud 34 no reenvía `#page=N` al visor; el resultado abre el documento e indica la página con palabras.
+- **Pestaña de Archivos**: elemento personalizado registrado con `getSidebar().registerTab`, sin Vue (estilos y accesibilidad más simples). El texto se muestra como texto y solo si el recurso permite descargar; «Volver a leer» es del propietario o un administrador, con límite de frecuencia.
+- **Administración**: rutas solo para administradores con CSRF; ninguna devuelve nombres ni texto salvo la lista de omitidos, que muestra el nombre únicamente de archivos que la persona puede abrir.
+- **Accesibilidad**: axe en Vitest (jsdom, con control negativo) y en un navegador real (contraste, 360 px, `prefers-contrast: more`, movimiento reducido, ruta solo con teclado).
+
 ## Pruebas
 
 Todo corre en Docker, en el proyecto de compose `bd-s1`, solo en `127.0.0.1`. Desde el directorio `app/`:
@@ -88,6 +99,12 @@ Todo corre en Docker, en el proyecto de compose `bd-s1`, solo en `127.0.0.1`. De
 | `make test-canary` | Veinte comprobaciones con Nextcloud 34 y el trabajador reales: línea base, recurso revocado, descarga desactivada, grupo retirado, etiqueta en carpeta superior, etiqueta duplicada, borrado y rechazo al encolar. |
 
 `make clean` elimina únicamente los recursos de `bd-s1`. Las pruebas de trabajo en Python se ejecutan con `make -C worker test`. La integración continua (`.github/workflows/ci.yml`: `php`, `worker` y `smoke`) está escrita pero aún no se ha ejecutado en GitHub.
+
+### Pruebas de la interfaz (S6)
+
+- `make -C app test-js`: Vitest + jsdom + axe (59 pruebas): estado de URL, extractos, formatos, página de búsqueda en todos sus estados, administración, pestaña de Archivos y reglas de las fuentes (sin importar todo `@nextcloud/vue`, sin colores fijos, sin servidores externos).
+- `make -C app build-js`: construye `js/` y `css/` y verifica el presupuesto; `make -C app check-js-drift` verifica que lo versionado coincide con las fuentes.
+- `make -C app test-e2e-ui`: Playwright 1.56.1 en imagen fijada contra la pila real (10 comprobaciones): teclado, URL, 360 px, movimiento reducido, contraste alto, axe real, barra de búsqueda de Nextcloud, pestaña de Archivos y administración (y 403 para quien no es administrador).
 
 ## Repetir las mediciones
 

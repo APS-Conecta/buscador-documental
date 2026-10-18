@@ -1,0 +1,32 @@
+<?php
+
+declare(strict_types=1);
+
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+namespace OCA\BuscadorDocumental\Controller;
+
+use OCA\BuscadorDocumental\Search\Searcher;
+use OCP\AppFramework\Controller;
+use OCP\AppFramework\Http\Attribute\NoAdminRequired;
+use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
+use OCP\AppFramework\Http\TemplateResponse;
+use OCP\AppFramework\Services\IInitialState;
+use OCP\IRequest;
+use OCP\Util;
+
+/** The app page (/apps/buscador_documental/): a shell plus the initial state the Vue app starts from. */
+class PageController extends Controller {
+	public function __construct(IRequest $request, private IInitialState $state, private Searcher $searcher) {
+		parent::__construct('buscador_documental', $request);
+	}
+
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
+	public function index(): TemplateResponse {
+		$this->state->provideInitialState('readiness', $this->searcher->readiness());
+		Util::addScript('buscador_documental', 'buscador_documental-main');
+		Util::addStyle('buscador_documental', 'buscador_documental-style');
+		return new TemplateResponse('buscador_documental', 'index');
+	}
+}

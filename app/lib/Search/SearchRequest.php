@@ -12,7 +12,7 @@ final class SearchRequest {
 	public const MODES = ['exacta', 'significado', 'mixta'];
 	public const SORTS = ['relevance', 'modified_desc', 'modified_asc', 'name_asc', 'name_desc'];
 	public const PAGE_SIZES = [25, 50, 100];
-	private const FILTER_KEYS = ['types', 'modified_from', 'modified_to', 'folder_id'];
+	private const FILTER_KEYS = ['types', 'modified_from', 'modified_to', 'folder_id', 'owner', 'uncertain'];
 
 	private function __construct(
 		public readonly string $query,
@@ -85,7 +85,21 @@ final class SearchRequest {
 			}
 			$folder = $f['folder_id'];
 		}
-		return new Filters($mimes, $from, $to, $folder);
+		$owner = null;
+		if (array_key_exists('owner', $f)) {
+			if (!in_array($f['owner'], ['mine', 'shared'], true)) {
+				throw new InvalidSearch('El filtro de propiedad debe ser «mis archivos» o «compartidos conmigo».');
+			}
+			$owner = $f['owner'];
+		}
+		$uncertain = false;
+		if (array_key_exists('uncertain', $f)) {
+			if (!is_bool($f['uncertain'])) {
+				throw new InvalidSearch('El filtro de lectura incierta no es válido.');
+			}
+			$uncertain = $f['uncertain'];
+		}
+		return new Filters($mimes, $from, $to, $folder, $owner, $uncertain);
 	}
 
 	private static function day(mixed $v, bool $endOfDay): int {

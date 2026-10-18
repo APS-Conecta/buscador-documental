@@ -38,7 +38,7 @@ class S5ClaimTest extends DbTestCase {
 	}
 
 	public function testSchemaIsFour(): void {
-		$this->assertSame(4, (int)$this->worker()->query('SELECT aps_search.schema_version()')->fetchColumn());
+		$this->assertSame(5, (int)$this->worker()->query('SELECT aps_search.schema_version()')->fetchColumn());
 	}
 
 	public function testWithoutSettingsNothingChanges(): void {

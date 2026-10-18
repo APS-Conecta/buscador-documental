@@ -66,8 +66,9 @@ class CandidateQuery {
 			}
 		}
 		$literal = '[' . implode(',', array_map(static fn ($x): string => sprintf('%.8g', $x), $vector)) . ']';
-		[$fsql, $fparams] = $filters->sql();
-		$meta = $filters->isEmpty() ? '' : ' JOIN aps_search.file_meta m ON m.file_id = v.file_id';
+		[$fsql, $fparams] = $filters->sql('c');
+		$meta = $filters->hasFileLevel() ? ' JOIN aps_search.file_meta m ON m.file_id = v.file_id' : '';
+		$meta .= $filters->needsChunk() ? ' JOIN aps_search.chunk c ON c.chunk_id = v.chunk_id' : '';
 		$order = $exactScan ? '(v.vec <=> ?::halfvec) + 0' : 'v.vec <=> ?::halfvec';          // "+ 0" keeps the planner off the index
 		$sql = "WITH ann AS MATERIALIZED (
 				SELECT v.chunk_id, v.file_id, (v.vec <=> ?::halfvec) AS d
@@ -89,8 +90,8 @@ class CandidateQuery {
 
 	/** Files the user could match at all, counted up to $cap + 1 (the exact-scan switch needs "fewer than N", not N). */
 	public function accessibleFiles(string $principalSet, Filters $filters, int $cap): int {
-		[$fsql, $fparams] = $filters->sql();
-		$meta = $filters->isEmpty() ? '' : ' JOIN aps_search.file_meta m ON m.file_id = a.file_id';
+		[$fsql, $fparams] = $filters->sql();                    // the chunk-level filter is left out: this is only a cheap count
+		$meta = $filters->hasFileLevel() ? ' JOIN aps_search.file_meta m ON m.file_id = a.file_id' : '';
 		$rows = $this->db->rows(
 			"SELECT count(*) AS n FROM (SELECT 1 FROM aps_search.file_acl a$meta WHERE a.principals && ?::text[]$fsql LIMIT ?) t",
 			[$principalSet, ...$fparams, $cap + 1],
@@ -163,8 +164,8 @@ class CandidateQuery {
 	/** @param array{0: string, 1: list<string>} $tsquery @return list<array{file_id: int, chunk_id: int}> */
 	private function fts(array $tsquery, string $principalSet, Filters $filters, int $limit): array {
 		[$qsql, $qparams] = $tsquery;
-		[$fsql, $fparams] = $filters->sql();
-		$meta = $filters->isEmpty() ? '' : ' JOIN aps_search.file_meta m ON m.file_id = c.file_id';
+		[$fsql, $fparams] = $filters->sql('c');
+		$meta = $filters->hasFileLevel() ? ' JOIN aps_search.file_meta m ON m.file_id = c.file_id' : '';
 		$rows = $this->db->rows(
 			"WITH q AS (SELECT $qsql AS tq),
 			cand AS (

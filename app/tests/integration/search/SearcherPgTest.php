@@ -38,6 +38,11 @@ class SearcherPgTest extends DbTestCase {
 		$n->method('isReadable')->willReturn(true);
 		$n->method('getName')->willReturn($name);
 		$n->method('getEtag')->willReturn($etag);
+		$n->method('getPath')->willReturn('/b/files/Informes/' . $name);
+		$n->method('getMTime')->willReturn(1760000000);
+		$owner = $this->createMock(\OCP\IUser::class);
+		$owner->method('getDisplayName')->willReturn('Ana Pérez');
+		$n->method('getOwner')->willReturn($owner);
 		return $n;
 	}
 
@@ -60,6 +65,7 @@ class SearcherPgTest extends DbTestCase {
 		$a->prepare("INSERT INTO aps_search.file_state (file_id, etag, text_state) VALUES (?, ?, 'indexed')")->execute([$id, $etag]);
 		$a->prepare('INSERT INTO aps_search.file_acl (file_id, principals) VALUES (?, ?::text[])')->execute([$id, IndexDb::textArray($principals)]);
 		$a->prepare('INSERT INTO aps_search.file_meta (file_id, name, mime, mtime, ancestors) VALUES (?, ?, ?, ?, ARRAY[1]::bigint[])')->execute([$id, "f$id.pdf", $mime, $mtime]);
+		$a->prepare("INSERT INTO aps_search.page (file_id, page_no, text, source) VALUES (?, 1, ?, 'layer')")->execute([$id, $text]);
 		$c = $a->prepare('INSERT INTO aps_search.chunk (file_id, page_no, ord, text) VALUES (?, 1, 0, ?) RETURNING chunk_id');
 		$c->execute([$id, $text]);
 		$a->prepare('INSERT INTO aps_search.chunk_vec_1 (chunk_id, file_id, vec) VALUES (?, ?, ?::halfvec)')->execute([(int)$c->fetchColumn(), $id, '[' . implode(',', $vec) . ']']);
@@ -86,6 +92,11 @@ class SearcherPgTest extends DbTestCase {
 
 	private function req(array $o = []): SearchRequest {
 		return SearchRequest::fromArray($o + ['query' => 'hemoglobina glicosilada']);
+	}
+
+	/** @param list<array<string, mixed>> $hits @return list<array<string, mixed>> the identity part of each hit */
+	private function base(array $hits): array {
+		return array_map(static fn (array $h): array => array_intersect_key($h, ['file_id' => 1, 'title' => 1]), $hits);
 	}
 
 	/** @return list<int> */
@@ -117,7 +128,7 @@ class SearcherPgTest extends DbTestCase {
 		$hit = $out['hits'][0];
 		$this->assertStringContainsString('azúcar', $hit['snippet']);
 		$this->assertStringNotContainsString('<mark>', $hit['snippet']);
-		$this->assertSame(['file_id', 'title', 'heading', 'page_no', 'snippet'], array_keys($hit));
+		$this->assertEqualsCanonicalizing(['file_id', 'title', 'heading', 'page_no', 'snippet', 'path', 'mtime', 'owner', 'uncertain'], array_keys($hit));
 	}
 
 	public function testAnUnreadableFileWithUnmodelledAccessChangesNothingTheCallerCanSee(): void {
@@ -144,7 +155,8 @@ class SearcherPgTest extends DbTestCase {
 		$this->app()->exec("UPDATE aps_search.file_state SET text_state = 'pending' WHERE file_id = 1");      // FileIndexer did this when the etag changed
 		foreach (['exacta', 'mixta'] as $mode) {
 			$out = $this->searcher()->search('b', $this->req(['mode' => $mode]));
-			$this->assertSame([['file_id' => 1, 'title' => 'f1.pdf']], $out['hits'], $mode);
+			$this->assertSame([['file_id' => 1, 'title' => 'f1.pdf']], $this->base($out['hits']), $mode);
+			$this->assertArrayNotHasKey('snippet', $out['hits'][0], $mode);
 		}
 	}
 
@@ -153,7 +165,8 @@ class SearcherPgTest extends DbTestCase {
 		$this->doc(1, ['u:b'], 'hemoglobina glicosilada', [1, 0, 0], etag: 'indexed-etag');
 		$this->nodes[1] = [$this->node('f1.pdf', 'newer-etag')];
 		$out = $this->searcher()->search('b', $this->req(['mode' => 'mixta']));
-		$this->assertSame([['file_id' => 1, 'title' => 'f1.pdf']], $out['hits']);
+		$this->assertSame([['file_id' => 1, 'title' => 'f1.pdf']], $this->base($out['hits']));
+		$this->assertArrayNotHasKey('snippet', $out['hits'][0]);
 	}
 
 	public function testTheGlossaryFindsTheLongFormFromTheAcronymAndTheWorkflowPagesThroughTheRealSnapshot(): void {
@@ -200,5 +213,46 @@ class SearcherPgTest extends DbTestCase {
 		$this->assertSame('semantic_unavailable', $out['notice']['code']);
 		$this->assertSame([1], $this->ids($out));
 		$this->assertFalse($this->searcher()->modes()[1]['enabled']);
+		$this->assertSame(['semantic' => false, 'reason' => 'not_validated', 'coverage' => 1.0], $this->searcher()->readiness(), 'the page learns only the aggregate state');
+	}
+
+	public function testTheUncertainFlagIsNotRevealedWhenTheSnippetIsWithheld(): void {
+		$this->boot();
+		$this->nodes[1] = [$this->node('f1.pdf', 'newer')];
+		$this->doc(1, ['u:b'], 'hemoglobina glicosilada borrosa', [1, 0, 0], etag: 'older');   // the index holds an older version than the node: no snippet
+		$this->app()->exec("UPDATE aps_search.page SET ocr_conf = 20, source = 'ocr' WHERE file_id = 1");
+		$hit = $this->searcher()->search('b', $this->req(['mode' => 'exacta']))['hits'][0];
+		$this->assertArrayNotHasKey('snippet', $hit);
+		$this->assertFalse($hit['uncertain'], 'what the page said about its reading is content, withheld with the snippet');
+	}
+
+	public function testHitsCarryPathDateOwnerAndTheUncertainFlagFromTheNodeTheCallerMayRead(): void {
+		$this->boot();
+		$this->doc(1, ['u:b'], 'hemoglobina glicosilada nitida', [1, 0, 0]);
+		$this->doc(2, ['u:b'], 'hemoglobina glicosilada borrosa', [0.9, 0.1, 0]);
+		$this->app()->exec("UPDATE aps_search.page SET ocr_conf = 41, source = 'ocr' WHERE file_id = 2");
+		$this->app()->exec("UPDATE aps_search.page SET ocr_conf = 95, source = 'ocr' WHERE file_id = 1");
+		$byId = [];
+		foreach ($this->searcher()->search('b', $this->req(['mode' => 'exacta']))['hits'] as $h) {
+			$byId[$h['file_id']] = $h;
+		}
+		$this->assertSame(['/Informes/f1.pdf', 1760000000, 'Ana Pérez', false], [$byId[1]['path'], $byId[1]['mtime'], $byId[1]['owner'], $byId[1]['uncertain']]);
+		$this->assertTrue($byId[2]['uncertain']);
+	}
+
+	public function testThePropiedadAndUncertainFiltersWorkEndToEndAndNeverCountUnreadableFiles(): void {
+		$this->boot();
+		$a = $this->app();
+		$this->doc(1, ['u:b'], 'hemoglobina glicosilada mia', [1, 0, 0]);
+		$this->doc(2, ['u:b'], 'hemoglobina glicosilada de otra persona', [1, 0, 0]);
+		$this->doc(3, ['u:other'], 'hemoglobina glicosilada ajena', [1, 0, 0]);
+		$a->exec("UPDATE aps_search.file_meta SET owner = 'b' WHERE file_id = 1");
+		$a->exec("UPDATE aps_search.file_meta SET owner = 'a' WHERE file_id IN (2, 3)");
+		$a->exec("UPDATE aps_search.page SET ocr_conf = 30, source = 'ocr' WHERE file_id = 2");
+		foreach (['exacta', 'significado', 'mixta'] as $mode) {
+			$this->assertSame([1], $this->ids($this->searcher()->search('b', $this->req(['mode' => $mode, 'filters' => ['owner' => 'mine']]))), "$mode mine");
+			$this->assertSame([2], $this->ids($this->searcher()->search('b', $this->req(['mode' => $mode, 'filters' => ['owner' => 'shared']]))), "$mode shared: file 3 is not b's to see");
+			$this->assertSame([2], $this->ids($this->searcher()->search('b', $this->req(['mode' => $mode, 'filters' => ['uncertain' => true]]))), "$mode uncertain");
+		}
 	}
 }

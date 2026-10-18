@@ -9,7 +9,7 @@ NET := bd-s1_default
 DOCKER := docker run --rm -v "$(CURDIR)":/app -w /app $(IMG)
 DOCKER_NET := docker run --rm --network $(NET) -v "$(CURDIR)":/app -w /app -e BD_PG_HOST=db $(IMG)
 
-.PHONY: instance-reset-schema test-e2e-rbac test-e2e-logs bench-reconcile test-e2e-reconcile test-e2e-erasure test-e2e-events test-e2e-scope test-e2e-groupfolder test-e2e-formats test-e2e-one test-contract test-search test-canary build-test-image deps test-unit test-db up down clean instance-migrate
+.PHONY: instance-reset-schema test-e2e-rbac test-e2e-logs bench-reconcile test-e2e-reconcile test-e2e-erasure test-e2e-events test-e2e-scope test-e2e-groupfolder test-e2e-formats test-e2e-one test-e2e-ui test-contract test-search test-canary build-test-image deps test-unit test-db up down clean instance-migrate node-image npm-install build-js test-js check-js-drift
 
 build-test-image:
 	docker build -q -f Dockerfile.test -t $(IMG) . >/dev/null
@@ -128,3 +128,27 @@ eval-search: deps up
 	  vendor/bin/phpunit --configuration phpunit.eval.xml --testdox; \
 	mkdir -p $(S4)/results-s4; cp "$$D/result.json" "$(S4)/results-s4/eval_search_$(EVAL_PROFILE).json"; \
 	cat "$(S4)/results-s4/eval_search_$(EVAL_PROFILE).json"
+
+# Frontend (ADR-0016): Node 24 in a pinned image; node_modules lives in a named volume so the repo stays clean.
+NODE_IMG := bd-app-node
+NODE := docker run --rm -v "$(CURDIR)":/app -v bd-app-node-modules:/app/node_modules -w /app $(NODE_IMG)
+
+node-image:
+	docker build -q -f Dockerfile.node -t $(NODE_IMG) . >/dev/null
+
+npm-install: node-image
+	$(NODE) sh -c 'if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi'
+
+build-js: npm-install
+	$(NODE) sh -c 'npm run build && npm run size'
+
+test-js: npm-install
+	$(NODE) npm test
+
+# CI: the committed js/ and css/ must be what the sources build to.
+check-js-drift: build-js
+	@git -C $(ROOT) diff --exit-code --stat -- app/js app/css || (echo "js/ or css/ is not what the sources build to: run make -C app build-js and commit" >&2; exit 1)
+	@test -z "$$(git -C $(ROOT) ls-files --others --exclude-standard -- app/js app/css)" || (echo "untracked build output" >&2; exit 1)
+
+test-e2e-ui: build-js
+	bash tests/e2e/ui.sh

@@ -99,6 +99,7 @@ class SearcherTest extends TestCase {
 			: ['semantic' => false, 'reason' => 'not_validated', 'coverage' => 0.99, 'gen' => 1]);
 		$state->method('activeProfile')->willReturn(['gen' => 1, 'model' => 'm', 'digest' => 'd', 'dim' => 3, 'query_prefix' => '', 'max_tokens' => 512]);
 		$state->method('exactScanFiles')->willReturn(2000);
+		$state->method('uncertainBelow')->willReturn(60.0);
 		$state->method('embedTimeoutMs')->willReturn(1500);
 
 		$embed = $this->createMock(EmbedClient::class);
