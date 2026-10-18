@@ -21,7 +21,15 @@ $OCC app:enable buscador_documental >/dev/null
 $OCC config:system:set trusted_domains 2 --value=nextcloud >/dev/null
 $OCC config:app:set buscador_documental worker_secret --value="$SECRET" --sensitive >/dev/null
 $C exec -T nextcloud chown www-data:www-data /var/www/html/custom_apps
-$OCC app:list 2>/dev/null | grep -q "groupfolders" || $OCC app:install groupfolders >/dev/null
+# The app comes from the Nextcloud app store: retry a few times, and say why when it cannot be installed (the output used to be hidden).
+if ! $OCC app:list 2>/dev/null | grep -q "groupfolders"; then
+	for attempt in 1 2 3 4; do
+		if OUT=$($OCC app:install groupfolders 2>&1); then break; fi
+		echo "  groupfolders install attempt $attempt failed: $OUT" >&2
+		[ "$attempt" -lt 4 ] || die "the groupfolders app could not be installed (see above)"
+		sleep $((attempt * 10))
+	done
+fi
 $OCC app:enable groupfolders >/dev/null 2>&1 || true
 $PSQL -c "TRUNCATE aps_search.job, aps_search.page, aps_search.chunk, aps_search.file_state, aps_search.file_meta, aps_search.file_acl RESTART IDENTITY CASCADE"
 $C --profile worker build worker >/dev/null
