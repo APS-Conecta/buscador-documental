@@ -117,6 +117,11 @@ DBX sh -c 'head -c 3 /dev/urandom | od -An -tx1 > /dev/null; printf "abc\n%s\n" 
 BAD=$($C exec -T -e PGUSER=postgres -e BD_BACKUP_KEY_FILE=/tmp/twoline.key db bash /tmp/restore.sh /tmp/x.bak bd_restore_test 2>&1 || true); grep -qE "wrong key|already has|keyed checksum does not match" <<<"$BAD" || die "unexpected: $BAD"
 DBX dropdb --if-exists bd_restore_test2; DBX createdb bd_restore_test2; DBX psql -q -d bd_restore_test2 -c "CREATE EXTENSION unaccent; CREATE EXTENSION vector"
 BAD=$($C exec -T -e PGUSER=postgres -e BD_BACKUP_KEY_FILE=/tmp/twoline.key db bash /tmp/restore.sh /tmp/x.bak bd_restore_test2 2>&1 || true); grep -qE "wrong key|keyed checksum does not match" <<<"$BAD" || die "a key that merely shares the first line decrypted the backup: $BAD"
+DBX dropdb --if-exists bd_restore_test2; DBX createdb bd_restore_test2; DBX psql -q -d bd_restore_test2 -c "CREATE EXTENSION unaccent; CREATE EXTENSION vector"
+# a backup that does not fit in memory is staged on disk: forced here with BD_RESTORE_NO_SHM (the 15 GB backup of the S7 load test needed it)
+OUT=$($C exec -T -e PGUSER=postgres -e BD_BACKUP_KEY_FILE=/tmp/bd.key -e BD_RESTORE_NO_SHM=1 db bash /tmp/restore.sh /tmp/x.bak bd_restore_test2 2>&1) || die "the restore staged on disk failed: $OUT"
+grep -q "chunks 3" <<<"$OUT" || die "the disk-staged restore did not bring the chunks: $OUT"
+ok "a restore whose decrypted dump is staged on disk (not memory) gives the same result"
 DBX dropdb --if-exists bd_restore_test2
 ok "the whole key file is the passphrase: a file that only shares the first line does not decrypt"
 

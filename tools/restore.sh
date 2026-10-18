@@ -32,7 +32,7 @@ BD_BACKUP_MAC=$( { printf 'mac:'; cat "$KEY"; } | openssl dgst -sha256 -r | cut 
 # (a backup bigger than the free memory goes to a private directory on disk instead: BD_RESTORE_TMPDIR or the default temp dir;
 # the decrypted text is then on that disk until the restore ends, so put it on an encrypted volume)
 NEED=$(( $(wc -c < "$IN") + 1048576 ))
-if [ -d /dev/shm ] && [ -w /dev/shm ] && [ "$(df -PB1 /dev/shm | awk 'NR==2{print $4}')" -gt "$NEED" ]; then WORK=$(mktemp -d -p /dev/shm); else WORK=$(mktemp -d ${BD_RESTORE_TMPDIR:+-p "$BD_RESTORE_TMPDIR"}); fi
+if [ -z "${BD_RESTORE_NO_SHM:-}" ] && [ -d /dev/shm ] && [ -w /dev/shm ] && [ "$(df -PB1 /dev/shm | awk 'NR==2{print $4}')" -gt "$NEED" ]; then WORK=$(mktemp -d -p /dev/shm); else WORK=$(mktemp -d ${BD_RESTORE_TMPDIR:+-p "$BD_RESTORE_TMPDIR"}); fi
 FREE=$(df -PB1 "$WORK" | awk 'NR==2{print $4}')
 [ "$FREE" -gt "$NEED" ] || { rmdir "$WORK" 2>/dev/null; fail "not enough free space to hold the decrypted backup ($(( NEED / 1048576 )) MB needed): set BD_RESTORE_TMPDIR to a directory with room"; }
 chmod 700 "$WORK"

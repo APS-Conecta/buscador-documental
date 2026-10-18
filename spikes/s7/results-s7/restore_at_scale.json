@@ -1,0 +1,1 @@
+{"pages": 1000000, "chunks": 3000000, "backup_seconds": 2607, "backup_bytes": 15238162512, "restore_seconds": 2630, "first_search_seconds_after_restore": 3, "first_search_hits": 25, "restored_vectors": 3000000, "note": "restore ran after the vector index was part of the dump; the HNSW index is rebuilt by pg_restore (included in restore_seconds)"}
