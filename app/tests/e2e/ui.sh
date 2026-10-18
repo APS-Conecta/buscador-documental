@@ -33,7 +33,7 @@ for u in ui_a ui_b; do
 done
 JOB=$($OCC background-job:list --class='OCA\BuscadorDocumental\Job\ProcessOutbox' --output=json | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["id"])')
 WORKLOG=$(mktemp /tmp/bd-s1-ui-work.XXXXXX); TMP=$(mktemp -d /tmp/bd-s1-ui.XXXXXX)
-trap 'rm -rf "$TMP" "$WORKLOG"; $OCC config:system:delete auth.bruteforce.protection.enabled >/dev/null 2>&1 || true' EXIT
+trap 'docker run --rm --user root -v "$TMP":/t --entrypoint sh mcr.microsoft.com/playwright:v1.56.1-noble@sha256:f1e7e01021efd65dd1a2c56064be399f3e4de00fd021ac561325f2bfbb2b837a -c "rm -rf /t/pw" >/dev/null 2>&1 || true; rm -rf "$TMP" "$WORKLOG"; $OCC config:system:delete auth.bruteforce.protection.enabled >/dev/null 2>&1 || true' EXIT
 tick() { $OCC background-job:execute "$JOB" --force-execute >/dev/null; }
 work() { for _ in 1 2 3 4; do $C --profile worker run --rm --no-deps -T worker python3 main.py --once >>"$WORKLOG" 2>&1 || true; done; }
 
