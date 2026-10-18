@@ -10,6 +10,7 @@ use OCA\BuscadorDocumental\Ops\Doctor;
 use OCA\BuscadorDocumental\Scope\ScopeRules;
 use OCA\BuscadorDocumental\Status\StatusReport;
 use OCA\BuscadorDocumental\Ui\AdminActions;
+use OCA\BuscadorDocumental\Ui\FolderList;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
@@ -29,6 +30,7 @@ class AdminController extends Controller {
 		private Doctor $doctor,
 		private ScopeRules $rules,
 		private AdminActions $actions,
+		private FolderList $folders,
 	) {
 		parent::__construct('buscador_documental', $request);
 	}
@@ -37,7 +39,7 @@ class AdminController extends Controller {
 		return $this->json([
 			'status' => $this->status->snapshot(),
 			'checks' => $this->doctor->run(),
-			'rules' => $this->rules->all(),
+			'rules' => $this->rulesWithPaths(),
 			'skipped' => $this->actions->skipped(null, 0, 0, $this->uid())['counts'],
 		]);
 	}
@@ -67,6 +69,12 @@ class AdminController extends Controller {
 
 	public function retry(int $id): JSONResponse {
 		return $this->actions->retry($id, $this->uid()) ? $this->json(['ok' => true]) : $this->json(['ok' => false], Http::STATUS_NOT_FOUND);
+	}
+
+	/** The rules, each with the folder's path when this administrator can read the folder (otherwise null: no name is revealed). */
+	private function rulesWithPaths(): array {
+		$paths = array_column($this->folders->forUser($this->uid()), 'path', 'id');
+		return array_map(static fn (array $r): array => $r + ['path' => $r['file_id'] === null ? null : ($paths[$r['file_id']] ?? null)], $this->rules->all());
 	}
 
 	private function uid(): string {
