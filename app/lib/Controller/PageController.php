@@ -28,6 +28,7 @@ class PageController extends Controller {
 	public function index(): TemplateResponse {
 		$uid = $this->session->getUser()?->getUID() ?? '';
 		$this->state->provideInitialState('modes', $this->searcher->modes());
+		$this->state->provideInitialState('readiness', $this->searcher->readiness());
 		$this->state->provideInitialState('is_admin', $uid !== '' && $this->groups->isAdmin($uid));
 		Util::addScript('buscador_documental', 'buscador_documental-main');
 		return new TemplateResponse('buscador_documental', 'index');

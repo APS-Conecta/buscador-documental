@@ -213,6 +213,7 @@ class SearcherPgTest extends DbTestCase {
 		$this->assertSame('semantic_unavailable', $out['notice']['code']);
 		$this->assertSame([1], $this->ids($out));
 		$this->assertFalse($this->searcher()->modes()[1]['enabled']);
+		$this->assertSame(['semantic' => false, 'reason' => 'not_validated', 'coverage' => 1.0], $this->searcher()->readiness(), 'the page learns only the aggregate state');
 	}
 
 	public function testHitsCarryPathDateOwnerAndTheUncertainFlagFromTheNodeTheCallerMayRead(): void {

@@ -52,6 +52,12 @@ class Searcher {
 		];
 	}
 
+	/** @return array{semantic: bool, reason: ?string, coverage: float} what the page tells people about the meaning search (aggregate only) */
+	public function readiness(): array {
+		$a = $this->vectors->availability();
+		return ['semantic' => $a['semantic'], 'reason' => $a['reason'], 'coverage' => $a['coverage']];
+	}
+
 	/** @return array<string, mixed> */
 	public function search(string $uid, SearchRequest $request): array {
 		if ($request->isBlank()) {

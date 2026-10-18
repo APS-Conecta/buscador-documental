@@ -3,5 +3,5 @@ import vue from '@vitejs/plugin-vue'
 
 export default defineConfig({
 	plugins: [vue()],
-	test: { environment: 'jsdom', include: ['src/**/*.test.js'], setupFiles: ['src/test/setup.js'] },
+	test: { server: { deps: { inline: [/@nextcloud\/vue/, /vue-material-design-icons/] } }, environment: 'jsdom', include: ['src/**/*.test.js'], setupFiles: ['src/test/setup.js'] },
 })
