@@ -15,9 +15,9 @@ class S4SchemaTest extends DbTestCase {
 			->execute([$gen, 'bge-m3', $model, 'sha256:abc', $dim, 'f16', '', '', 8192]);
 	}
 
-	public function testSchemaVersionIsThree(): void {
-		$this->assertSame(3, (int)$this->app()->query('SELECT schema_ver FROM aps_search.schema_meta')->fetchColumn());
-		$this->assertSame(3, (int)$this->worker()->query('SELECT aps_search.schema_version()')->fetchColumn());
+	public function testSchemaVersionIsAtLeastThreeAndCurrent(): void {
+		$this->assertSame(4, (int)$this->app()->query('SELECT schema_ver FROM aps_search.schema_meta')->fetchColumn());
+		$this->assertSame(4, (int)$this->worker()->query('SELECT aps_search.schema_version()')->fetchColumn());
 	}
 
 	public function testNewTablesAndColumnsExist(): void {

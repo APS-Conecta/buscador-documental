@@ -10,7 +10,7 @@ use InvalidArgumentException;
 
 /** The audit detail is a closed schema: ids, counts, flags and short codes. File names, paths, queries and text cannot get in. */
 final class AuditDetail {
-	private const KEYS = ['rule_id', 'count', 'reason', 'kind', 'mode', 'file_id', 'run_id', 'storage_id', 'paused', 'gen', 'profile'];
+	private const KEYS = ['rule_id', 'count', 'reason', 'kind', 'mode', 'file_id', 'run_id', 'storage_id', 'paused', 'gen', 'profile', 'window', 'lanes', 'cap_text', 'cap_vec', 'grace_hours'];
 	private const CODE = '/^[a-z0-9_.:-]{1,40}$/';
 
 	/** @return array<string, int|bool|string> */

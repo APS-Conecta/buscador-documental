@@ -11,14 +11,15 @@ use OCA\BuscadorDocumental\Scope\Settings;
 
 /** What `occ buscador:status` shows: counts, ages and reason codes. Never a name, a path or any text. */
 class StatusReport {
-	public function __construct(private IndexDb $db) {
+	public function __construct(private IndexDb $db, private ?\OCA\BuscadorDocumental\Ops\WorkWindow $window = null) {
 	}
 
 	/**
 	 * @return array{mode: string, paused: bool, notice_ack_at: ?string, jobs: array{queued: int, claimed: int},
 	 *               states: array<string, int>, skipped: array<string, int>, outbox: array{pending: int, parked: int},
 	 *               acl_backlog_seconds: ?int, last_reconcile: ?array{finished_at: string, counts: array},
-	 *               vectors: array{generations: list<array{gen: int, profile: string, state: string, coverage: float}>, queued: int, failed: int}}
+	 *               vectors: array{generations: list<array{gen: int, profile: string, state: string, coverage: float}>, queued: int, failed: int},
+	 *               eta: array<string, array<string, mixed>>, workers: array<string, int>, schema_bytes: int, last_reconcile_age_seconds: ?int}
 	 */
 	public function snapshot(): array {
 		$settings = new Settings($this->db);
@@ -40,6 +41,10 @@ class StatusReport {
 			'outbox' => ['pending' => (int)$outbox['pending'], 'parked' => (int)$outbox['parked']],
 			'acl_backlog_seconds' => $backlog === null ? null : (int)round((float)$backlog),
 			'vectors' => $this->vectors($settings),
+			'eta' => $this->eta($settings),
+			'workers' => $this->workers(),
+			'schema_bytes' => $this->schemaBytes(),
+			'last_reconcile_age_seconds' => $last === [] ? null : (int)$this->db->rows('SELECT extract(epoch FROM now() - ?::timestamptz) AS s', [$last[0]['finished_at']])[0]['s'],
 			'last_reconcile' => $last === [] ? null : ['finished_at' => (string)$last[0]['finished_at'], 'counts' => json_decode((string)$last[0]['counts'], true, 8, JSON_THROW_ON_ERROR)],
 		];
 	}
@@ -54,6 +59,45 @@ class StatusReport {
 			(SELECT count(*) FROM aps_search.job WHERE lane = 'vec') AS queued,
 			(SELECT count(*) FROM aps_search.file_state WHERE vec_state = 'failed') AS failed")[0];
 		return ['generations' => $gens, 'queued' => (int)$n['queued'], 'failed' => (int)$n['failed']];
+	}
+
+	/** @return array{text: array<string, mixed>, vec: array<string, mixed>} */
+	private function eta(Settings $settings): array {
+		$paused = $settings->isPaused();
+		$now = new \DateTimeImmutable('now');
+		$w = $this->window?->show($now);
+		$opens = $this->window?->opensInSeconds($now);
+		$closed = $w !== null && !$w['open_now'];
+		$r = $this->db->rows("SELECT
+			(SELECT count(*) FROM aps_search.job WHERE lane = 'text') AS text_jobs,
+			(SELECT count(*) FROM aps_search.outbox WHERE processed_at IS NULL AND kind = 'file' AND attempts < 5) AS text_events,
+			(SELECT count(*) FROM aps_search.job WHERE lane = 'vec') AS vec_jobs,
+			(SELECT count(*) FROM aps_search.file_state WHERE text_state = 'indexed') AS indexed,
+			(SELECT count(*) FROM aps_search.file_state WHERE indexed_at > now() - interval '1 hour') AS t1,
+			(SELECT count(*) FROM aps_search.file_state WHERE indexed_at > now() - interval '2 hours' AND indexed_at <= now() - interval '1 hour') AS t2,
+			(SELECT count(*) FROM aps_search.file_state WHERE embedded_at > now() - interval '1 hour') AS v1,
+			(SELECT count(*) FROM aps_search.file_state WHERE embedded_at > now() - interval '2 hours' AND embedded_at <= now() - interval '1 hour') AS v2,
+			(SELECT count(*) FROM aps_search.embedding_profile WHERE state = 'active') AS has_profile")[0];
+		$coverage = (float)($settings->get('vec_coverage') ?? 0);
+		$vecRemaining = (int)$r['has_profile'] > 0 ? max((int)$r['vec_jobs'], (int)round((1 - $coverage) * (int)$r['indexed'])) : 0;
+		$lanes = $w['lanes'] ?? 'vec';
+		return [
+			'text' => Eta::estimate((int)$r['text_jobs'] + (int)$r['text_events'], (int)$r['t1'], (int)$r['t2'], $paused, !($closed && $lanes === 'all'), $opens),
+			'vec' => Eta::estimate($vecRemaining, (int)$r['v1'], (int)$r['v2'], $paused, !$closed, $opens),
+		];
+	}
+
+	/** @return array<string, int> lane => seconds since a worker last asked for work */
+	private function workers(): array {
+		$out = [];
+		foreach ($this->db->rows('SELECT lane, min(extract(epoch FROM now() - at)) AS age FROM aps_search.worker_seen GROUP BY lane ORDER BY lane') as $row) {
+			$out[(string)$row['lane']] = (int)round((float)$row['age']);
+		}
+		return $out;
+	}
+
+	private function schemaBytes(): int {
+		return (int)$this->db->rows("SELECT coalesce(sum(pg_total_relation_size(c.oid)), 0) AS b FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'aps_search' AND c.relkind = 'r'")[0]['b'];
 	}
 
 	/** @return array<string, int> */

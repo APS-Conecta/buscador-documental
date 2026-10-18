@@ -28,6 +28,10 @@ class Settings {
 		);
 	}
 
+	public function delete(string $key): void {
+		$this->db->execute('DELETE FROM aps_search.settings WHERE key = ?', [$key]);
+	}
+
 	/** The mode in force. A stored `all_readable` without the legal gate is ignored: the safe mode wins. */
 	public function scopeMode(): string {
 		$stored = $this->get('scope_mode') ?? 'opt_in';

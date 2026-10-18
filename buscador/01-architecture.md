@@ -77,3 +77,6 @@ Postgres full or read-only; worker dead (heartbeat alert); lease expiry mid-OCR;
 
 ## 10. Sandbox
 The worker supervisor (holds DB and HMAC secrets, has network) hands each file to a separate `parser` container (ADR-0011; `unshare -n` is not available under the default seccomp profile): `network_mode: none`, no secrets, `cap_drop: [ALL]`, `no-new-privileges`, cgroup CPU/memory/PID limits, read-only rootfs plus tmpfs scratch, non-root, per-file timeout enforced by the supervisor. No Docker socket is ever mounted. Caps on size, pages, pixels, zip ratio come from S0 measurements. S2 proves the isolation with tests (cannot read worker env, no route to Postgres/app).
+
+## 10. Operations controls (S5, ADR-0015)
+Night window, concurrency caps, worker liveness, secret rotation with a grace period, an internal network for the worker and encrypted schema backups are described in ADR-0015; the runbooks are in the administrator page of the site.

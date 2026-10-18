@@ -40,5 +40,7 @@
         <command>OCA\BuscadorDocumental\Command\Reindex</command>
         <command>OCA\BuscadorDocumental\Command\PurgeUser</command>
         <command>OCA\BuscadorDocumental\Command\Profile</command>
+        <command>OCA\BuscadorDocumental\Command\Window</command>
+        <command>OCA\BuscadorDocumental\Command\Throttle</command>
     </commands>
 </info>
