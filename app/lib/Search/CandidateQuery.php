@@ -17,6 +17,12 @@ class CandidateQuery {
 	public const PRE_LIMIT = 10000;
 	/** Below this many matching files the strict pass is thin and the OR relaxation also runs. */
 	public const THIN = 25;
+	/** Candidates ranked when every word is common and the reader has many files: the newest matches are dense, so fewer are enough, and finding them costs time in proportion (S7: 3.8 s at 10000 for a reader of a tenth of the index). */
+	public const COMMON_PRE_LIMIT = 2000;
+	/** A term in at least this share of all chunks is left out of the OR relaxation: it matches so much that it only adds noise and cost. */
+	public const COMMON_SHARE = 0.02;
+	/** Readers of fewer files than this get the plan that starts from their files, not from the matches of the words. */
+	public const NARROW_FILES = 2000;
 	private const CFG = "'aps_search.spanish_unaccent'::regconfig";
 	private const MAX_RELAX_TERMS = 12;
 
@@ -32,8 +38,11 @@ class CandidateQuery {
 	 */
 	public function exacta(string $query, array $alternatives, string $principalSet, Filters $filters, int $limit, ?bool $relax = null): array {
 		$strict = [];
+		$words = $this->words($query);
+		$common = $words === [] ? [] : $this->commonTerms($words);
 		if ($relax !== true) {
-			$strict = $this->fts($this->strictTsquery($query, $alternatives), $principalSet, $filters, $limit);
+			// A required word that is not common narrows the matches a lot: let the word index lead (see fts()).
+			$strict = $this->fts($this->strictTsquery($query, $alternatives), $principalSet, $filters, $limit, array_diff($words, $common) !== []);
 		}
 		if ($relax === false || ($relax === null && count($strict) >= self::THIN)) {
 			return $strict;
@@ -42,7 +51,7 @@ class CandidateQuery {
 		if ($or === null) {
 			return $strict;
 		}
-		$relaxed = $this->fts($or, $principalSet, $filters, $limit);
+		$relaxed = $this->fts($or, $principalSet, $filters, $limit, array_diff($words, $common) !== []);
 		if ($strict === []) {
 			return $relaxed;
 		}
@@ -82,7 +91,7 @@ class CandidateQuery {
 		return $this->db->guarded(function () use ($sql, $params, $exactScan): array {
 			if (!$exactScan) {
 				// Iterative scan keeps the index feeding a filtered query until enough rows pass (ADR-0001, S0 settings).
-				$this->db->rows("SELECT set_config('hnsw.iterative_scan', 'relaxed_order', true), set_config('hnsw.max_scan_tuples', '20000', true), set_config('hnsw.ef_search', '200', true)");
+				$this->db->rows("SELECT set_config('hnsw.iterative_scan', 'relaxed_order', true), set_config('hnsw.max_scan_tuples', '20000', true), set_config('hnsw.ef_search', ?, true)", [(string)$this->efSearch]);
 			}
 			return $this->shape($this->db->rows($sql, $params));
 		});
@@ -149,11 +158,12 @@ class CandidateQuery {
 
 	/** @param list<string> $alternatives @return array{0: string, 1: list<string>}|null null when OR would equal the strict form */
 	private function relaxedTsquery(string $query, array $alternatives): ?array {
-		$terms = array_values(array_unique(array_filter(explode(' ', Glossary::fold($query)), static fn (string $t): bool => $t !== '')));
+		$terms = $this->words($query);
 		if (count($terms) < 2) {
 			return null;
 		}
-		$terms = array_slice($terms, 0, self::MAX_RELAX_TERMS);
+		$rare = array_values(array_diff($terms, $this->commonTerms($terms)));
+		$terms = $rare === [] ? $terms : $rare;       // all common, or no statistics yet: all of them stay
 		$sql = 'to_tsquery(' . self::CFG . ', ?)';
 		foreach ($alternatives as $_) {
 			$sql .= ' || websearch_to_tsquery(' . self::CFG . ', ?)';
@@ -161,29 +171,95 @@ class CandidateQuery {
 		return [$sql, [implode(' | ', $terms), ...$alternatives]];
 	}
 
+	/** @return list<string> the distinct folded words of the query, at most MAX_RELAX_TERMS */
+	private function words(string $query): array {
+		$terms = array_values(array_unique(array_filter(explode(' ', Glossary::fold($query)), static fn (string $t): bool => $t !== '')));
+		return array_slice($terms, 0, self::MAX_RELAX_TERMS);
+	}
+
+	/**
+	 * Which of these words are very common (in at least COMMON_SHARE of the chunks), by the planner's own statistics on the search
+	 * column. Without statistics (a fresh database) none is: everything then behaves as before.
+	 *
+	 * @param list<string> $terms
+	 * @return list<string>
+	 */
+	private function commonTerms(array $terms): array {
+		$common = $this->db->rows(
+			'SELECT t.term FROM unnest(?::text[]) AS t(term) WHERE EXISTS (
+				SELECT 1 FROM pg_stats s, unnest(s.most_common_elems::text::text[], s.most_common_elem_freqs) AS u(e, fr)
+				WHERE s.schemaname = \'aps_search\' AND s.tablename = \'chunk\' AND s.attname = \'tsv\' AND u.fr >= ?
+				  AND u.e IN (SELECT unnest(tsvector_to_array(to_tsvector(' . self::CFG . ', t.term)))))',
+			[IndexDb::textArray($terms), self::COMMON_SHARE],
+		);
+		return array_column($common, 'term');
+	}
+
+	/** hnsw.ef_search for the vector leg: more candidates per search, better recall, more time (S7 measured the trade). */
+	public int $efSearch = 400;
+
+	/** Tests set this to 0 to run the plan for readers of many files on a small corpus. */
+	public int $narrowFiles = self::NARROW_FILES;
+
+	/** @var array<string, bool> */
+	private array $narrowMemo = [];
+
+	private function isNarrow(string $principalSet, Filters $filters): bool {
+		[$fsql, $fparams] = $filters->sql();
+		$key = md5($principalSet . $fsql . serialize($fparams));
+		return $this->narrowMemo[$key] ??= $this->accessibleFiles($principalSet, $filters, $this->narrowFiles) < $this->narrowFiles;
+	}
+
 	/** @param array{0: string, 1: list<string>} $tsquery @return list<array{file_id: int, chunk_id: int}> */
-	private function fts(array $tsquery, string $principalSet, Filters $filters, int $limit): array {
+	private function fts(array $tsquery, string $principalSet, Filters $filters, int $limit, bool $wordsLead = false): array {
 		[$qsql, $qparams] = $tsquery;
 		[$fsql, $fparams] = $filters->sql('c');
 		$meta = $filters->hasFileLevel() ? ' JOIN aps_search.file_meta m ON m.file_id = c.file_id' : '';
-		$rows = $this->db->rows(
-			"WITH q AS (SELECT $qsql AS tq),
-			cand AS (
-				SELECT c.chunk_id, c.file_id, c.tsv
-				FROM aps_search.chunk c
-				JOIN aps_search.file_acl a ON a.file_id = c.file_id$meta, q
-				WHERE c.tsv @@ q.tq AND a.principals && ?::text[]$fsql
-				ORDER BY c.chunk_id DESC
-				LIMIT " . self::PRE_LIMIT . "
-			),
-			best AS (
-				SELECT DISTINCT ON (cand.file_id) cand.file_id, cand.chunk_id, ts_rank(cand.tsv, q.tq) AS rank
-				FROM cand, q
-				ORDER BY cand.file_id, ts_rank(cand.tsv, q.tq) DESC, cand.chunk_id DESC
-			)
-			SELECT file_id, chunk_id FROM best ORDER BY rank DESC, file_id LIMIT ?",
-			[...$qparams, $principalSet, ...$fparams, $limit],
-		);
+		// A reader of few files: start from those files and look for the words in their chunks (the planner otherwise walks the
+		// newest chunks of the whole index looking for the few that this person may read). Everyone else: as before.
+		$narrow = $this->isNarrow($principalSet, $filters);
+		// The planner guesses every word it has no statistics for matches 0.5 % of the chunks and so walks the newest chunks of the
+		// whole index hoping to find enough: for a rare word that is seconds. "+ 0" takes that index away from it, so the word
+		// index finds the few matches first. Used when a required word is known not to be common, and for readers of few files
+		// (who start from their files).
+		$lead = $wordsLead || $narrow ? '+ 0' : '';
+		$cap = $wordsLead || $narrow ? self::PRE_LIMIT : self::COMMON_PRE_LIMIT;
+		// The query text is written into the places that use it, not kept in a CTE: with a literal the planner reads the word
+		// statistics, with a CTE value it guesses and may choose to read every chunk of the index (measured: 7 s for a common word).
+		if ($narrow) {
+			$sql = "WITH acl AS MATERIALIZED (SELECT file_id FROM aps_search.file_acl WHERE principals && ?::text[]),
+				cand AS MATERIALIZED (
+					SELECT c.chunk_id, c.file_id, c.tsv FROM aps_search.chunk c JOIN acl a ON a.file_id = c.file_id$meta
+					WHERE c.tsv @@ ($qsql)$fsql
+					ORDER BY c.chunk_id $lead DESC LIMIT $cap
+				),
+				best AS (
+					SELECT DISTINCT ON (file_id) file_id, chunk_id, ts_rank(tsv, ($qsql)) AS rank FROM cand
+					ORDER BY file_id, rank DESC, chunk_id DESC
+				)
+				SELECT file_id, chunk_id FROM best ORDER BY rank DESC, file_id LIMIT ?";
+			$params = [$principalSet, ...$qparams, ...$fparams, ...$qparams, $limit];
+		} else {
+			// Common words and a reader of many files: walk the newest chunks and test each match's file as a row filter. As a join
+			// the planner (which thinks this reader has 500 files, not 5000) reads every chunk of those files first (measured 5 s).
+			// Words that are not common are found through the word index, where the join is cheap.
+			$join = $wordsLead ? ' JOIN aps_search.file_acl a ON a.file_id = c.file_id' : '';
+			$access = $wordsLead
+				? 'a.principals && ?::text[]'
+				: '(SELECT a.principals FROM aps_search.file_acl a WHERE a.file_id = c.file_id) && ?::text[]';
+			$sql = "WITH cand AS MATERIALIZED (
+					SELECT c.chunk_id, c.file_id, c.tsv FROM aps_search.chunk c$join$meta
+					WHERE c.tsv @@ ($qsql) AND $access$fsql
+					ORDER BY c.chunk_id $lead DESC LIMIT $cap
+				),
+				best AS (
+					SELECT DISTINCT ON (file_id) file_id, chunk_id, ts_rank(tsv, ($qsql)) AS rank FROM cand
+					ORDER BY file_id, rank DESC, chunk_id DESC
+				)
+				SELECT file_id, chunk_id FROM best ORDER BY rank DESC, file_id LIMIT ?";
+			$params = [...$qparams, $principalSet, ...$fparams, ...$qparams, $limit];
+		}
+		$rows = $this->db->rows($sql, $params);
 		return $this->shape($rows);
 	}
 

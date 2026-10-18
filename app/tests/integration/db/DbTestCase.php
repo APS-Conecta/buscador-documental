@@ -98,9 +98,10 @@ SQL);
 			'job' => $claim['job_id'], 'epoch' => $claim['lease_epoch'], 'etag' => $claim['etag'], 'hash' => 'h1',
 			'pages' => json_encode([['page_no' => 1, 'text' => 'hola mundo', 'ocr_conf' => 0.9, 'source' => 'ocr']]),
 			'chunks' => json_encode([['page_no' => 1, 'ord' => 0, 'heading' => null, 'text' => 'hola mundo']]),
+			'ocr_ver' => 'ocrmypdf-test', 'chunker_ver' => 'chunker-test',
 		], $over);
 		$s = $pdo->prepare('SELECT aps_search.write_result(?, ?, ?, ?, ?::jsonb, ?::jsonb, ?, ?)');
-		$s->execute([$p['job'], $p['epoch'], $p['etag'], $p['hash'], $p['pages'], $p['chunks'], 'ocrmypdf-test', 'chunker-test']);
+		$s->execute([$p['job'], $p['epoch'], $p['etag'], $p['hash'], $p['pages'], $p['chunks'], $p['ocr_ver'], $p['chunker_ver']]);
 	}
 
 	protected function rowCount(string $table, ?int $fileId = null): int {

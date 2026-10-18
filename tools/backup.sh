@@ -3,10 +3,11 @@
 #
 #   BD_BACKUP_KEY_FILE=/safe/place/backup.key  PGHOST=... PGUSER=... PGDATABASE=... PGPASSWORD=...  tools/backup.sh OUT.bak
 #
-# Writes OUT.bak (pg_dump custom format, AES-256-CBC with PBKDF2), OUT.bak.sha256 (detects corruption) and OUT.bak.meta
+# Writes OUT.bak (pg_dump custom format, AES-256-CBC with PBKDF2), OUT.bak.sha256 (detects corruption), OUT.bak.hmac (a keyed
+# checksum: without the key file nobody can change the backup and have restore accept it) and OUT.bak.meta
 # (counts and the schema version, no names or text). Needs pg_dump, psql and openssl. The passphrase is derived from the WHOLE key
 # file, which must be at least 32 bytes and readable by you only; keep it apart from the backup (anyone with both reads every
-# indexed word). The encryption does not authenticate the file: restore only backups you made and kept in storage others cannot write.
+# indexed word). CBC itself does not authenticate, so restore checks the keyed checksum (.hmac) before it decrypts anything; keep the key apart from the backup.
 set -euo pipefail
 OUT=${1:?usage: backup.sh OUT.bak}
 KEY=${BD_BACKUP_KEY_FILE:?set BD_BACKUP_KEY_FILE to a file holding the encryption key}
@@ -22,12 +23,15 @@ have=$(psql -qAt -c "select 1 from pg_namespace where nspname = 'aps_search'") |
 
 BD_BACKUP_PASS=$(openssl dgst -sha256 -r < "$KEY" | cut -d' ' -f1)
 export BD_BACKUP_PASS
+BD_BACKUP_MAC=$( { printf 'mac:'; cat "$KEY"; } | openssl dgst -sha256 -r | cut -d' ' -f1)   # a second secret derived from the key file, never the passphrase itself
+export BD_BACKUP_MAC
 START=$(date +%s)
 umask 077
 trap 'rm -f "$OUT.part"' ERR EXIT
 pg_dump -Fc --schema=aps_search | openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -salt -pass env:BD_BACKUP_PASS > "$OUT.part"
 mv "$OUT.part" "$OUT"
 sha256sum "$OUT" | cut -d' ' -f1 > "$OUT.sha256"
+openssl dgst -sha256 -hmac "$BD_BACKUP_MAC" -r < "$OUT" | cut -d' ' -f1 > "$OUT.hmac"
 psql -qAt -F' ' -c "select 'schema_ver', schema_ver from aps_search.schema_meta
 	union all select 'pages', count(*) from aps_search.page
 	union all select 'chunks', count(*) from aps_search.chunk

@@ -68,3 +68,9 @@ Consequences:
 - Restore rehearsal on the test stack (3 small files, stub embedder): backup 0.6 s, restore 1.1 s, read and embed 6 s (`spikes/s5/results-s5/restore_rehearsal.json`). Backup and restore are bounded by the size of `aps_search`; expect minutes per 10 GB. The 1M-page rehearsal is S7.
 - Rebuilding without a backup costs the first-read time: OCR pages about 13 s each, text and born-digital documents seconds, vectors about 1 chunk/s per 4 CPUs with bge-m3 (see S4 additions). The text lane never waits for vectors.
 - Status queries read counters and two small time windows; the Prometheus output adds `buscador_schema_bytes` (database size of the schema) for capacity tracking.
+
+## S7 additions (2026-10-19): measured at 1M pages
+- **Size**: 1 000 000 pages (3 000 000 chunks, 1 024-dimension vectors) take **28 GB** of database: vectors 16.8 GB, chunk text 8.4 GB, HNSW index 8.2 GB, page text 2.7 GB, full-text index 0.75 GB (`spikes/s7/results-s7/load_full.json`). Plan about 30 GB per million pages, plus WAL during builds.
+- **Build**: the HNSW index over 3M vectors took 26 minutes with 8 GB of shared memory and 4 GB of maintenance memory (Docker's default shared memory is too small: the build fails with "could not resize shared memory segment").
+- **Search** (database stage, p95): see ADR-0017. Comfortable to 5 concurrent searchers for any reader and 10 for narrow readers; 20 is outside the supported model on 8 cores.
+- **Backup and restore**: 43 min and 44 min (including the vector index rebuild) at this size; the backup file is about 15 GB; restoring needs the same again in free disk or memory for the decrypted dump (set `BD_RESTORE_TMPDIR`). First search works 3 s after the restore.

@@ -1,0 +1,103 @@
+# Clean-install check (A-OPS-5): a stock Nextcloud with NO bind mount of the repo; the release tarball is extracted into it.
+# Project `bd-install`, loopback only, toy passwords. NC_IMAGE selects the Nextcloud image (default: the pinned 34; the
+# non-blocking CI job passes nextcloud:35-apache).
+name: bd-install
+
+services:
+  db:
+    image: pgvector/pgvector:0.8.7-pg18-bookworm@sha256:2358fcba361ed2233a5ed81b5fe4ca779ccb304120ce531a3bf51c0ed7e2bc11
+    restart: "no"
+    mem_limit: 2g
+    shm_size: 256m
+    ports: ["127.0.0.1:5443:5432"]
+    volumes:
+      - bd_pg:/var/lib/postgresql
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    environment: {POSTGRES_DB: nextcloud, POSTGRES_USER: postgres, POSTGRES_PASSWORD: dev}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d nextcloud"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [default, workers]
+  nextcloud:
+    image: ${NC_IMAGE:-nextcloud:34.0.4-apache@sha256:0e5688ba0988b9112cf03f9c6bab53eccb466d278435f6596f16c1f25acacf74}
+    restart: "no"
+    mem_limit: 2g
+    ports: ["127.0.0.1:8192:80"]
+    depends_on: {db: {condition: service_healthy}}
+    volumes: [bd_nc:/var/www/html]
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: nextcloud
+      POSTGRES_USER: nextcloud
+      POSTGRES_PASSWORD: dev
+      NEXTCLOUD_ADMIN_USER: admin
+      NEXTCLOUD_ADMIN_PASSWORD: admin
+      NEXTCLOUD_TRUSTED_DOMAINS: localhost
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost/status.php || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    networks: [default, workers]
+
+  worker:
+    profiles: ["worker"]
+    build: ./worker
+    image: bd-install-worker
+    restart: "no"
+    init: true
+    read_only: true
+    tmpfs: ["/tmp:size=1g,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: 2g
+    depends_on:
+      db: {condition: service_healthy}
+      nextcloud: {condition: service_healthy}
+      parser: {condition: service_healthy}
+    environment:
+      BD_DB_DSN: postgresql://bd_worker:dev-worker@db:5432/nextcloud
+      BD_BASE_URL: http://nextcloud
+      BD_WORKER_ID: worker-1
+      BD_WORKER_SECRET: bd-install-toy-secret-0123456789abcdef
+      BD_WORK: /work
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes: [bd_work:/work]
+    networks: [workers]
+
+  parser:
+    profiles: ["worker"]
+    build: ./worker
+    image: bd-install-worker
+    command: ["python3", "parserd.py"]
+    restart: unless-stopped
+    init: true
+    network_mode: none
+    read_only: true
+    tmpfs: ["/tmp:size=512m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 128
+    mem_limit: 2g
+    cpus: 2
+    environment: {BD_WORK: /work, OMP_THREAD_LIMIT: "1"}
+    volumes: [bd_work:/work]
+    healthcheck:
+      test: ["CMD-SHELL", "find /tmp/ready -mmin -1 | grep -q ."]
+      interval: 2s
+      retries: 30
+
+volumes:
+  bd_pg:
+  bd_nc:
+  bd_work:
+    driver: local
+    driver_opts: {type: tmpfs, device: tmpfs, o: "size=1g,uid=10001,gid=10001,mode=0700"}
+
+networks:
+  default: {}
+  workers: {internal: true}

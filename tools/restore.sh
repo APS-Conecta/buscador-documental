@@ -3,9 +3,10 @@
 #
 #   BD_BACKUP_KEY_FILE=...  PGHOST=... PGUSER=<superuser> PGPASSWORD=...  tools/restore.sh IN.bak TARGET_DATABASE
 #
-# RESTORE ONLY BACKUPS YOU MADE AND KEPT SOMEWHERE OTHERS CANNOT WRITE: the encryption does not authenticate the file. To limit
-# what a tampered archive could do, everything except creating the empty schema runs as the role bd_owner, which is not a
-# superuser, cannot run programs on the server and owns nothing outside aps_search.
+# The backup must carry a valid keyed checksum (OUT.bak.hmac, made with the key file): it is verified before anything is decrypted,
+# so a file altered by someone without the key is refused. Everything except creating the empty schema runs as the role bd_owner,
+# which is not a superuser, cannot run programs on the server and owns nothing outside aps_search. A dump made by the key holder
+# is trusted code for that schema (it can define functions there): restore only backups made with YOUR key.
 #
 # The target must exist and contain the roles bd_owner and bd_worker (cluster-wide), the Nextcloud database user named in the
 # dump's grants, and the extensions unaccent (and vector when the backup has vector tables). It must not already hold aps_search.
@@ -14,14 +15,26 @@ set -euo pipefail
 IN=${1:?usage: restore.sh IN.bak TARGET_DATABASE}
 DB=${2:?usage: restore.sh IN.bak TARGET_DATABASE}
 KEY=${BD_BACKUP_KEY_FILE:?set BD_BACKUP_KEY_FILE to the file holding the encryption key}
+# The schema version this script (and the app that ships it) writes and reads. A backup of any other version is refused: restore
+# it with the app version that made it, then upgrade the app (a newer schema would be read by code that does not know it).
+SUPPORTED_SCHEMA=5
 fail() { echo "restore: $*" >&2; exit 2; }
 [ -f "$IN" ] || fail "the backup file does not exist"
 [ -f "$KEY" ] && [ ! -L "$KEY" ] || fail "the key file does not exist (or is a symbolic link)"
+case "$DB" in *[=' ']*) fail "TARGET_DATABASE must be a database name, not a connection string";; esac
+[ -f "$IN.hmac" ] || fail "the keyed checksum $IN.hmac is missing: a backup without it cannot be trusted"
+BD_BACKUP_MAC=$( { printf 'mac:'; cat "$KEY"; } | openssl dgst -sha256 -r | cut -d' ' -f1)
+[ "$(openssl dgst -sha256 -hmac "$BD_BACKUP_MAC" -r < "$IN" | cut -d' ' -f1)" = "$(cat "$IN.hmac")" ] || fail "the keyed checksum does not match: the backup was altered, or the key is not the one that made it"
 [ -f "$IN.sha256" ] || fail "the checksum file $IN.sha256 is missing: a backup without it cannot be checked for damage"
 [ "$(sha256sum "$IN" | cut -d' ' -f1)" = "$(cat "$IN.sha256")" ] || fail "the checksum does not match: the backup is damaged"
 
 # the decrypted dump lives in a private directory (memory when there is some), never in a shared temp file
-if [ -d /dev/shm ] && [ -w /dev/shm ]; then WORK=$(mktemp -d -p /dev/shm); else WORK=$(mktemp -d); fi
+# (a backup bigger than the free memory goes to a private directory on disk instead: BD_RESTORE_TMPDIR or the default temp dir;
+# the decrypted text is then on that disk until the restore ends, so put it on an encrypted volume)
+NEED=$(( $(wc -c < "$IN") + 1048576 ))
+if [ -z "${BD_RESTORE_NO_SHM:-}" ] && [ -d /dev/shm ] && [ -w /dev/shm ] && [ "$(df -PB1 /dev/shm | awk 'NR==2{print $4}')" -gt "$NEED" ]; then WORK=$(mktemp -d -p /dev/shm); else WORK=$(mktemp -d ${BD_RESTORE_TMPDIR:+-p "$BD_RESTORE_TMPDIR"}); fi
+FREE=$(df -PB1 "$WORK" | awk 'NR==2{print $4}')
+[ "$FREE" -gt "$NEED" ] || { rmdir "$WORK" 2>/dev/null; fail "not enough free space to hold the decrypted backup ($(( NEED / 1048576 )) MB needed): set BD_RESTORE_TMPDIR to a directory with room"; }
 chmod 700 "$WORK"
 CREATED=0
 cleanup() { if [ "$CREATED" = 1 ]; then psql -qAt -d "$DB" -c "drop schema if exists aps_search cascade" >/dev/null 2>&1 || true; fi; rm -rf "$WORK"; }
@@ -31,6 +44,9 @@ BD_BACKUP_PASS=$(openssl dgst -sha256 -r < "$KEY" | cut -d' ' -f1)
 export BD_BACKUP_PASS
 openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -pass env:BD_BACKUP_PASS < "$IN" > "$TMP" 2>/dev/null || fail "cannot decrypt: wrong key or damaged backup"
 TOC=$(pg_restore -l "$TMP" 2>/dev/null) || fail "the decrypted data is not a valid backup: wrong key or damaged backup"
+
+DUMP_VER=$(pg_restore -a -n aps_search -t schema_meta -f - "$TMP" 2>/dev/null | awk '/^COPY /{f=1; next} f{print $1; exit}')
+[ "$DUMP_VER" = "$SUPPORTED_SCHEMA" ] || fail "the backup holds schema version ${DUMP_VER:-unknown} and this restore script supports version $SUPPORTED_SCHEMA: restore it with the app version that made it, then upgrade"
 
 q() { psql -qAt -d "$DB" -c "$1"; }
 [ "$(q "select 1 from pg_database where datname = current_database()")" = 1 ] || fail "cannot connect to the target database"

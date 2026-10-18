@@ -18,3 +18,6 @@ Not enforced (earlier text overstated it): a custom seccomp profile (Docker's de
 - Two containers per worker deployment; the per-job IPC adds a file copy.
 - `01-architecture.md` is updated: the supervisor/child wording stays, the mechanism changes from `unshare` to a separate container.
 - If a host ever allows unprivileged user namespaces cleanly, a single-container variant can be reconsidered in a new ADR.
+
+## Addendum (S7, STRIDE review H7)
+The hardening this ADR deferred to S7 (per-job directories, distinct uids) is not needed for the design as built: a worker process claims one job at a time, `jobbox.prepare` empties `in/` and `out/` before every submission and the submission cleans up after itself, so the shared work volume holds only the file being parsed. A compromised parser can forge only the answer for that file, which the supervisor validates and the application re-checks at search time; filling the volume delays only the current job. What this relies on: **one `/work` volume per worker replica** (never shared by two supervisors) and one job at a time per supervisor. If either changes, per-job directories and distinct uids become mandatory.

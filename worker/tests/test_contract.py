@@ -67,7 +67,7 @@ def test_example_signature_and_request_shape(ex):
 
 
 @pytest.mark.parametrize("status,exc", [(401, bdclient.AuthError), (403, bdclient.ClaimLost), (404, bdclient.ClaimLost),
-                                        (412, bdclient.EtagChanged), (429, bdclient.Retryable), (503, bdclient.Retryable)])
+                                        (412, bdclient.EtagChanged), (429, bdclient.Retryable), (503, bdclient.Retryable), (302, ValueError)])
 def test_error_mapping(status, exc):
     ex = {"response": {"status": status, "json": {}}}
     srv, _ = serve(ex)

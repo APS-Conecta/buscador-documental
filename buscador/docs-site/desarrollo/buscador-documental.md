@@ -100,6 +100,15 @@ Todo corre en Docker, en el proyecto de compose `bd-s1`, solo en `127.0.0.1`. De
 
 `make clean` elimina únicamente los recursos de `bd-s1`. Las pruebas de trabajo en Python se ejecutan con `make -C worker test`. La integración continua (`.github/workflows/ci.yml`: `php`, `worker` y `smoke`) está escrita pero aún no se ha ejecutado en GitHub.
 
+## Decisiones de la etapa S7 (endurecimiento y entrega)
+
+- **Revisión STRIDE** del canal del proceso de lectura, del rol de base de datos, del contenedor de lectura, del cliente de embeddings y del respaldo: `buscador/stride-worker-channel.md`. Sin hallazgos altos abiertos; cada hallazgo tiene prueba o una disposición explícita.
+- **Modos de falla**: tabla y pruebas en `buscador/failure-modes.md`; la suite viva `make -C app test-e2e-failures` cubre la base de datos que rechaza escrituras y la falta de la etiqueta de exclusión.
+- **Prueba de carga con un millón de páginas** (`spikes/s7/`): esquema real `aps_search` con 3 millones de fragmentos y vectores de 1 024 dimensiones, medida con el `CandidateQuery` del producto. Encontró un problema real (consultas de palabras poco comunes o de pocos archivos leíbles hasta 7 s) que se corrigió: el texto de la consulta va literal para que el planificador use sus estadísticas, el índice de palabras lidera cuando una palabra requerida es poco común, quien lee pocos archivos parte de sus archivos y las palabras muy comunes se omiten de la relajación OR.
+- **Entrega**: `make -C app release` genera `buscador_documental-<versión>.tar.gz` y su suma; `make -C app test-e2e-install` lo instala en un Nextcloud limpio (34, bloqueante; 35, no bloqueante en CI). La prueba encontró que al activar la aplicación no se creaba la etiqueta `rag-excluded`: corregido.
+- **Respaldo**: suma de control con clave (`.hmac`) obligatoria, rechazo de otra versión de esquema y de cadenas de conexión como destino.
+- **Compuerta legal**: registrada como **abierta** en el ADR-0006 (condiciones y responsables); no se puede cerrar con código.
+
 ### Pruebas de la interfaz (S6)
 
 - `make -C app test-js`: Vitest + jsdom + axe (59 pruebas): estado de URL, extractos, formatos, página de búsqueda en todos sus estados, administración, pestaña de Archivos y reglas de las fuentes (sin importar todo `@nextcloud/vue`, sin colores fijos, sin servidores externos).

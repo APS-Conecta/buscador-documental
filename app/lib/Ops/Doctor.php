@@ -48,6 +48,10 @@ class Doctor {
 
 		$roles = (int)$this->db->rows("SELECT count(*) AS n FROM pg_roles WHERE rolname IN ('bd_owner', 'bd_worker')")[0]['n'];
 		$c[] = $this->check('database_roles', $roles === 2 ? 'ok' : 'fail', $roles === 2 ? 'bd_owner and bd_worker exist' : 'a database role is missing');
+		$lim = $this->db->rows("SELECT r.rolconnlimit, coalesce(s.setconfig, '{}'::text[]) AS cfg FROM pg_roles r LEFT JOIN pg_db_role_setting s ON s.setrole = r.oid AND s.setdatabase = 0 WHERE r.rolname = 'bd_worker'");
+		$cfg = $lim === [] ? '' : (string)$lim[0]['cfg'];
+		$bounded = $lim !== [] && (int)$lim[0]['rolconnlimit'] > 0 && str_contains($cfg, 'statement_timeout=') && str_contains($cfg, 'temp_file_limit=');
+		$c[] = $this->check('worker_role_limits', $bounded ? 'ok' : 'warn', $bounded ? 'the worker role has a connection limit, a statement timeout and a temp file limit' : 'the worker role is not bounded: an administrator should set CONNECTION LIMIT, statement_timeout and temp_file_limit on bd_worker (install guide)');
 		$hasUnaccent = $this->db->rows("SELECT 1 FROM pg_extension WHERE extname = 'unaccent'") !== [];
 		$c[] = $this->check('extension_unaccent', $hasUnaccent ? 'ok' : 'fail', $hasUnaccent ? 'installed' : 'missing: CREATE EXTENSION unaccent');
 

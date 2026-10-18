@@ -59,6 +59,8 @@ class WorkerClient:
         return h
 
     def _check(self, r):
+        if 300 <= r.status_code < 400:
+            raise ValueError(f"unexpected redirect {r.status_code}")      # never followed: the headers carry the signature
         if r.status_code == 401:
             raise AuthError()
         if r.status_code in (403, 404):
@@ -74,7 +76,7 @@ class WorkerClient:
 
     def meta(self, file_id, job_id, epoch) -> dict:
         path = f"{PREFIX}/files/{file_id}/meta"
-        r = self.session.get(self.base + path, headers=self.headers("GET", path, job_id, epoch), timeout=self.timeout)
+        r = self.session.get(self.base + path, headers=self.headers("GET", path, job_id, epoch), timeout=self.timeout, allow_redirects=False)
         self._check(r)
         return r.json()
 
@@ -82,7 +84,7 @@ class WorkerClient:
         """Streams the content into fh; returns (sha256 hex, bytes)."""
         path = f"{PREFIX}/files/{file_id}/content"
         h = self.headers("GET", path, job_id, epoch, rng=rng, if_match=etag)
-        with self.session.get(self.base + path, headers=h, stream=True, timeout=self.timeout) as r:
+        with self.session.get(self.base + path, headers=h, stream=True, timeout=self.timeout, allow_redirects=False) as r:
             self._check(r)
             digest = hashlib.sha256()
             n = 0

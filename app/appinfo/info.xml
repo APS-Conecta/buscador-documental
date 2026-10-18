@@ -25,6 +25,9 @@
         </navigation>
     </navigations>
     <repair-steps>
+        <install>
+            <step>OCA\BuscadorDocumental\Migration\EnsureExclusionTag</step>
+        </install>
         <post-migration>
             <step>OCA\BuscadorDocumental\Migration\EnsureExclusionTag</step>
         </post-migration>

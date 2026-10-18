@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- S7 load driver (spikes/s7): not part of any normal run; configured by S7_* environment variables. -->
+<phpunit bootstrap="vendor/autoload.php" colors="false" cacheDirectory=".phpunit.cache">
+	<testsuites>
+		<testsuite name="s7"><file>../spikes/s7/LoadTest.php</file></testsuite>
+	</testsuites>
+</phpunit>

@@ -248,6 +248,7 @@ class SearcherTest extends TestCase {
 
 	public function testMixtaFusesBothLegsAndRunsThemUnderTheSameFilters(): void {
 		$this->corpus(6);
+		$this->nodes[7] = [$this->node('Informes')];                              // folder 7 is readable by this person (see the folder filter)
 		$this->keywordRows = [['file_id' => 1, 'chunk_id' => 10], ['file_id' => 2, 'chunk_id' => 20], ['file_id' => 3, 'chunk_id' => 30]];
 		$this->vectorRows = [['file_id' => 3, 'chunk_id' => 31], ['file_id' => 4, 'chunk_id' => 40], ['file_id' => 1, 'chunk_id' => 11]];
 		$s = $this->searcher();

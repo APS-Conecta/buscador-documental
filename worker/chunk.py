@@ -43,8 +43,12 @@ class TooManyChunks(Exception):
     """The document cannot fit the chunk cap; it must be refused, not cut."""
 
 
+_SURROGATES = re.compile("[\ud800-\udfff]")
+
+
 def clean(text: str) -> str:
-    return text.replace("\x00", "")        # jsonb rejects NUL
+    """jsonb rejects NUL, and PostgreSQL rejects a lone UTF-16 surrogate (a malformed PDF string can produce one)."""
+    return _SURROGATES.sub("\ufffd", text.replace("\x00", ""))
 
 
 def tokens(s: str) -> int:

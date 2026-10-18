@@ -78,6 +78,11 @@ class Searcher {
 				$start = $token['pos'];
 				$back = $token['back'];
 			} else {
+				// A folder id is only a filter for folders the person can read: otherwise the filter would tell them which folders
+				// sit above a file shared with them.
+				if ($request->filters->folderId !== null && $this->recheck->filter($uid, [$request->filters->folderId]) === []) {
+					return $this->empty('ok', '');
+				}
 				[$files, $chunks, $notice] = $this->db->withTimeout(self::TIMEOUT_MS, fn (): array => $this->rank($uid, $request));
 				[$files, $chunks] = $this->withoutUnreadableUnmodelled($uid, $files, $chunks);
 				$snap = ['file_ids' => $files, 'chunk_ids' => $chunks];
