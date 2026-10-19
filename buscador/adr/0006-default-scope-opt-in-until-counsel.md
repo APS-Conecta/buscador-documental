@@ -23,4 +23,7 @@ Status of the gate on 2026-10-19: **open, external**. The product is built, test
 | Decision on `all_readable` mode: stays off unless counsel and the DPIA both allow it | establishment | recorded decision | open |
 | Pause and exclusion procedure known to the administrators (`occ buscador:pause`, `rag-excluded`, `occ buscador:purge-user`) | administrator | runbook read, drill done | documented in the administrator page of the site |
 
+### Deferral decision (2026-10-19)
+The project owner decided to allow installation while the four rows above are still **open**, and to resolve them later. This is a recorded deferral by the owner, **not** counsel's opinion, a DPIA, an approved notice or a decision on `all_readable`; none of those exist yet and no row is marked met. Consequences kept in force: scope stays opt-in folders, `all_readable` stays off, the first-run notice stays the draft, and the pause (`occ buscador:pause`) and `rag-excluded` remain the controls. Whoever installs on real documents before the rows are filled does so on the establishment's own responsibility, and the rows must still be filled in as they are obtained.
+
 What is already in place whatever the answer: scope is opt-in folders by default; nothing leaves the server unless the administrator points the optional endpoint elsewhere; the `rag-excluded` tag always wins; erasure follows account deletion; the pause is one click. When every row is filled, this ADR is superseded by a short note recording the dates and references, and A-SEC-7 turns green.
