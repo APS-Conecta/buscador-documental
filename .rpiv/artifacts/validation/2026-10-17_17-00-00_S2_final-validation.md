@@ -5,7 +5,7 @@ status: ready
 inputs: [.rpiv/artifacts/validation/2026-10-17_14-00-00_S2_validation.md, .rpiv/artifacts/reviews/2026-10-17_15-00-00_S2_review.md]
 acceptance_ids: [A-QUAL-1, A-SAFE-1, A-SAFE-2, A-SAFE-3]
 ---
-# S2 final validation (branch s2-extraction after the review fixes, commit e65485b plus doc edits)
+# S2 final validation (after the review fixes, commit e65485b plus doc edits)
 
 Supersedes the earlier S2 validation, which ran before the review fixes.
 
