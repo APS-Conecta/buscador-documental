@@ -42,6 +42,3 @@ Work: STRIDE review (worker channel, DB role); failure-mode tests (`01-architect
 | full | discover → research → design → design-review (human) → plan → implement → validate → review → docs → commit |
 | blueprint | research → blueprint → implement → validate → review → docs → commit |
 | UI (U0) | `/bd-mockup` → ux-audit → design-review (human) |
-
-## Cross-plan impacts (applied in the "fixes" step)
-README, acceptance-matrix, P2 (S2, S4, S8), P4, P6, P7 S3 — see `CROSSREF.md`.

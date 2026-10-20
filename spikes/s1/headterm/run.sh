@@ -12,4 +12,4 @@ $C up -d --wait db
 RUN="$C --profile tools run --rm -T -e PYTHONDONTWRITEBYTECODE=1 -v $PWD:/s1:ro py"
 $RUN python3 /s1/load_text.py --chunks 3000000
 $RUN python3 /work/bench/m10_headterm.py
-python3 ../bench/headterm_compare.py ../results-s1/headterm/m10.json /root/bd-spike/results/m10.json
+python3 ../bench/headterm_compare.py ../results-s1/headterm/m10.json ../../s0-harness/results-s0/m10.json
