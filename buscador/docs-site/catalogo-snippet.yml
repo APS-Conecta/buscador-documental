@@ -1,6 +1,6 @@
 # Para catalogo.yml del repositorio documentation. NO se aplica todavía: gen-catalogo.py fija la nómina en 16 filas y exige paridad
-# de las filas `nextcloud-app` con el registro OWN_APPS de gestion (provisioning/phases/12-apps.sh); añadir esta fila requiere
-# ampliar la nómina y registrar la app allí (decisión de quien mantiene gestion y el catálogo).
+# de las filas `nextcloud-app` con el registro OWN_APPS del instalador (provisioning/phases/12-apps.sh); añadir esta fila requiere
+# ampliar la nómina y registrar la app allí (decisión de quien mantiene el instalador y el catálogo).
   - repo: buscador-documental
     kind: nextcloud-app
     role: "Buscador Documental: busca por palabras o por significado, incluidos escaneos y fotografías, respetando los permisos de Nextcloud."
