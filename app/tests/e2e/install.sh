@@ -29,7 +29,10 @@ ok "the app enabled on a clean install ($($OCC app:list | grep -c buscador_docum
 [ "$($PSQL -c 'select schema_ver from aps_search.schema_meta')" = 5 ] || die "schema was not created at version 5"
 ok "the index schema was created (version 5)"
 $OCC config:system:set trusted_domains 2 --value=nextcloud >/dev/null
-$OCC config:app:set buscador_documental worker_secret --value="$SECRET" --sensitive >/dev/null
+# The suite adopts its generated worker secret from the environment (issue 43); a repeated run is a no-op.
+$C exec -T --user www-data -e BD_WORKER_SECRET="$SECRET" nextcloud php occ buscador:adopt-secret >/dev/null || die "the worker secret was not adopted from the environment"
+$C exec -T --user www-data -e BD_WORKER_SECRET="$SECRET" nextcloud php occ buscador:adopt-secret >/dev/null || die "a repeated adoption failed"
+ok "the worker secret was adopted from BD_WORKER_SECRET (and adopting it again changes nothing)"
 [ "$($PSQL -c "select count(*) from oc_systemtag where name = 'rag-excluded'")" = 1 ] || die "enabling the app did not create the rag-excluded tag (indexing would fail closed)"
 ok "the exclusion tag exists after enabling"
 $OCC buscador:doctor --json > "$TMP/doctor.json" || true

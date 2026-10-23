@@ -1,5 +1,6 @@
 # Buscador Documental CI. Everything runs in Docker (images pinned by digest in compose.yaml); nothing needs PHP,
-# Tesseract or Postgres on the runner. Actions are pinned by major tag; pin to commit SHAs before the first release.
+# Tesseract or Postgres on the runner. Actions are pinned by commit SHA. The frontend bundle is built, not
+# committed (issue 43): .github/workflows/release.yml builds and packs it on every pull request and v* tag.
 name: ci
 
 on:
@@ -35,16 +36,16 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - run: make -C worker test
+      - run: make -C worker test-image
       - run: make -C worker test-glossary
 
   js:
-    name: js (vitest + axe, committed bundle matches sources, size budget)
+    name: js (vitest + axe)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - run: make -C app test-js
-      - run: make -C app check-js-drift
 
   smoke:
     name: smoke (permission canary)

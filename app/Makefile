@@ -9,7 +9,7 @@ NET := bd-s1_default
 DOCKER := docker run --rm -v "$(CURDIR)":/app -w /app $(IMG)
 DOCKER_NET := docker run --rm --network $(NET) -v "$(CURDIR)":/app -w /app -e BD_PG_HOST=db $(IMG)
 
-.PHONY: instance-reset-schema test-e2e-rbac test-e2e-logs bench-reconcile test-e2e-reconcile test-e2e-erasure test-e2e-events test-e2e-scope test-e2e-groupfolder test-e2e-formats test-e2e-one test-e2e-ui test-e2e-failures test-contract test-search test-canary build-test-image deps test-unit test-db up down clean instance-migrate release test-e2e-install node-image npm-install build-js test-js check-js-drift
+.PHONY: instance-reset-schema test-e2e-rbac test-e2e-logs bench-reconcile test-e2e-reconcile test-e2e-erasure test-e2e-events test-e2e-scope test-e2e-groupfolder test-e2e-formats test-e2e-one test-e2e-ui test-e2e-failures test-contract test-search test-canary build-test-image deps test-unit test-db up down clean instance-migrate release test-e2e-install node-image npm-install build-js test-js
 
 build-test-image:
 	docker build -q -f Dockerfile.test -t $(IMG) . >/dev/null
@@ -145,21 +145,19 @@ build-js: npm-install
 test-js: npm-install
 	$(NODE) npm test
 
-# CI: the committed js/ and css/ must be what the sources build to.
-check-js-drift: build-js
-	@git -C $(ROOT) diff --exit-code --stat -- app/js app/css || (echo "js/ or css/ is not what the sources build to: run make -C app build-js and commit" >&2; exit 1)
-	@test -z "$$(git -C $(ROOT) ls-files --others --exclude-standard -- app/js app/css)" || (echo "untracked build output" >&2; exit 1)
-
 test-e2e-ui: build-js
 	bash tests/e2e/ui.sh
 
-# Release tarball (A-OPS-5): tracked runtime files only, in a top-level buscador_documental/ folder as the app store expects.
+# Release tarball (A-OPS-5): the runtime file set of .nextcloudignore — the same rules, the same deterministic tar flags and the same gzip -n as the
+# shared packer (APS-Conecta/.github scripts/pack-app.sh), with the frontend bundle built by build-js (issue 43:
+# the bundle is built, not committed). The same commit packs to the same tarball here and in the release workflow.
 VERSION := $(shell sed -n 's:.*<version>\(.*\)</version>.*:\1:p' appinfo/info.xml | head -1)
-release: check-js-drift
-	rm -rf dist && mkdir -p dist
-	cd $(ROOT) && git ls-files app/appinfo app/lib app/templates app/img app/js app/css app/openapi app/ops LICENSE THIRD-PARTY-NOTICES.md | grep -v '\.map$$' > app/dist/files.txt
-	cd $(ROOT) && tar --transform 's,^app/,buscador_documental/,;s,^LICENSE$$,buscador_documental/LICENSE,;s,^THIRD-PARTY-NOTICES.md$$,buscador_documental/THIRD-PARTY-NOTICES.md,' -czf app/dist/buscador_documental-$(VERSION).tar.gz -T app/dist/files.txt
-	cd dist && sha256sum buscador_documental-$(VERSION).tar.gz > buscador_documental-$(VERSION).tar.gz.sha256 && rm -f files.txt
+TS := $(shell git -C $(ROOT) log -1 --format=%ct)
+release: build-js
+	rm -rf dist && mkdir -p dist/buscador_documental
+	rsync -a --filter='- .git' --filter='- node_modules' --exclude-from=.nextcloudignore ./ dist/buscador_documental/
+	tar --sort=name --mtime=@$(TS) --owner=0 --group=0 --numeric-owner --format=gnu --mode='u+w,go-w,a+rX' -C dist -c buscador_documental | gzip -n > dist/buscador_documental-$(VERSION).tar.gz
+	cd dist && sha256sum buscador_documental-$(VERSION).tar.gz > buscador_documental-$(VERSION).tar.gz.sha256
 	@ls -l dist
 
 test-e2e-install: release

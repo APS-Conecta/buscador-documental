@@ -76,6 +76,39 @@ class SecretRotationTest extends TestCase {
 		$this->assertArrayNotHasKey('worker_secret_prev', $this->store);
 	}
 
+	public function testAdoptTakesTheSuiteSecretAndEndsAnyRotationGrace(): void {
+		$this->store['worker_secret'] = 'the-old-secret-0123456789abcdefghijklmn';
+		$this->store['worker_secret_prev'] = 'even-older-0123456789abcdefghij';
+		$this->store['worker_secret_prev_until'] = (string)(self::NOW + 3600);
+		$adopted = 'suite-secret-0123456789abcdefghijklmnop';
+		$this->assertTrue($this->rotation()->adopt($adopted));
+		$this->assertSame($adopted, $this->store['worker_secret']);
+		$this->assertTrue($this->sensitive['worker_secret'], 'the adopted secret is stored like a rotated one: sensitive, not exported');
+		$this->assertArrayNotHasKey('worker_secret_prev', $this->store, 'a grace secret from rotate-secret has no meaning once the suite owns the secret');
+		$this->assertArrayNotHasKey('worker_secret_prev_until', $this->store);
+		$this->assertSame([['secret.adopt', []]], $this->audited);
+		$this->assertStringNotContainsString($adopted, json_encode($this->audited));
+	}
+
+	public function testAdoptingTheSecretAlreadyInUseIsANoOp(): void {
+		$this->store['worker_secret'] = 'suite-secret-0123456789abcdefghijklmnop';
+		$this->assertFalse($this->rotation()->adopt('suite-secret-0123456789abcdefghijklmnop'));
+		$this->assertSame([], $this->audited, 'a repeated provisioning run changes and records nothing');
+		$this->assertSame('suite-secret-0123456789abcdefghijklmnop', $this->store['worker_secret']);
+	}
+
+	public function testAdoptRefusesAShortSecretAndTouchesNothing(): void {
+		$this->store['worker_secret'] = 'the-old-secret-0123456789abcdefghijklmn';
+		try {
+			$this->rotation()->adopt('short');
+			$this->fail('accepted a short secret');
+		} catch (OpsException $e) {
+			$this->assertStringContainsString('32 characters', $e->getMessage());
+		}
+		$this->assertSame('the-old-secret-0123456789abcdefghijklmn', $this->store['worker_secret']);
+		$this->assertSame([], $this->audited);
+	}
+
 	public function testBadGraceIsRefused(): void {
 		foreach ([-1, 721] as $bad) {
 			try {

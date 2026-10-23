@@ -1,0 +1,27 @@
+# The app release caller (issue 43): the shared workflow of APS-Conecta/.github builds and packs the app on
+# every pull request, and on a v* tag signs and publishes it inside this repo's protected `release` environment.
+# Pinned by commit SHA, as the shared workflow requires; bump only after reviewing the change.
+name: release
+
+on:
+  pull_request:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    uses: APS-Conecta/.github/.github/workflows/app-release.yml@7884528d4e283decc2c8e639cb6e9ca6ed180c80 # 2026-10-22
+    permissions:
+      contents: write
+    with:
+      app-id: buscador_documental
+      app-dir: app
+      node-version: "24"
+      # The size gate (ADR-0016) rides the build: it ran with the old drift check and still has to run per pull request.
+      build: npm ci --no-audit --no-fund && npm run build && npm run size
+    secrets:
+      APP_SIGNING_KEY: ${{ secrets.APP_SIGNING_KEY }}
+      APP_SIGNING_KEY_PASSWORD: ${{ secrets.APP_SIGNING_KEY_PASSWORD }}

@@ -112,7 +112,7 @@ Todo corre en Docker, en el proyecto de compose `bd-s1`, solo en `127.0.0.1`. De
 ### Pruebas de la interfaz (S6)
 
 - `make -C app test-js`: Vitest + jsdom + axe (59 pruebas): estado de URL, extractos, formatos, página de búsqueda en todos sus estados, administración, pestaña de Archivos y reglas de las fuentes (sin importar todo `@nextcloud/vue`, sin colores fijos, sin servidores externos).
-- `make -C app build-js`: construye `js/` y `css/` y verifica el presupuesto; `make -C app check-js-drift` verifica que lo versionado coincide con las fuentes.
+- `make -C app build-js`: construye `js/` y `css/` y verifica el presupuesto. El paquete va fuera de git (incidencia 43): en cada pull request y etiqueta `v*` lo construye y empaca `.github/workflows/release.yml`, el flujo compartido de la organización, que además firma y publica la versión en una etiqueta.
 - `make -C app test-e2e-ui`: Playwright 1.56.1 en imagen fijada contra la pila real (10 comprobaciones): teclado, URL, 360 px, movimiento reducido, contraste alto, axe real, barra de búsqueda de Nextcloud, pestaña de Archivos y administración (y 403 para quien no es administrador).
 
 ## Repetir las mediciones

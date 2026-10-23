@@ -11,6 +11,11 @@ RUN pip install --no-cache-dir "psycopg[binary]==3.2.*" requests==2.34.2 PyYAML=
 ENV OMP_THREAD_LIMIT=1 PYTHONUNBUFFERED=1
 WORKDIR /worker
 COPY . /worker
-RUN useradd --uid 10001 --no-create-home worker
+# The image owns its work directory (issue 43): a fresh named volume mounted at /work inherits the mount point's
+# ownership from the image, so the non-root worker can write it without any uid fixup at the mount. The dev
+# stack's tmpfs work volume sets the same uid explicitly. /worker, the code, stays root-owned and read-only.
+RUN useradd --uid 10001 --no-create-home worker \
+    && mkdir -p /work \
+    && chown worker:worker /work
 USER 10001
 CMD ["python3", "main.py"]
