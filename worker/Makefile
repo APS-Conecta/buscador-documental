@@ -1,10 +1,17 @@
 # Worker tests run in the worker image (no Python deps on the host). The spec is mounted read-only from the app.
 IMG := bd-s1-worker
-.PHONY: image test test-sandbox test-laws test-glossary eval-ocr
+.PHONY: image test test-sandbox test-laws test-glossary test-image eval-ocr
 image:
 	docker build -q -t $(IMG) . >/dev/null
 test: image
 	docker run --rm -v "$(CURDIR)/../app/openapi":/spec:ro -e BD_SPEC=/spec/worker-v1.yaml $(IMG) python3 -m pytest -q tests
+
+# The image runs as the non-root worker and owns its work directory (issue 43): a fresh named volume at /work is
+# writable with no uid fixup at the mount — what the suite's worker and parser containers get.
+test-image: image
+	docker volume rm -f bd-work-probe >/dev/null 2>&1 || true
+	docker run --rm -v bd-work-probe:/work $(IMG) python3 -c "import os, pathlib; assert os.getuid() == 10001, os.getuid(); pathlib.Path('/work/probe').touch(); print('non-root worker writes a fresh /work volume')"
+	docker volume rm bd-work-probe >/dev/null
 
 # A-SAFE-2: the isolation properties, checked inside the hardened parser container (needs only the compose project bd-s1).
 test-sandbox: image

@@ -1,0 +1,16 @@
+# The runtime file set, the same one `make -C app release` stages and the shared app-release workflow ships
+# (APS-Conecta/.github pack-app.sh reads this file in place of its defaults). appinfo, lib, templates, img,
+# openapi, ops and the licences are sources; js/ and css/ are what the frontend build leaves behind.
+# Development files — src, tests, tools, the configs, the Makefile, the Dockerfiles — stay out (issue 43).
++ /appinfo
++ /css
++ /img
++ /js
++ /lib
++ /openapi
++ /ops
++ /templates
++ /LICENSE
++ /THIRD-PARTY-NOTICES.md
+- *.map
+- /*
