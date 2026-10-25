@@ -139,16 +139,16 @@ def _layer_texts(path: str) -> list:
     return extract.extract(path)
 
 
-def _image_heavy(path: str) -> list:
+def _image_heavy(pdf) -> list:
+    """Per-page scan flag for an open pikepdf document."""
     import extract
-    import pikepdf
-    with pikepdf.open(path) as pdf:
-        return [any(w * h >= SCAN_PIXELS for w, h in extract.page_images(page)) for page in pdf.pages]
+    return [any(w * h >= SCAN_PIXELS for w, h in extract.page_images(page)) for page in pdf.pages]
 
 
-def _single_page(src: str, index: int, dst: str) -> None:
+def _single_page(pdf, index: int, dst: str) -> None:
+    """Writes page `index` of the already-open `pdf` to a one-page PDF at `dst`."""
     import pikepdf
-    with pikepdf.open(src) as pdf, pikepdf.new() as one:
+    with pikepdf.new() as one:
         one.pages.append(pdf.pages[index])
         one.save(dst)
 
@@ -160,26 +160,28 @@ def _is_image(path: str) -> bool:
 
 def run(path: str, layer: list = None) -> dict:
     """Returns {"pages": [...], "conf": [... or None], "source": ["layer"|"ocr", ...]}."""
+    import pikepdf
     pages, conf, source = [], [], []
     with tempfile.TemporaryDirectory() as tmp:
         if _is_image(path):
             text, out = ocr_page(path, False, tmp, image=True)
             return {"pages": [text], "conf": [page_confidence(out, tmp)], "source": ["ocr"]}
         layer = layer if layer is not None else _layer_texts(path)
-        heavy = _image_heavy(path)
-        for i, text in enumerate(layer):
-            kind = classify(text, heavy[i] if i < len(heavy) else False)
-            if kind == "native":
-                pages.append(text)
-                conf.append(None)
-                source.append("layer")
-                continue
-            work = os.path.join(tmp, f"p{i}")
-            os.makedirs(work)
-            one = os.path.join(work, "in.pdf")
-            _single_page(path, i, one)
-            ocr_text, out = ocr_page(one, force=(kind == "untrusted"), workdir=work)
-            pages.append(ocr_text)
-            conf.append(page_confidence(out, work))
-            source.append("ocr")
+        with pikepdf.open(path) as pdf:         # one parse for the whole run: scan flags below, page extraction in the loop
+            heavy = _image_heavy(pdf)
+            for i, text in enumerate(layer):
+                kind = classify(text, heavy[i] if i < len(heavy) else False)
+                if kind == "native":
+                    pages.append(text)
+                    conf.append(None)
+                    source.append("layer")
+                    continue
+                work = os.path.join(tmp, f"p{i}")
+                os.makedirs(work)
+                one = os.path.join(work, "in.pdf")
+                _single_page(pdf, i, one)
+                ocr_text, out = ocr_page(one, force=(kind == "untrusted"), workdir=work)
+                pages.append(ocr_text)
+                conf.append(page_confidence(out, work))
+                source.append("ocr")
     return {"pages": pages, "conf": conf, "source": source}

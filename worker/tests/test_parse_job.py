@@ -1,6 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import json
 
+import pytest
+
+import extract
 import fixtures as fx
 import ocr
 import parse_job
@@ -39,3 +42,34 @@ def test_an_unexpected_error_in_the_child_is_a_terminal_internal_answer(tmp_path
     monkeypatch.setattr(pdfocr, "run", lambda *a, **k: (_ for _ in ()).throw(TypeError("surprise")))
     out = run(tmp_path, fx.pdf_text(tmp_path / "a.pdf"))
     assert out["status"] == "error" and out["reason"] == "internal" and "TypeError" in out["detail"]
+
+
+@pytest.mark.parametrize("kind,make", [
+    ("pdf", lambda p: fx.pdf_text(p / "a.pdf")),
+    ("image", lambda p: fx.scan_image().save(str(p / "a.png")) or str(p / "a.png")),
+], ids=["pdf", "image"])
+def test_the_input_header_is_read_once_and_the_layer_is_routed_by_kind(tmp_path, monkeypatch, kind, make):
+    """Issue 16: one header read answers both routing questions (OCR-worthy? PDF?), where before the file was opened
+    twice. A PDF keeps the layer extract already produced; an image is routed without one."""
+    import builtins
+    p = make(tmp_path)
+    got = {}
+
+    def fake_run(path, layer=None):
+        got["layer"] = layer
+        return {"pages": ["x"], "conf": [None], "source": ["layer"]}
+
+    monkeypatch.setattr(extract, "extract", lambda path: ["página uno"])     # count parse_job's own file reads only
+    monkeypatch.setattr(pdfocr, "run", fake_run)
+    real_open, seen = builtins.open, []
+
+    def counting(file, *a, **k):
+        if str(file) == p:
+            seen.append(file)
+        return real_open(file, *a, **k)
+
+    monkeypatch.setattr(builtins, "open", counting)
+    out = run(tmp_path, p)
+    assert out["status"] == "ok"
+    assert seen.count(p) == 1                    # one open of the input for the routing decisions
+    assert got["layer"] == (["página uno"] if kind == "pdf" else None)

@@ -149,6 +149,20 @@ def _pdf(path):
         raise Encrypted("password required") from e
     except pikepdf.PdfError as e:
         raise Corrupt("unreadable PDF") from e
+
+    def text_of(source):
+        try:
+            reader = PdfReader(source)
+            return [(p.extract_text() or "") for p in reader.pages]
+        except Exception as e:
+            raise Corrupt("unreadable text layer") from e
+
+    def text_of_saved():
+        buf = io.BytesIO()
+        pdf.save(buf)
+        buf.seek(0)                          # read back in place: no second copy of the whole file
+        return text_of(buf)
+
     with pdf:
         n = len(pdf.pages)
         if n > MAX_PAGES:
@@ -162,13 +176,12 @@ def _pdf(path):
             for w, h in page_images(page):
                 if w * h > MAX_PIXELS:
                     raise Unsafe("pixel bomb in PDF")
-        buf = io.BytesIO()
-        pdf.save(buf)                              # decrypted copy of an owner-password-only file, in memory
-    try:
-        reader = PdfReader(io.BytesIO(buf.getvalue()))
-        return [(p.extract_text() or "") for p in reader.pages]
-    except Exception as e:
-        raise Corrupt("unreadable text layer") from e
+        if pdf.is_encrypted:                      # an owner-password-only file: pypdf reads a decrypted in-memory copy
+            return text_of_saved()
+        try:
+            return text_of(path)                  # the common case: pypdf streams the file, no whole-PDF copy
+        except Corrupt:                           # a damaged file pikepdf repaired: one normalized copy, then give up
+            return text_of_saved()
 
 
 # ---- zip containers ----

@@ -45,6 +45,37 @@ def test_owner_password_only_pdf_is_read(tmp_path):
     assert extract.extract(fx.pdf_text(tmp_path / "o.pdf", encrypt=("owner", ""))) == ["Hola mundo 1"]
 
 
+def test_an_unencrypted_pdf_is_read_from_the_path_without_an_in_memory_copy(tmp_path, monkeypatch):
+    """Issue 16: serializing the whole file is reserved for files that need it (encrypted, or damaged beyond a direct
+    read). A plain PDF must reach pypdf straight from the path, no Pdf.save."""
+    import pikepdf
+    p = fx.pdf_text(tmp_path / "a.pdf", pages=2)      # the fixture builds the file with Pdf.save: patch after
+
+    def no_save(*a, **k):
+        raise AssertionError("serializing an unencrypted PDF")
+
+    monkeypatch.setattr(pikepdf.Pdf, "save", no_save)
+    assert extract.extract(p) == ["Hola mundo 1", "Hola mundo 2"]
+
+
+def test_a_pdf_pypdf_cannot_read_directly_falls_back_to_a_normalized_copy(tmp_path, monkeypatch):
+    """Issue 16 keeps the old recovery: pikepdf repairs files pypdf refuses, so a failed direct read is retried once
+    from a saved (normalized) copy before the file is called corrupt."""
+    import pypdf
+    real = pypdf.PdfReader
+    direct = []
+
+    def flaky(source, *a, **k):
+        direct.append(isinstance(source, str))          # True = the direct-from-path attempt
+        if isinstance(source, str):
+            raise ValueError("unreadable without repair")
+        return real(source)
+
+    monkeypatch.setattr(pypdf, "PdfReader", flaky)
+    assert extract.extract(fx.pdf_text(tmp_path / "d.pdf")) == ["Hola mundo 1"]
+    assert direct == [True, False]
+
+
 @pytest.mark.parametrize("make,exc", [
     (lambda p: fx.pdf_text(p, encrypt=("o", "user-secret")), extract.Encrypted),
     (lambda p: fx.truncated_zip(p), extract.Corrupt),

@@ -97,8 +97,10 @@ def test_a_ghostscript_timeout_is_an_ocr_timeout(tmp_path, monkeypatch):
 
 
 def test_a_scan_wrapped_in_a_form_xobject_is_still_a_scan(tmp_path):
+    import pikepdf
     p = fx.pdf_with_image(tmp_path / "f.pdf", 2000, 1500, in_form=True)
-    assert pdfocr._image_heavy(p) == [True]
+    with pikepdf.open(p) as pdf:
+        assert pdfocr._image_heavy(pdf) == [True]
 
 
 def test_a_garbage_text_layer_is_replaced_by_ocr(tmp_path):
@@ -113,6 +115,25 @@ def test_mixed_document_is_decided_page_by_page(tmp_path):
     assert out["source"] == ["layer", "ocr", "layer"]
     assert out["conf"][0] is None and out["conf"][1] is not None
     assert has(out["pages"][1]) and "derivada" in out["pages"][2]
+
+
+def test_the_source_pdf_is_opened_once_no_matter_how_many_pages_need_ocr(tmp_path, monkeypatch):
+    """Issue 16: scan detection and per-page extraction share one pikepdf parse; before, every OCR'd page reopened
+    the whole document (O(N^2) on multi-page scans)."""
+    import pikepdf
+    monkeypatch.setattr(pdfocr, "ocr_page", lambda *a, **k: ("texto ocr", str(tmp_path / "o.pdf")))
+    monkeypatch.setattr(pdfocr, "page_confidence", lambda *a, **k: 50.0)
+    real_open, opens = pikepdf.open, []
+
+    def counting(path, *a, **k):
+        opens.append(str(path))
+        return real_open(path, *a, **k)
+
+    monkeypatch.setattr(pikepdf, "open", counting)
+    pdf = fx.pdf_text(tmp_path / "m.pdf", text="#@!", pages=3)      # every layer is debris: all pages are OCR'd
+    out = pdfocr.run(pdf, layer=["", "", ""])
+    assert out["source"] == ["ocr", "ocr", "ocr"]
+    assert opens == [pdf]                                            # one open, not one per page
 
 
 def test_a_page_that_times_out_fails_the_job_as_a_timeout(tmp_path, monkeypatch):
