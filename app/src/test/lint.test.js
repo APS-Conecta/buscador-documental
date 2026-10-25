@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 // A-UX-7 (no barrel import of @nextcloud/vue) and A-UX-9 (colours only from the theme variables), as tests over the sources.
+// #40: no node crypto either, so the elliptic build-time advisory can never reach the browser bundle.
 const files = []
 const walk = (dir) => {
 	for (const f of readdirSync(dir)) {
@@ -30,6 +31,11 @@ describe('source rules', () => {
 
 	it('loads nothing from a third-party host', () => {
 		const bad = files.filter((f) => /https?:\/\/(?!www\.w3\.org)/.test(readFileSync(f, 'utf8')))
+		expect(bad).toEqual([])
+	})
+
+	it('imports no node crypto: the elliptic polyfill never reaches the browser bundle', () => {
+		const bad = files.filter((f) => /from\s+['"](node:)?(crypto(-browserify)?|elliptic|browserify-sign|create-ecdh)(\/[\w.@/-]+)?['"]/.test(readFileSync(f, 'utf8')))
 		expect(bad).toEqual([])
 	})
 })
