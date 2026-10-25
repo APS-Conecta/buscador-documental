@@ -21,7 +21,8 @@ class Throttle {
 		$out = [];
 		foreach (self::DEFAULTS as $lane => $default) {
 			$v = $this->settings->get('cap_' . $lane);
-			$out[$lane] = $v !== null && ctype_digit($v) && (int)$v >= 1 && (int)$v <= 16 ? (int)$v : $default;
+			// one or two digits, 1 to 16 — the exact spellings claim_job accepts, so both sides read the same cap
+			$out[$lane] = $v !== null && ctype_digit($v) && strlen($v) <= 2 && (int)$v >= 1 && (int)$v <= 16 ? (int)$v : $default;
 		}
 		return $out;
 	}

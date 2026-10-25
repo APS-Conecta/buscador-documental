@@ -7,12 +7,11 @@ declare(strict_types=1);
 namespace OCA\BuscadorDocumental\Worker;
 
 use OCA\BuscadorDocumental\Db\IndexDb;
+use OCA\BuscadorDocumental\Ops\Throttle;
 
 /** Does this worker hold the current, unexpired claim on this file? (M6: checked on every meta and content request) */
 class ClaimGuard {
-	public const MAX_ACTIVE_PER_WORKER = 4;
-
-	public function __construct(private IndexDb $db) {
+	public function __construct(private IndexDb $db, private Throttle $throttle) {
 	}
 
 	/** @return array{etag:string}|null null when there is no such active claim */
@@ -30,12 +29,14 @@ class ClaimGuard {
 		return $this->db->rows("SELECT 1 FROM aps_search.settings WHERE key = 'paused' AND value = '1'") !== [];
 	}
 
-	/** True when the worker holds more active claims than the cap allows (derived from the DB, never a cache counter). */
+	/** True when the worker holds more active text-lane claims than the configured cap allows: the same lane, count and
+	 * cap_text fallback claim_job hands claims out under, so a raised cap is not answered with 429s (ADR-0015; derived from
+	 * the DB, never a cache counter). */
 	public function overCap(string $workerId): bool {
 		$rows = $this->db->rows(
-			'SELECT count(*) AS n FROM aps_search.job WHERE claimed_by = ? AND lease_until > clock_timestamp()',
+			"SELECT count(*) AS n FROM aps_search.job WHERE lane = 'text' AND claimed_by = ? AND lease_until > clock_timestamp()",
 			[$workerId],
 		);
-		return (int)$rows[0]['n'] > self::MAX_ACTIVE_PER_WORKER;
+		return (int)$rows[0]['n'] > $this->throttle->show()['text'];
 	}
 }

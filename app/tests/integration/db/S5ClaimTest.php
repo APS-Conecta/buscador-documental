@@ -10,10 +10,6 @@ use PDO;
 
 /** S5 phase 1: the night window, the concurrency caps and worker liveness, all enforced by claim_job. */
 class S5ClaimTest extends DbTestCase {
-	private function set(string $k, string $v): void {
-		$this->app()->prepare('INSERT INTO aps_search.settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value')->execute([$k, $v]);
-	}
-
 	/** A window that contains the present moment in UTC, and one that does not. */
 	private function around(): array {
 		$h = (int)gmdate('G');

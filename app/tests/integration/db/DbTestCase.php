@@ -6,7 +6,13 @@ declare(strict_types=1);
 
 namespace OCA\BuscadorDocumental\Tests\integration\db;
 
+use OCA\BuscadorDocumental\Audit\AuditLog;
+use OCA\BuscadorDocumental\Audit\Pseudonyms;
+use OCA\BuscadorDocumental\Db\IndexDb;
 use OCA\BuscadorDocumental\Migration\SqlScript;
+use OCA\BuscadorDocumental\Ops\Throttle;
+use OCA\BuscadorDocumental\Scope\Settings;
+use OCA\BuscadorDocumental\Worker\ClaimGuard;
 use OCP\DB\IResult;
 use OCP\IDBConnection;
 use PDO;
@@ -75,6 +81,17 @@ SQL);
 	/** A fresh session as the worker role. */
 	protected function worker(): PDO {
 		return $this->open[] = self::connect('bd_worker', 'dev-worker', self::$dbName);
+	}
+
+	/** A ClaimGuard wired as the app wires it, so overCap judges by the configured caps (ADR-0015), not a constant. */
+	protected function claimGuard(): ClaimGuard {
+		$db = new IndexDb($this->connection($this->app()));
+		return new ClaimGuard($db, new Throttle(new Settings($db), new AuditLog($db, new Pseudonyms($db))));
+	}
+
+	/** Writes a settings row the way the occ commands do, bypassing their validation. */
+	protected function set(string $k, string $v): void {
+		$this->app()->prepare('INSERT INTO aps_search.settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value')->execute([$k, $v]);
 	}
 
 	/** Queues one file the way FileIndexer does and returns nothing. */

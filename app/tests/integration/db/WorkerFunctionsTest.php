@@ -11,6 +11,7 @@ use OCA\BuscadorDocumental\Index\IndexEraser;
 
 /** A-SEC-4 part 2 and A-SEC-3 (H1/H2): claim, write, zombie workers, erase races. */
 class WorkerFunctionsTest extends DbTestCase {
+
 	public function testHappyPathIndexesAndRemovesJob(): void {
 		$this->seedFile(10);
 		$w = $this->worker();
@@ -133,7 +134,7 @@ class WorkerFunctionsTest extends DbTestCase {
 		$a = $this->app();
 		$a->exec("INSERT INTO aps_search.job (lane, file_id, idem_key, claimed_by, claimed_etag, lease_epoch, lease_until, gen) VALUES ('vec', 10, '10:e1:1', 'w1', 'e1', 1, now() + interval '5 minutes', 1)");
 		$jobId = (int)$a->query("SELECT id FROM aps_search.job WHERE lane = 'vec'")->fetchColumn();
-		$guard = new \OCA\BuscadorDocumental\Worker\ClaimGuard(new \OCA\BuscadorDocumental\Db\IndexDb($this->connection($a)));
+		$guard = $this->claimGuard();
 		$this->assertNull($guard->activeClaim('w1', $jobId, 1, 10), 'only the text lane reads the file bytes through the channel');
 	}
 
@@ -149,6 +150,43 @@ class WorkerFunctionsTest extends DbTestCase {
 		$this->assertSame(0, (int)$s->fetchColumn());
 		$s->execute(['text', 'w2']);
 		$this->assertSame(2, (int)$s->fetchColumn());
+	}
+
+	public function testOverCapFollowsTheConfiguredTextCap(): void {
+		for ($i = 1; $i <= 6; $i++) {
+			$this->seedFile($i);
+		}
+		$w = $this->worker();
+		$this->set('cap_text', '8');
+		$got = 0;
+		while ($this->claim($w, 'w1') !== null) {
+			$got++;
+		}
+		$this->assertSame(6, $got);
+		$this->assertFalse($this->claimGuard()->overCap('w1'), 'a raised cap_text is not answered with a false 429');
+		$this->set('cap_text', '6');
+		$this->assertFalse($this->claimGuard()->overCap('w1'), 'exactly the cap in force is not over it, the same line claim_job stops at');
+		$this->set('cap_text', '4');
+		$this->assertTrue($this->claimGuard()->overCap('w1'), 'a lowered cap bites on the claims already held');
+		$this->set('cap_text', 'many');
+		$this->assertTrue($this->claimGuard()->overCap('w1'), 'an unusable value means the default of four, as in claim_job');
+		$this->set('cap_text', '016');
+		$this->assertTrue($this->claimGuard()->overCap('w1'), 'a three-digit spelling is not one or two digits either: claim_job reads the default of four');
+	}
+
+	public function testOverCapCountsOnlyTheTextLane(): void {
+		for ($i = 1; $i <= 5; $i++) {
+			$this->seedFile($i);
+		}
+		$w = $this->worker();
+		$s = $w->prepare('SELECT count(*) FROM aps_search.claim_job(?, 10, ?, 900)');
+		$s->execute(['text', 'w1']);
+		$this->assertSame(4, (int)$s->fetchColumn(), 'the default text cap is four');
+		$a = $this->app();
+		$a->exec("INSERT INTO aps_search.job (lane, file_id, idem_key, claimed_by, claimed_etag, lease_epoch, lease_until, gen) VALUES ('vec', 5, '5:e1:1', 'w1', 'e1', 1, now() + interval '5 minutes', 1)");
+		$this->assertFalse($this->claimGuard()->overCap('w1'), 'a vec-lane claim never makes the text-lane fetches look over cap');
+		$a->exec("UPDATE aps_search.job SET claimed_by = 'w1', claimed_etag = 'e1', lease_epoch = 1, lease_until = now() + interval '5 minutes' WHERE lane = 'text' AND file_id = 5");
+		$this->assertTrue($this->claimGuard()->overCap('w1'), 'five text claims is over the default cap of four');
 	}
 
 	public function testGlobalLeaseCapStopsWorkerIdRenaming(): void {

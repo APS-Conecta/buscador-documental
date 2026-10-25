@@ -10,7 +10,6 @@ use OCA\BuscadorDocumental\Db\IndexDb;
 use OCA\BuscadorDocumental\Scope\Settings;
 use OCA\BuscadorDocumental\Status\Reindexer;
 use OCA\BuscadorDocumental\Status\StatusReport;
-use OCA\BuscadorDocumental\Worker\ClaimGuard;
 
 /** S3 phase 3: pause stops new claims in the database itself; status and reindex report and queue numbers only. */
 class PauseStatusTest extends DbTestCase {
@@ -46,7 +45,7 @@ class PauseStatusTest extends DbTestCase {
 	}
 
 	public function testTheClaimGuardReportsPause(): void {
-		$g = new ClaimGuard($this->db());
+		$g = $this->claimGuard();
 		$this->assertFalse($g->isPaused());
 		(new Settings($this->db()))->setPaused(true);
 		$this->assertTrue($g->isPaused());
