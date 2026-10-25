@@ -19,7 +19,7 @@ class HybridPgTest extends DbTestCase {
 		return new CandidateQuery(new IndexDb($this->connection($this->app())));
 	}
 
-	private function set(): string {
+	private function scopeArray(): string {
 		return IndexDb::textArray(self::SET);
 	}
 
@@ -58,7 +58,7 @@ class HybridPgTest extends DbTestCase {
 		$best = $this->doc(2, ['u:b'], 'medio uno', [0.7, 0.7, 0], chunk: 0);
 		$this->doc(2, ['u:b'], 'medio dos', [0, 1, 0], chunk: 1);
 		$this->doc(3, ['u:b'], 'lejano', [-1, 0, 0]);
-		$rows = $this->query()->significado([1, 0.1, 0], 1, $this->set(), new Filters(), 10, true);
+		$rows = $this->query()->significado([1, 0.1, 0], 1, $this->scopeArray(), new Filters(), 10, true);
 		$this->assertSame([1, 2, 3], $this->files($rows));
 		$this->assertSame($best, (int)$rows[1]['chunk_id'], 'the closer of the two chunks of file 2');
 	}
@@ -69,18 +69,18 @@ class HybridPgTest extends DbTestCase {
 		$this->doc(2, ['g:staff'], 'grupo', [1, 0, 0]);
 		$this->doc(3, ['x:recheck'], 'sin modelar', [1, 0, 0]);
 		$q = $this->query();
-		$this->assertSame([2, 3], $this->files($q->significado([1, 0, 0], 1, $this->set(), new Filters(), 10, true)));
-		$this->assertSame([], $this->files($q->exacta('ajeno', [], $this->set(), new Filters(), 10)), 'keyword leg too');
+		$this->assertSame([2, 3], $this->files($q->significado([1, 0, 0], 1, $this->scopeArray(), new Filters(), 10, true)));
+		$this->assertSame([], $this->files($q->exacta('ajeno', [], $this->scopeArray(), new Filters(), 10)), 'keyword leg too');
 	}
 
 	public function testExactaUsesAlternativesAndRelaxesToOrWhenTheStrictPassIsThin(): void {
 		$this->doc(1, ['u:b'], 'informe del Resumen Estadístico Mensual de junio');
 		$this->doc(2, ['u:b'], 'hemoglobina glicosilada del paciente');
 		$q = $this->query();
-		$this->assertSame([], $this->files($q->exacta('REM', [], $this->set(), new Filters(), 10)));
-		$this->assertSame([1], $this->files($q->exacta('REM', ['resumen estadistico mensual'], $this->set(), new Filters(), 10)));
-		$this->assertSame([], $this->files($q->exacta('hemoglobina inexistente', [], $this->set(), new Filters(), 10, relax: false)), 'strict AND finds nothing');
-		$this->assertSame([2], $this->files($q->exacta('hemoglobina inexistente', [], $this->set(), new Filters(), 10, relax: true)), 'OR relaxation finds it');
+		$this->assertSame([], $this->files($q->exacta('REM', [], $this->scopeArray(), new Filters(), 10)));
+		$this->assertSame([1], $this->files($q->exacta('REM', ['resumen estadistico mensual'], $this->scopeArray(), new Filters(), 10)));
+		$this->assertSame([], $this->files($q->exacta('hemoglobina inexistente', [], $this->scopeArray(), new Filters(), 10, relax: false)), 'strict AND finds nothing');
+		$this->assertSame([2], $this->files($q->exacta('hemoglobina inexistente', [], $this->scopeArray(), new Filters(), 10, relax: true)), 'OR relaxation finds it');
 	}
 
 	public function testFiltersNarrowEveryLeg(): void {
@@ -99,8 +99,8 @@ class HybridPgTest extends DbTestCase {
 			'folder and type' => [new Filters(mimes: ['text/plain'], folderId: 5), [3]],
 		];
 		foreach ($cases as $name => [$f, $want]) {
-			$kw = $this->files($q->exacta('glucosa', [], $this->set(), $f, 10));
-			$vec = $this->files($q->significado([1, 0, 0], 1, $this->set(), $f, 10, true));
+			$kw = $this->files($q->exacta('glucosa', [], $this->scopeArray(), $f, 10));
+			$vec = $this->files($q->significado([1, 0, 0], 1, $this->scopeArray(), $f, 10, true));
 			sort($kw);
 			sort($vec);
 			$this->assertSame($want, $kw, "keyword: $name");
@@ -115,8 +115,8 @@ class HybridPgTest extends DbTestCase {
 		$a->exec("INSERT INTO aps_search.file_meta (file_id, name, mime, mtime, ancestors) SELECT g, 'n', 'image/png', 1, ARRAY[1]::bigint[] FROM generate_series(100, 10150) g");
 		$a->exec("INSERT INTO aps_search.chunk (file_id, page_no, ord, text) SELECT g, 1, 0, 'hemoglobina reciente' FROM generate_series(100, 10150) g");
 		$q = $this->query();
-		$this->assertNotContains(1, $this->files($q->exacta('hemoglobina', [], $this->set(), new Filters(), 20000)), 'unfiltered: only the newest 10 000 chunks are ranked');
-		$this->assertSame([1], $this->files($q->exacta('hemoglobina', [], $this->set(), new Filters(mimes: ['application/pdf']), 10)), 'the filter runs before the pre-limit');
+		$this->assertNotContains(1, $this->files($q->exacta('hemoglobina', [], $this->scopeArray(), new Filters(), 20000)), 'unfiltered: only the newest 10 000 chunks are ranked');
+		$this->assertSame([1], $this->files($q->exacta('hemoglobina', [], $this->scopeArray(), new Filters(mimes: ['application/pdf']), 10)), 'the filter runs before the pre-limit');
 	}
 
 	public function testTheAnnPathAgreesWithTheExactPathOnASmallCorpus(): void {
@@ -128,8 +128,8 @@ class HybridPgTest extends DbTestCase {
 		$q = $this->query();
 		$q->buildIndex(1);
 		$this->assertTrue($q->hasAnnIndex(1));
-		$exact = $this->files($q->significado([0.3, -0.2, 0.9], 1, $this->set(), new Filters(), 10, true));
-		$ann = $this->files($q->significado([0.3, -0.2, 0.9], 1, $this->set(), new Filters(), 10, false));
+		$exact = $this->files($q->significado([0.3, -0.2, 0.9], 1, $this->scopeArray(), new Filters(), 10, true));
+		$ann = $this->files($q->significado([0.3, -0.2, 0.9], 1, $this->scopeArray(), new Filters(), 10, false));
 		$this->assertCount(10, $ann);
 		$this->assertGreaterThanOrEqual(9, count(array_intersect($exact, $ann)), 'ANN recall on 60 vectors');
 	}
@@ -139,21 +139,21 @@ class HybridPgTest extends DbTestCase {
 			$this->doc($i, $i % 2 ? ['u:b'] : ['u:z'], "t $i", null, $i <= 10 ? 'application/pdf' : 'text/plain');
 		}
 		$q = $this->query();
-		$this->assertSame(15, $q->accessibleFiles($this->set(), new Filters(), 100));
-		$this->assertSame(5, $q->accessibleFiles($this->set(), new Filters(mimes: ['application/pdf']), 100));
-		$this->assertSame(4, $q->accessibleFiles($this->set(), new Filters(), 3), 'capped at limit + 1');
+		$this->assertSame(15, $q->accessibleFiles($this->scopeArray(), new Filters(), 100));
+		$this->assertSame(5, $q->accessibleFiles($this->scopeArray(), new Filters(mimes: ['application/pdf']), 100));
+		$this->assertSame(4, $q->accessibleFiles($this->scopeArray(), new Filters(), 3), 'capped at limit + 1');
 	}
 
 	public function testAnUnknownGenerationIsRefused(): void {
 		$this->expectException(\InvalidArgumentException::class);
-		$this->query()->significado([1, 0, 0], 99, $this->set(), new Filters(), 10, true);
+		$this->query()->significado([1, 0, 0], 99, $this->scopeArray(), new Filters(), 10, true);
 	}
 
 	public function testTheVectorIsInertEvenIfItWasForged(): void {
 		$this->generation();
 		$this->doc(1, ['u:b'], 'x', [1, 0, 0]);
 		$this->expectException(\InvalidArgumentException::class);
-		$this->query()->significado([1, 0, NAN], 1, $this->set(), new Filters(), 10, true);
+		$this->query()->significado([1, 0, NAN], 1, $this->scopeArray(), new Filters(), 10, true);
 	}
 
 	public function testThePropiedadFilterSplitsMineFromSharedInEveryLeg(): void {
@@ -164,8 +164,8 @@ class HybridPgTest extends DbTestCase {
 		$q = $this->query();
 		foreach ([['mine', [1]], ['shared', [2, 3]]] as [$which, $want]) {
 			$f = (new Filters(owner: $which))->forUser('b', 60.0);
-			$kw = $this->files($q->exacta('glucosa', [], $this->set(), $f, 10));
-			$vec = $this->files($q->significado([1, 0, 0], 1, $this->set(), $f, 10, true));
+			$kw = $this->files($q->exacta('glucosa', [], $this->scopeArray(), $f, 10));
+			$vec = $this->files($q->significado([1, 0, 0], 1, $this->scopeArray(), $f, 10, true));
 			sort($kw);
 			sort($vec);
 			$this->assertSame($want, $kw, "keyword $which");
@@ -180,17 +180,17 @@ class HybridPgTest extends DbTestCase {
 		$this->doc(3, ['u:b'], 'glucosa con capa de texto', [1, 0, 0]);
 		$q = $this->query();
 		$f = (new Filters(uncertain: true))->forUser('b', 60.0);
-		$this->assertSame([2], $this->files($q->exacta('glucosa', [], $this->set(), $f, 10)));
-		$this->assertSame([2], $this->files($q->significado([1, 0, 0], 1, $this->set(), $f, 10, true)));
+		$this->assertSame([2], $this->files($q->exacta('glucosa', [], $this->scopeArray(), $f, 10)));
+		$this->assertSame([2], $this->files($q->significado([1, 0, 0], 1, $this->scopeArray(), $f, 10, true)));
 		$strict = (new Filters(uncertain: true))->forUser('b', 30.0);
-		$this->assertSame([], $this->files($q->exacta('glucosa', [], $this->set(), $strict, 10)), 'the threshold is the caller\'s setting');
+		$this->assertSame([], $this->files($q->exacta('glucosa', [], $this->scopeArray(), $strict, 10)), 'the threshold is the caller\'s setting');
 	}
 
 	public function testTheExactScanCountIgnoresTheChunkLevelFilter(): void {
 		$this->doc(1, ['u:b'], 'a', null, conf: 10.0, owner: 'b');
 		$this->doc(2, ['u:b'], 'b', null, conf: 99.0, owner: 'b');
 		$f = (new Filters(owner: 'mine', uncertain: true))->forUser('b', 60.0);
-		$this->assertSame(2, $this->query()->accessibleFiles($this->set(), $f, 100), 'only the file-level part narrows the cheap count');
+		$this->assertSame(2, $this->query()->accessibleFiles($this->scopeArray(), $f, 100), 'only the file-level part narrows the cheap count');
 	}
 
 	public function testTheRelaxationDropsVeryCommonTermsAndBothPlansAgree(): void {
@@ -200,11 +200,11 @@ class HybridPgTest extends DbTestCase {
 		}
 		$a->exec('ANALYZE aps_search.chunk');
 		$q = $this->query();
-		$onlyRare = $this->files($q->exacta('comunisimo rarisimo', [], $this->set(), new Filters(), 100, relax: true));
+		$onlyRare = $this->files($q->exacta('comunisimo rarisimo', [], $this->scopeArray(), new Filters(), 100, relax: true));
 		$this->assertSame([7], $onlyRare, 'the very common word is left out of the OR, so only the rare one decides');
 		$broad = $this->query();
 		$broad->narrowFiles = 0;                                               // the plan for readers of many files
-		$this->assertSame($onlyRare, $this->files($broad->exacta('comunisimo rarisimo', [], $this->set(), new Filters(), 100, relax: true)));
-		$this->assertSame($this->files($q->exacta('comunisimo', [], $this->set(), new Filters(), 100, relax: false)), $this->files($broad->exacta('comunisimo', [], $this->set(), new Filters(), 100, relax: false)));
+		$this->assertSame($onlyRare, $this->files($broad->exacta('comunisimo rarisimo', [], $this->scopeArray(), new Filters(), 100, relax: true)));
+		$this->assertSame($this->files($q->exacta('comunisimo', [], $this->scopeArray(), new Filters(), 100, relax: false)), $this->files($broad->exacta('comunisimo', [], $this->scopeArray(), new Filters(), 100, relax: false)));
 	}
 }
