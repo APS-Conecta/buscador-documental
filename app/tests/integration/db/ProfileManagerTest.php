@@ -214,13 +214,13 @@ class ProfileManagerTest extends DbTestCase {
 		}
 		$this->app()->exec('SELECT aps_search.enqueue_vec_backfill(1, 10)');
 		foreach ([$b, $c, $d] as $_) {
-			$this->giveUpVecJob($this->claimVecJob());                     // generation 1 gives up on B, C and D
+			$this->giveUpVecJob($this->claim($this->worker(), 'vec-w', lane: 'vec'));     // generation 1 gives up on B, C and D
 		}
 		$this->app()->exec("SELECT aps_search.erase_files(ARRAY[$d]::bigint[], 'excluded')");     // D: no chunks left, vec_state stays failed
 		$this->generation(2);
 		$this->embedIn(2, $b);
 		$this->app()->exec('SELECT aps_search.enqueue_vec_backfill(2, 1)');
-		$claim = $this->claimVecJob();
+		$claim = $this->claim($this->worker(), 'vec-w', lane: 'vec');
 		$this->assertSame($a, $claim['file_id']);
 		$this->giveUpVecJob($claim);                                        // generation 2 gives up on A
 		$this->app()->exec('SELECT aps_search.mark_generation_ready(2)');
@@ -235,10 +235,10 @@ class ProfileManagerTest extends DbTestCase {
 		$this->indexedFile($f, 1);
 		$this->indexedFile($g);
 		$this->app()->exec('SELECT aps_search.enqueue_vec_backfill(1, 10)');
-		$this->giveUpVecJob($this->claimVecJob());                          // generation 1 gives up on G
+		$this->giveUpVecJob($this->claim($this->worker(), 'vec-w', lane: 'vec'));     // generation 1 gives up on G
 		$this->generation(2);
 		$this->app()->exec('SELECT aps_search.enqueue_vec_backfill(2, 1)');
-		$this->giveUpVecJob($this->claimVecJob());                          // generation 2 gives up on F
+		$this->giveUpVecJob($this->claim($this->worker(), 'vec-w', lane: 'vec'));     // generation 2 gives up on F
 		$m = $this->manager();
 		$m->drop(2);
 		$this->assertSame(2, $m->set('bge-m3', 'http://ollama:11434', null)['gen'], 'the number is free again');

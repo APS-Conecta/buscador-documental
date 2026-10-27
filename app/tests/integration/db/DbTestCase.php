@@ -103,20 +103,11 @@ SQL);
 	}
 
 	/** @return array{job_id:int, lease_epoch:int, file_id:int, etag:string}|null */
-	protected function claim(PDO $pdo, string $who = 'w1', int $lease = 900): ?array {
+	protected function claim(PDO $pdo, string $who = 'w1', int $lease = 900, string $lane = 'text'): ?array {
 		$s = $pdo->prepare('SELECT * FROM aps_search.claim_job(?, 1, ?, ?)');
-		$s->execute(['text', $who, $lease]);
+		$s->execute([$lane, $who, $lease]);
 		$r = $s->fetch(PDO::FETCH_ASSOC);
 		return $r === false ? null : array_map(static fn ($v) => is_numeric($v) ? (int)$v : $v, $r);
-	}
-
-	/** @return array{job_id:int, lease_epoch:int, file_id:int, etag:string} the next vec job, claimed as the worker */
-	protected function claimVecJob(): array {
-		$s = $this->worker()->prepare("SELECT * FROM aps_search.claim_job('vec', 1, 'vec-w', 900)");
-		$s->execute();
-		$r = $s->fetch(PDO::FETCH_ASSOC);
-		$this->assertIsArray($r, 'a vec job to claim');
-		return array_map(static fn ($v) => is_numeric($v) ? (int)$v : $v, $r);
 	}
 
 	/** What the worker does when embedding a claimed vec job fails for good: fail_job with a reason that is not retryable. */

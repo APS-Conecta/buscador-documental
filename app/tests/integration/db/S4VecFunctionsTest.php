@@ -255,7 +255,7 @@ class S4VecFunctionsTest extends DbTestCase {
 		$this->indexed(11, 1);
 		$this->generation(1, 'building');
 		$this->assertSame(1, (int)$this->app()->query('SELECT aps_search.enqueue_vec_backfill(1, 1)')->fetchColumn());
-		$this->giveUpVecJob($this->claimVecJob());                            // file 10's job: the worker gives up for good
+		$this->giveUpVecJob($this->claim($this->worker(), 'vec-w', lane: 'vec'));     // file 10's job: the worker gives up for good
 		$this->assertSame(1, (int)$this->app()->query('SELECT aps_search.enqueue_vec_backfill(1, 10)')->fetchColumn(), 'only the file that has not failed');
 		$this->assertSame(0, (int)$this->app()->query("SELECT count(*) FROM aps_search.job WHERE lane = 'vec' AND file_id = 10")->fetchColumn());
 	}

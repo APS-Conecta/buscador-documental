@@ -156,10 +156,10 @@ class DoctorTest extends DbTestCase {
 		}
 		$a->exec("INSERT INTO aps_search.chunk_vec_1 (chunk_id, file_id, vec) SELECT chunk_id, file_id, '[1,0,0]' FROM aps_search.chunk WHERE file_id = $f");
 		$a->exec('SELECT aps_search.enqueue_vec_backfill(1, 10)');
-		$this->giveUpVecJob($this->claimVecJob());                          // the active generation gives up on G
+		$this->giveUpVecJob($this->claim($this->worker(), 'vec-w', lane: 'vec'));     // the active generation gives up on G
 		$a->exec("SELECT aps_search.create_generation(2, 'bge-m3', 'bge-m3:567m', 'sha256:new', 3, 'f16', '', '', 512)");
 		$a->exec('SELECT aps_search.enqueue_vec_backfill(2, 1)');
-		$this->giveUpVecJob($this->claimVecJob());                          // generation 2, still building, gives up on F
+		$this->giveUpVecJob($this->claim($this->worker(), 'vec-w', lane: 'vec'));     // generation 2, still building, gives up on F
 		$r = $this->checks()['vector_failures'];
 		$this->assertSame('warn', $r['status']);
 		$this->assertStringStartsWith('2 file(s)', $r['detail'], "F's failure counts although searches do not use generation 2 yet");

@@ -137,7 +137,7 @@ class VecBackfillTest extends DbTestCase {
 		$this->embed(1, $this->indexed(7), 7);
 		$this->gen(2);
 		$this->backfill()->tick(100);
-		$c = $this->claimVecJob();
+		$c = $this->claim($this->worker(), 'vec-w', lane: 'vec');
 		$this->assertSame(['7:e1:2'], [$this->vecJobs(7)[0]], 'only generation 2 lacks the vectors');
 		$this->giveUpVecJob($c);
 		$this->backfill()->tick(100);
@@ -148,7 +148,7 @@ class VecBackfillTest extends DbTestCase {
 		$this->indexed(7);
 		$this->gen(1, 'active');
 		$this->backfill()->tick(100);
-		$this->giveUpVecJob($this->claimVecJob());
+		$this->giveUpVecJob($this->claim($this->worker(), 'vec-w', lane: 'vec'));
 		$this->gen(2);
 		$this->backfill()->tick(100);
 		$this->assertSame(['7:e1:2'], $this->vecJobs(7), 'generation 2 gets its own try; generation 1 does not try again');
@@ -158,7 +158,7 @@ class VecBackfillTest extends DbTestCase {
 		$this->indexed(7);
 		$this->gen(1, 'active');
 		$this->backfill()->tick(100);
-		$this->giveUpVecJob($this->claimVecJob());
+		$this->giveUpVecJob($this->claim($this->worker(), 'vec-w', lane: 'vec'));
 		$this->backfill()->tick(100);
 		$this->assertSame([], $this->vecJobs(7));
 		$this->assertSame('failed', $this->app()->query('SELECT vec_state FROM aps_search.file_state WHERE file_id = 7')->fetchColumn());
@@ -169,7 +169,7 @@ class VecBackfillTest extends DbTestCase {
 		$this->embed(1, $this->indexed(7), 7);
 		$this->gen(2);
 		$this->backfill()->tick(100);
-		$this->claimVecJob();
+		$this->claim($this->worker(), 'vec-w', lane: 'vec');
 		$this->app()->exec("UPDATE aps_search.job SET attempts = 5, lease_until = now() - interval '1 second' WHERE lane = 'vec'");
 		$this->worker()->query("SELECT * FROM aps_search.claim_job('vec', 1, 'other', 900)")->fetchAll();     // runs the give-up step
 		$this->assertSame([], $this->vecJobs(7), 'given up after five claims');
@@ -182,7 +182,7 @@ class VecBackfillTest extends DbTestCase {
 		$this->embed(1, $this->indexed(7), 7);
 		$this->gen(2);
 		$this->backfill()->tick(100);
-		$this->giveUpVecJob($this->claimVecJob());                          // generation 2 gave up on file 7
+		$this->giveUpVecJob($this->claim($this->worker(), 'vec-w', lane: 'vec'));     // generation 2 gave up on file 7
 		$this->app()->exec("INSERT INTO aps_search.job (lane, file_id, idem_key) VALUES ('text', 7, '7:e1:again')");
 		$w = $this->worker();
 		$this->write($w, $this->claim($w));                                 // the file is read again
@@ -195,7 +195,7 @@ class VecBackfillTest extends DbTestCase {
 		$this->indexed(7);
 		$this->gen(1, 'active');
 		$this->backfill()->tick(100);
-		$c = $this->claimVecJob();
+		$c = $this->claim($this->worker(), 'vec-w', lane: 'vec');
 		$this->app()->exec("UPDATE aps_search.file_state SET etag = 'e2' WHERE file_id = 7");       // the file changed meanwhile
 		$this->giveUpVecJob($c);
 		$this->assertSame('pending', $this->app()->query('SELECT vec_state FROM aps_search.file_state WHERE file_id = 7')->fetchColumn());
