@@ -227,6 +227,22 @@ class OutboxProcessorTest extends DbTestCase {
 		$this->assertSame(['enqueued' => 1], $runner->runBatch(50));
 	}
 
+	public function testAnUploadWhileReadingIsPausedLeavesNoRowOfTheBatchClaimed(): void {
+		[$db, $rules, $settings, $p, $outbox] = $this->build();
+		$rules->addFolder(11, 'occ');
+		$settings->setPaused(true);
+		$outbox->touch(13, 'file');                                       // the uploaded file
+		$outbox->touch(12, 'subtree');                                    // its folder, which queues 13 again in the same batch
+		$runner = new OutboxRunner($db, $outbox, $p, $this->createMock(LoggerInterface::class));
+		$this->assertSame(['held' => 1, 'expanded' => 1], $runner->runBatch(50));
+		$this->assertSame(0, (int)$db->rows('SELECT count(*) AS n FROM aps_search.outbox WHERE claimed_at IS NOT NULL AND processed_at IS NULL')[0]['n']);
+		$waiting = $db->rows("SELECT attempts FROM aps_search.outbox WHERE file_id = 13 AND kind = 'file' AND processed_at IS NULL AND claimed_at IS NULL");
+		$this->assertSame([0], array_map('intval', array_column($waiting, 'attempts')), 'one waiting row for the file, no attempt spent');
+		$settings->setPaused(false);
+		$runner->runBatch(50);
+		$this->assertSame(1, array_count_values($this->enqueued)[13] ?? 0, 'read once after resume');
+	}
+
 	public function testATenThousandEventStormIsOneRow(): void {
 		[$db, , , , $outbox] = $this->build();
 		for ($i = 0; $i < 10000; $i++) {
@@ -314,6 +330,72 @@ class OutboxProcessorTest extends DbTestCase {
 		$pending = $db->rows('SELECT id FROM aps_search.outbox WHERE processed_at IS NULL');
 		$this->assertCount(1, $pending, 'the later event survived as its own row');
 		$this->assertNotSame($claimed[0]['id'], (int)$pending[0]['id']);
+	}
+
+	public static function handBacks(): array {
+		return ['held while paused' => ['release'], 'failed, retried later' => ['retryLater']];
+	}
+
+	/** @dataProvider handBacks */
+	public function testHandingBackARowWhoseFileHasANewerEventKeepsOnlyTheNewer(string $method): void {
+		[$db, , , , $outbox] = $this->build();
+		$outbox->touch(13, 'file');
+		$oldId = $outbox->claim(10)[0]['id'];
+		$outbox->touch(13, 'file');                                       // a newer event while the row is in flight
+		$newId = (int)$db->rows('SELECT max(id) AS id FROM aps_search.outbox')[0]['id'];
+		$outbox->{$method}([$oldId]);
+		$waiting = $db->rows("SELECT id, attempts, (not_before <= now())::int AS due FROM aps_search.outbox
+			WHERE file_id = 13 AND kind = 'file' AND processed_at IS NULL AND claimed_at IS NULL");
+		$this->assertCount(1, $waiting, 'one waiting row for the file');
+		$this->assertSame($newId, (int)$waiting[0]['id'], 'the newer event carries the work');
+		$this->assertSame(0, (int)$waiting[0]['attempts']);
+		$this->assertSame(1, (int)$waiting[0]['due'], 'and is not held back by a backoff');
+		$this->assertNotNull($db->rows('SELECT processed_at FROM aps_search.outbox WHERE id = ?', [$oldId])[0]['processed_at'], 'the old row is settled');
+		$this->assertSame([$newId], array_column($outbox->claim(10), 'id'), 'the old row is never claimed again');
+	}
+
+	public function testHandingBackAMixOfSupersededAndOrdinaryRowsSettlesEachCorrectly(): void {
+		[$db, , , , $outbox] = $this->build();
+		$outbox->touch(13, 'file');
+		$outbox->touch(17, 'file');
+		[$a13, $b17] = array_column($outbox->claim(10), 'id');
+		$outbox->touch(13, 'file');
+		$n13 = (int)$db->rows('SELECT max(id) AS id FROM aps_search.outbox')[0]['id'];
+		// the first run died: its stale claims are taken again together with the newer row (also how rows stuck before this fix recover)
+		$db->execute("UPDATE aps_search.outbox SET claimed_at = now() - interval '11 minutes' WHERE claimed_at IS NOT NULL");
+		$this->assertSame([$a13, $b17, $n13], array_column($outbox->claim(10), 'id'));
+		$outbox->release([$a13, $b17, $n13]);
+		$row = fn (int $id): array => array_map('intval', $db->rows('SELECT attempts, (processed_at IS NOT NULL)::int AS done, (claimed_at IS NOT NULL)::int AS claimed
+			FROM aps_search.outbox WHERE id = ?', [$id])[0]);
+		$this->assertSame(['attempts' => 0, 'done' => 0, 'claimed' => 0], $row($n13), 'the newer row waits with its attempt given back');
+		$this->assertSame(1, $row($a13)['done'], 'the older row of the same file is settled');
+		$this->assertSame(['attempts' => 1, 'done' => 0, 'claimed' => 0], $row($b17), 'an ordinary row is released as before');
+		$this->assertSame(0, (int)$db->rows('SELECT count(*) AS n FROM aps_search.outbox WHERE claimed_at IS NOT NULL AND processed_at IS NULL')[0]['n']);
+	}
+
+	public function testAnEventCommittedWhileARowIsHandedBackDoesNotMakeItFail(): void {
+		$db = new class($this->connection($this->app())) extends IndexDb {
+			public ?\Closure $beforeHandBack = null;
+
+			public function execute(string $sql, array $params = []): int {
+				if ($this->beforeHandBack !== null && str_contains($sql, 'claimed_at = NULL')) {
+					[$hook, $this->beforeHandBack] = [$this->beforeHandBack, null];
+					$hook();
+				}
+				return parent::execute($sql, $params);
+			}
+		};
+		$outbox = new Outbox($db);
+		$outbox->touch(13, 'file');
+		$oldId = $outbox->claim(10)[0]['id'];
+		$other = new Outbox(new IndexDb($this->connection($this->app())));    // another request on its own session
+		$db->beforeHandBack = static fn () => $other->touch(13, 'file');   // commits after the check for a newer row, before the hand-back
+		$outbox->release([$oldId]);
+		$newId = (int)$db->rows('SELECT max(id) AS id FROM aps_search.outbox')[0]['id'];
+		$this->assertNotSame($oldId, $newId);
+		$waiting = $db->rows("SELECT id FROM aps_search.outbox WHERE file_id = 13 AND kind = 'file' AND processed_at IS NULL AND claimed_at IS NULL");
+		$this->assertSame([$newId], array_map('intval', array_column($waiting, 'id')), 'the concurrent event carries the work');
+		$this->assertNotNull($db->rows('SELECT processed_at FROM aps_search.outbox WHERE id = ?', [$oldId])[0]['processed_at'], 'the old row is settled');
 	}
 
 	public function testAParkedRowNeverBlocksALaterEvent(): void {
