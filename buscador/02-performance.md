@@ -45,7 +45,7 @@ Max file size, max pages, max pixels, zip expansion ratio, per-file timeout, xls
 | Max file size | 250 MB | a 300 dpi JPEG scan page is ~0.7 MB [S0]; 250 MB is ~350 such pages |
 | Max pages per file | 300 | worst measured page 9.6 s (deskew+rotate): 300 pages = 48 min on one core |
 | Max pixels per page | 50 MP | A4 at 300 dpi is 8.7 MP; 50 MP covers A2 at 300 dpi and sits below Pillow's decompression-bomb limit (89 MP) |
-| Per-page OCR timeout | 180 s | `--tesseract-timeout 180`; no sample came close (max 9.6 s) |
+| Per-page OCR timeout | 300 s per OCR tool call (BD_PAGE_TIMEOUT) | also ocrmypdf's `--tesseract-timeout`, so a slow page fails the file as timeout instead of being stored blank; no sample came close (max 9.6 s) |
 | Per-file timeout | min(3600 s, 12 s x pages + 60 s) | 1.25x the worst measured page time per page |
 | Lease length | per-file timeout + 60 s, renewed after each page | checkpoint per page |
 | Zip expansion ratio | 100:1 and 1 GB total uncompressed | policy default, **not measured in S0** (no archive corpus); S2 proves it with the zip-bomb tests |

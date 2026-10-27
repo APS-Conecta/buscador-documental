@@ -158,6 +158,22 @@ def scan_pdf(path, lines=LINES, rotate=0, garbage_layer=False, layer_text=None, 
     return str(path)
 
 
+def slow_tesseract(tmp, seconds):
+    """A `tesseract` wrapper for PATH: ocrmypdf's page-OCR call (`... txt`) sleeps `seconds` and adds a line to the
+    log first. OSD, the version probes and the confidence `tsv` call pass straight through. Returns (bin_dir, log)."""
+    import shlex
+    import shutil
+    real = shutil.which("tesseract")              # resolved before the caller puts the wrapper on PATH
+    bin_dir, log = tmp / "bin", tmp / "tesseract.log"
+    bin_dir.mkdir()
+    log.touch()
+    wrapper = bin_dir / "tesseract"
+    wrapper.write_text(f'#!/bin/sh\ncase " $* " in *" txt "*) echo ocr >> {shlex.quote(str(log))}; sleep {seconds};; esac\n'
+                       f'exec {shlex.quote(real)} "$@"\n')
+    wrapper.chmod(0o755)
+    return str(bin_dir), log
+
+
 def merge_pdfs(path, parts):
     out = pikepdf.new()
     for p in parts:
