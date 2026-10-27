@@ -20,7 +20,7 @@ use OCP\IConfig;
  */
 class Doctor {
 	private const APP = 'buscador_documental';
-	public const SCHEMA = 5;
+	public const SCHEMA = 6;
 
 	public function __construct(
 		private IndexDb $db,

@@ -97,7 +97,7 @@ class S3SchemaTest extends DbTestCase {
 	}
 
 	public function testSchemaVersionIsReadableByTheWorker(): void {
-		$this->assertSame(5, (int)$this->worker()->query('SELECT aps_search.schema_version()')->fetchColumn());
+		$this->assertSame(6, (int)$this->worker()->query('SELECT aps_search.schema_version()')->fetchColumn());
 	}
 
 	public function testNextcloudUserCanUseTheNewTables(): void {
@@ -145,7 +145,7 @@ class S3SchemaTest extends DbTestCase {
 			$this->assertSame(0, (int)$app->query("SELECT count(*) FROM pg_namespace WHERE nspname = 'aps_search'")->fetchColumn(), 'no half-built schema');
 			$this->assertSame('nextcloud', $app->query('SELECT current_user')->fetchColumn());
 			SqlScript::runAtomically($this->connection($app), SqlScript::up());           // and a retry now works
-			$this->assertSame(5, (int)$app->query('SELECT schema_ver FROM aps_search.schema_meta')->fetchColumn());
+			$this->assertSame(6, (int)$app->query('SELECT schema_ver FROM aps_search.schema_meta')->fetchColumn());
 		} finally {
 			self::admin('nextcloud')->exec("DROP DATABASE IF EXISTS $name WITH (FORCE)");
 		}

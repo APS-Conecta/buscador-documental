@@ -208,6 +208,18 @@ class S4VecFunctionsTest extends DbTestCase {
 		}));
 	}
 
+	public function testAVecGiveUpForAnOverwrittenVersionLeavesVecStateAlone(): void {
+		$this->generation(1);
+		$this->indexed(10, 1);
+		$w = $this->worker();
+		$c = $this->claimVec($w);
+		$before = $this->app()->query('SELECT vec_state FROM aps_search.file_state WHERE file_id = 10')->fetchColumn();
+		$this->app()->exec("UPDATE aps_search.file_state SET etag = 'e2' WHERE file_id = 10");
+		$w->prepare('SELECT aps_search.fail_job(?, ?, ?, false)')->execute([$c['job_id'], $c['lease_epoch'], 'embed_failed']);
+		$this->assertSame($before, $this->app()->query('SELECT vec_state FROM aps_search.file_state WHERE file_id = 10')->fetchColumn(), 'a give-up on the old text is not the new version\'s');
+		$this->assertSame(0, (int)$this->app()->query("SELECT count(*) FROM aps_search.job WHERE id = {$c['job_id']}")->fetchColumn());
+	}
+
 	public function testBackfillQueuesIndexedFilesWithoutVectorsOnceAndHonoursTheLimit(): void {
 		foreach ([10, 11, 12] as $id) {
 			$this->indexed($id, 1);
