@@ -12,6 +12,7 @@ use OCA\BuscadorDocumental\Db\IndexDb;
 use OCA\BuscadorDocumental\Migration\SqlScript;
 use OCA\BuscadorDocumental\Ops\Throttle;
 use OCA\BuscadorDocumental\Scope\Settings;
+use OCA\BuscadorDocumental\Search\CandidateQuery;
 use OCA\BuscadorDocumental\Worker\ClaimGuard;
 use OCP\DB\IResult;
 use OCP\IDBConnection;
@@ -87,6 +88,16 @@ SQL);
 	protected function claimGuard(): ClaimGuard {
 		$db = new IndexDb($this->connection($this->app()));
 		return new ClaimGuard($db, new Throttle(new Settings($db), new AuditLog($db, new Pseudonyms($db))));
+	}
+
+	protected function candidates(): CandidateQuery {
+		return new CandidateQuery(new IndexDb($this->connection($this->app())));
+	}
+
+	/** The OID of generation 1's HNSW index, or null: a rebuild changes it. */
+	protected function indexOid(): ?int {
+		$oid = $this->app()->query("SELECT to_regclass('aps_search.chunk_vec_1_hnsw')::oid")->fetchColumn();
+		return $oid === null ? null : (int)$oid;
 	}
 
 	/** Writes a settings row the way the occ commands do, bypassing their validation. */
