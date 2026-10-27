@@ -30,24 +30,25 @@ class CandidateQuery {
 	}
 
 	/**
-	 * Keyword leg. $alternatives are extra plain phrases (glossary) ORed with the query; $relax: null = relax only when the
-	 * strict pass is thin, true = only the OR form, false = strict only.
+	 * Keyword leg. $pairs are the glossary's [folded query words, alternative]: the strict pass lets each alternative stand for
+	 * its words, the OR relaxation adds it as one more term; $relax: null = relax only when the strict pass is thin, true = only
+	 * the OR form, false = strict only.
 	 *
-	 * @param list<string> $alternatives
+	 * @param list<array{0: string, 1: string}> $pairs
 	 * @return list<array{file_id: int, chunk_id: int}>
 	 */
-	public function exacta(string $query, array $alternatives, string $principalSet, Filters $filters, int $limit, ?bool $relax = null): array {
+	public function exacta(string $query, array $pairs, string $principalSet, Filters $filters, int $limit, ?bool $relax = null): array {
 		$strict = [];
 		$words = $this->words($query);
 		$common = $words === [] ? [] : $this->commonTerms($words);
 		if ($relax !== true) {
 			// A required word that is not common narrows the matches a lot: let the word index lead (see fts()).
-			$strict = $this->fts($this->strictTsquery($query, $alternatives), $principalSet, $filters, $limit, array_diff($words, $common) !== []);
+			$strict = $this->fts($this->strictTsquery($query, $pairs), $principalSet, $filters, $limit, array_diff($words, $common) !== []);
 		}
 		if ($relax === false || ($relax === null && count($strict) >= self::THIN)) {
 			return $strict;
 		}
-		$or = $this->relaxedTsquery($query, $alternatives);
+		$or = $this->relaxedTsquery($query, array_column($pairs, 1));
 		if ($or === null) {
 			return $strict;
 		}
@@ -147,13 +148,28 @@ class CandidateQuery {
 		return (int)$rows[0]['dim'];
 	}
 
-	/** @param list<string> $alternatives @return array{0: string, 1: list<string>} */
-	private function strictTsquery(string $query, array $alternatives): array {
-		$sql = 'websearch_to_tsquery(' . self::CFG . ', ?)';
-		foreach ($alternatives as $_) {
-			$sql .= ' || websearch_to_tsquery(' . self::CFG . ', ?)';
+	/** @param list<array{0: string, 1: string}> $pairs @return array{0: string, 1: list<string>} */
+	private function strictTsquery(string $query, array $pairs): array {
+		$t = 'websearch_to_tsquery(' . self::CFG . ', ?)';
+		$sql = $t;
+		$params = [$query];
+		$folded = Glossary::fold($query);
+		// A shorter span rewritten first takes the words that a longer span containing it needs.
+		usort($pairs, static fn (array $a, array $b): int => substr_count($b[0], ' ') <=> substr_count($a[0], ' '));
+		foreach ($pairs as [$words, $alternative]) {
+			if ($words === $folded) {
+				// The alternative stands for the whole query ("REM", or a stopword key such as "LES" whose own tsquery is empty).
+				$sql = "$sql || $t";
+				$params[] = $alternative;
+				continue;
+			}
+			// Swap the alternative in for its words only, inside the parsed query, so exclusions and phrases still apply to it.
+			foreach (array_unique([$words, str_replace(' ', '-', $words)]) as $form) {     // a typed "CIE-10" parses as a phrase
+				$sql = "ts_rewrite($sql, $t, $t || $t)";
+				array_push($params, $form, $form, $alternative);
+			}
 		}
-		return [$sql, [$query, ...$alternatives]];
+		return [$sql, $params];
 	}
 
 	/** @param list<string> $alternatives @return array{0: string, 1: list<string>}|null null when OR would equal the strict form */

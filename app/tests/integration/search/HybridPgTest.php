@@ -9,6 +9,7 @@ namespace OCA\BuscadorDocumental\Tests\integration\search;
 use OCA\BuscadorDocumental\Db\IndexDb;
 use OCA\BuscadorDocumental\Search\CandidateQuery;
 use OCA\BuscadorDocumental\Search\Filters;
+use OCA\BuscadorDocumental\Search\Glossary;
 use OCA\BuscadorDocumental\Tests\integration\db\DbTestCase;
 
 /** The three candidate legs against the real schema, with three-dimensional vectors. */
@@ -52,6 +53,14 @@ class HybridPgTest extends DbTestCase {
 		return array_map(static fn (array $r): int => (int)$r['file_id'], $rows);
 	}
 
+	/** @return list<int> the files of the strict keyword pass for $q with the shipped glossary, sorted */
+	private function strictWithGlossary(string $q): array {
+		$glossary = Glossary::fromFile(__DIR__ . '/../../../lib/Search/glossary.json');
+		$files = $this->files($this->query()->exacta($q, $glossary->pairs($q), $this->scopeArray(), new Filters(), 10, relax: false));
+		sort($files);
+		return $files;
+	}
+
 	public function testSignificadoRanksByCosineDistanceAndKeepsOneChunkPerFile(): void {
 		$this->generation();
 		$this->doc(1, ['u:b'], 'cercano', [1, 0, 0]);
@@ -78,9 +87,37 @@ class HybridPgTest extends DbTestCase {
 		$this->doc(2, ['u:b'], 'hemoglobina glicosilada del paciente');
 		$q = $this->query();
 		$this->assertSame([], $this->files($q->exacta('REM', [], $this->scopeArray(), new Filters(), 10)));
-		$this->assertSame([1], $this->files($q->exacta('REM', ['resumen estadistico mensual'], $this->scopeArray(), new Filters(), 10)));
+		$this->assertSame([1], $this->files($q->exacta('REM', [['rem', 'resumen estadistico mensual']], $this->scopeArray(), new Filters(), 10)));
 		$this->assertSame([], $this->files($q->exacta('hemoglobina inexistente', [], $this->scopeArray(), new Filters(), 10, relax: false)), 'strict AND finds nothing');
 		$this->assertSame([2], $this->files($q->exacta('hemoglobina inexistente', [], $this->scopeArray(), new Filters(), 10, relax: true)), 'OR relaxation finds it');
+	}
+
+	public function testAGlossaryAlternativeReplacesOnlyTheWordsItStandsFor(): void {
+		$this->doc(1, ['u:b'], 'protocolo PSCV vigente');
+		$this->doc(2, ['u:b'], 'programa de salud cardiovascular');
+		$this->doc(3, ['u:b'], 'protocolo del programa de salud cardiovascular');
+		$this->doc(4, ['u:b'], 'informe PSCV trimestral');
+		$this->doc(5, ['u:b'], 'informe del resumen estadístico mensual de junio');
+		$this->doc(6, ['u:b'], 'resumen estadístico mensual de mayo');
+		$this->doc(7, ['u:b'], 'informe CESFAM de junio');
+		$this->doc(8, ['u:b'], 'CESFAM de mayo');
+		$this->assertSame([1, 3], $this->strictWithGlossary('protocolo pscv'), 'the expansion stands for pscv, protocolo is still required');
+		$this->assertSame([2, 4], $this->strictWithGlossary('pscv -protocolo'), 'the exclusion applies to the expansion too');
+		$this->assertSame([1], $this->strictWithGlossary('"protocolo pscv"'), 'the phrase holds for every form');
+		$this->assertSame([5], $this->strictWithGlossary('REM de junio'));
+		$this->assertSame([7], $this->strictWithGlossary('informe del centro de salud familiar de junio'), 'a multi-word expansion inside a longer query');
+	}
+
+	public function testNestedAndHyphenatedGlossarySpansKeepTheirExpansion(): void {
+		$this->doc(1, ['u:b'], 'control EMPAM del adulto mayor');
+		$this->doc(2, ['u:b'], 'codigo clasificacion internacional de enfermedades 10 version asignado');
+		$this->assertSame([1], $this->strictWithGlossary('control del examen de medicina preventiva del adulto mayor'), 'the longest of the nested expansions (emp, empa, empam)');
+		$this->assertSame([2], $this->strictWithGlossary('codigo CIE-10 asignado'), 'a typed CIE-10 is a phrase, and cie alone is a shorter key');
+	}
+
+	public function testAnAlternativeForTheWholeQueryStillStandsForIt(): void {
+		$this->doc(1, ['u:b'], 'paciente con lupus eritematoso sistémico');
+		$this->assertSame([1], $this->strictWithGlossary('LES'), 'les is a stopword: its own tsquery is empty');
 	}
 
 	public function testFiltersNarrowEveryLeg(): void {
