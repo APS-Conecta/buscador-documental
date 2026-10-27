@@ -56,8 +56,9 @@ class OutboxProcessorTest extends DbTestCase {
 		$this->fixture();
 		$conn = $this->connection($this->app());
 		$db = new IndexDb($conn);
-		$audit = new AuditLog($db, new Pseudonyms($db));
-		$rules = new ScopeRules($db, $audit);
+		$pseudonyms = new Pseudonyms($db);
+		$audit = new AuditLog($db, $pseudonyms);
+		$rules = new ScopeRules($db, $audit, $pseudonyms);
 		$settings = new Settings($db);
 		$this->enqueued = [];
 		$this->aclWritten = [];
@@ -367,7 +368,8 @@ class OutboxProcessorTest extends DbTestCase {
 
 		[$db2, , , $p2, $outbox2] = $this->build([], new \RuntimeException('down'));
 		$db2->execute('DELETE FROM aps_search.outbox');
-		(new ScopeRules($db2, new AuditLog($db2, new Pseudonyms($db2))))->addFolder(11, 'occ');
+		$pseudonyms2 = new Pseudonyms($db2);
+		(new ScopeRules($db2, new AuditLog($db2, $pseudonyms2), $pseudonyms2))->addFolder(11, 'occ');
 		$outbox2->touch(13, 'file');
 		$runner2 = new OutboxRunner($db2, $outbox2, $p2, $this->createMock(LoggerInterface::class));
 		for ($i = 1; $i <= 5; $i++) {

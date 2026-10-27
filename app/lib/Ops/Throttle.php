@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace OCA\BuscadorDocumental\Ops;
 
+use OCA\BuscadorDocumental\Audit\Actor;
 use OCA\BuscadorDocumental\Audit\AuditLog;
 use OCA\BuscadorDocumental\Scope\Settings;
 
@@ -42,12 +43,12 @@ class Throttle {
 				$this->settings->set('cap_' . $lane, (string)$n);
 			}
 		}
-		$this->audit->record('occ', 'throttle.set', null, ['cap_text' => $this->show()['text'], 'cap_vec' => $this->show()['vec']]);
+		$this->audit->record(Actor::Occ, 'throttle.set', null, ['cap_text' => $this->show()['text'], 'cap_vec' => $this->show()['vec']]);
 	}
 
 	public function reset(): void {
 		$this->settings->delete('cap_text');
 		$this->settings->delete('cap_vec');
-		$this->audit->record('occ', 'throttle.set', null, ['cap_text' => self::DEFAULTS['text'], 'cap_vec' => self::DEFAULTS['vec']]);
+		$this->audit->record(Actor::Occ, 'throttle.set', null, ['cap_text' => self::DEFAULTS['text'], 'cap_vec' => self::DEFAULTS['vec']]);
 	}
 }
