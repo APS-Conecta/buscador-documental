@@ -190,13 +190,17 @@ def test_purge_removes_leftovers_from_a_previous_life(work):
     assert os.listdir(os.path.join(work, "in")) == [] and os.listdir(os.path.join(work, "out")) == []
 
 
-def test_an_oversized_result_is_refused_not_loaded(work, tmp_path, monkeypatch):
+@pytest.mark.parametrize("cmd,data", [
+    (child("import json,sys; json.dump({'status':'ok','pages':['x'*1000]}, open(sys.argv[2],'w'))"), b"%PDF"),
+    (jobbox.DEFAULT_CHILD, ("información " * 20).encode()),     # 260 bytes of text: over the cap before any escaping
+], ids=["synthetic", "text-file"])
+def test_an_oversized_result_is_refused_not_loaded(work, tmp_path, monkeypatch, cmd, data):
     monkeypatch.setattr(jobbox, "RESULT_MAX", 100)
-    src = tmp_path / "a.pdf"
-    src.write_bytes(b"%PDF")
-    serve_in_thread(work, child("import json,sys; json.dump({'status':'ok','pages':['x'*1000]}, open(sys.argv[2],'w'))"))
-    out = jobbox.submit(work, "j21", str(src), {"kind": "pdf"}, timeout=10)
-    assert out["status"] == "error" and "too large" in out["detail"]
+    src = tmp_path / "src.bin"
+    src.write_bytes(data)
+    serve_in_thread(work, cmd)
+    out = jobbox.submit(work, "j21", str(src), {"kind": "file"}, timeout=10)
+    assert out == {"status": "error", "reason": "too_large", "detail": "answer too large"}
 
 
 def test_a_symlinked_result_is_not_followed(work, tmp_path):
