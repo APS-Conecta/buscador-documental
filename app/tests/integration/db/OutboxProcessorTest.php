@@ -77,13 +77,24 @@ class OutboxProcessorTest extends DbTestCase {
 		return [$db, $rules, $settings, $processor, new Outbox($db), $audit];
 	}
 
-	private function indexedRow(int $id): void {
+	/** @param list<int> $ancestors the parent chain as of the file's last evaluation, closest first (FileIndexer) */
+	private function indexedRow(int $id, array $ancestors = []): void {
 		$a = $this->app();
 		$a->exec("INSERT INTO aps_search.file_state (file_id, etag, text_state) VALUES ($id, 'e', 'indexed')");
 		$a->exec("INSERT INTO aps_search.page (file_id, page_no, text) VALUES ($id, 1, 'x')");
 		$a->exec("INSERT INTO aps_search.chunk (file_id, page_no, ord, text) VALUES ($id, 1, 0, 'x')");
 		$a->exec("INSERT INTO aps_search.file_acl (file_id, principals) VALUES ($id, ARRAY['u:alice'])");
-		$a->exec("INSERT INTO aps_search.file_meta (file_id, name) VALUES ($id, 'x')");
+		$a->exec("INSERT INTO aps_search.file_meta (file_id, name, ancestors) VALUES ($id, 'x', '{" . implode(',', $ancestors) . "}')");
+	}
+
+	/** Changes the fixture's file cache the way Nextcloud does on a move (the app's DB user may only read it). */
+	private function alterFileCache(string $sql): void {
+		self::connect('postgres', 'dev', self::$dbName)->exec($sql);
+	}
+
+	/** @return list<int> the files waiting in the outbox */
+	private function queued(IndexDb $db): array {
+		return array_map('intval', array_column($db->rows("SELECT file_id FROM aps_search.outbox WHERE kind = 'file' ORDER BY file_id"), 'file_id'));
 	}
 
 	public function testAFileGoneFromNextcloudIsPurgedAndLeavesATombstone(): void {
@@ -162,10 +173,98 @@ class OutboxProcessorTest extends DbTestCase {
 	}
 
 	public function testAFolderEventExpandsToItsFilesOnly(): void {
-		[$db, , , $p] = $this->build();
+		[$db, $rules, , $p] = $this->build();
+		$rules->addFolder(10, 'occ');                                    // in scope, nothing below it indexed yet
 		$this->assertSame('expanded', $p->process(11, 'file'));                 // a folder arriving as a plain file event
-		$ids = array_map('intval', array_column($db->rows("SELECT file_id FROM aps_search.outbox WHERE kind = 'file' ORDER BY file_id"), 'file_id'));
-		$this->assertSame([13, 17], $ids, 'files under 11, never the folders themselves');
+		$this->assertSame([13, 17], $this->queued($db), 'files under 11, never the folders themselves');
+	}
+
+	public function testAnUnchangedInScopeFolderIsNotExpanded(): void {
+		[$db, $rules, , $p] = $this->build();
+		$rules->addFolder(10, 'occ');
+		$this->indexedRow(13, [12, 11, 10]);
+		$this->indexedRow(17, [12, 11, 10]);
+		$this->assertSame('folder_unchanged', $p->process(11, 'file'), 'a write below 11 only corrected its mtime');
+		$this->assertSame([], $this->queued($db), 'no descendant is evaluated again');
+	}
+
+	public function testAFolderOutsideTheScopeWithNothingIndexedAddsNoRows(): void {
+		[$db, $rules, , $p] = $this->build();
+		$rules->addFolder(20, 'occ');                                    // the team folder only, not alice's home
+		$this->assertSame('folder_unchanged', $p->process(10, 'file'), 'an upload to a home root that is not in scope');
+		$this->assertSame('folder_unchanged', $p->process(11, 'file'));
+		$this->assertSame([], $this->queued($db));
+	}
+
+	public function testATagChangeOnAFolderAlwaysExpands(): void {
+		[$db, $rules, , $p] = $this->build(['11' => ['3']]);            // rag-excluded assigned to 11
+		$rules->addFolder(10, 'occ');
+		$this->indexedRow(13, [12, 11, 10]);
+		$this->indexedRow(17, [12, 11, 10]);
+		$this->assertSame('expanded', $p->process(11, 'subtree'), 'parent and index unchanged, yet every verdict below changed');
+		$this->assertSame([13, 17], $this->queued($db));
+		$this->assertSame('erased_excluded', $p->process(13, 'file'));
+
+		[, , , $p] = $this->build();                                    // and removed again
+		$this->assertSame('expanded', $p->process(11, 'subtree'));
+		$this->assertSame('enqueued', $p->process(13, 'file'));
+		$this->assertSame('enqueued', $p->process(13, 'subtree'), 'a file tagged directly is evaluated like any file row');
+	}
+
+	public function testAnExcludedInScopeFolderWithNothingIndexedIsNotExpanded(): void {
+		[$db, $rules, , $p] = $this->build(['11' => ['3']]);
+		$rules->addFolder(10, 'occ');                                    // nothing below 11 is indexed: erasure removed it
+		$this->assertSame('folder_unchanged', $p->process(11, 'file'), 'a write below an excluded folder erases nothing again');
+		$this->assertSame([], $this->queued($db));
+	}
+
+	public function testAFolderWhoseExclusionStateIsUnavailableIsRetriedAndAddsNoRows(): void {
+		[$db, $rules, , $p] = $this->build(['11' => ['3']], new \RuntimeException('tag service down'));
+		$rules->addFolder(10, 'occ');
+		$this->assertSame('retry', $p->process(11, 'file'));
+		$this->assertSame([], $this->queued($db));
+	}
+
+	public function testAStorageRootIsNotExpandedOnEveryWrite(): void {
+		[$db, $rules, , $p] = $this->build();
+		$rules->addFolder(10, 'occ');
+		$this->indexedRow(13, [12, 11, 10]);                            // the chain stops at the root: its parent -1 is never stored
+		$this->assertSame('folder_unchanged', $p->process(10, 'file'));
+		$this->assertSame([], $this->queued($db));
+	}
+
+	public function testAFolderMovedToAnotherParentIsExpandedAndItsFilesFollow(): void {
+		[$db, $rules, , $p] = $this->build(tree: [12 => 14] + self::TREE);
+		$rules->addFolder(11, 'occ');
+		$this->indexedRow(13, [12, 11, 10]);
+		$this->indexedRow(17, [12, 11, 10]);
+		$this->alterFileCache("UPDATE oc_filecache SET path = replace(path, 'files/top/mid', 'files/other/mid') WHERE fileid IN (12, 13, 17)");
+		$this->alterFileCache('UPDATE oc_filecache SET parent = 14 WHERE fileid = 12');
+		$this->assertSame('expanded', $p->process(12, 'file'), 'mid moved from top (in scope) to other');
+		$this->assertSame([13, 17], $this->queued($db));
+		$this->assertSame('erased_out_of_scope', $p->process(13, 'file'));
+	}
+
+	public function testAFolderMovedIntoTheTrashIsExpandedAndItsFilesAreErased(): void {
+		[$db, $rules, , $p] = $this->build(tree: [11 => 30, 30 => -1] + self::TREE);
+		$rules->addFolder(10, 'occ');
+		$this->indexedRow(13, [12, 11, 10]);
+		$this->indexedRow(17, [12, 11, 10]);
+		$this->alterFileCache("INSERT INTO oc_filecache (fileid, storage, path, parent, mimetype) VALUES (30, 1, 'files_trashbin/files', -1, 1)");
+		$this->alterFileCache("UPDATE oc_filecache SET path = replace(path, 'files/top', 'files_trashbin/files/top.d1') WHERE fileid IN (11, 12, 13, 17)");
+		$this->alterFileCache('UPDATE oc_filecache SET parent = 30 WHERE fileid = 11');
+		$this->assertSame('expanded', $p->process(11, 'file'));
+		$this->assertSame([13, 17], $this->queued($db));
+		$this->assertSame('erased_trashed', $p->process(13, 'file'));
+	}
+
+	public function testAMoveIsSeenWhenOnlySomeIndexedDescendantsCarryTheOldParent(): void {
+		[$db, $rules, , $p] = $this->build();
+		$rules->addFolder(10, 'occ');
+		$this->indexedRow(13, [12, 11, 10]);                            // evaluated after 11 came back to 10
+		$this->indexedRow(17, [12, 11, 99]);                            // evaluated while 11 still sat in folder 99
+		$this->assertSame('expanded', $p->process(11, 'file'), 'every indexed descendant is compared, not a sample');
+		$this->assertSame([13, 17], $this->queued($db));
 	}
 
 	public function testAShareOnAFolderMarksIndexedDescendantsAndTheRefreshClearsThem(): void {
