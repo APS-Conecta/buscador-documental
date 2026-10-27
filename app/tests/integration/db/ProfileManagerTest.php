@@ -10,12 +10,14 @@ use OCA\BuscadorDocumental\Audit\AuditLog;
 use OCA\BuscadorDocumental\Audit\Pseudonyms;
 use OCA\BuscadorDocumental\Db\IndexDb;
 use OCA\BuscadorDocumental\Scope\Settings;
+use OCA\BuscadorDocumental\Search\CandidateQuery;
 use OCA\BuscadorDocumental\Search\EmbedClient;
 use OCA\BuscadorDocumental\Search\ProbeFailed;
 use OCA\BuscadorDocumental\Search\ProfileCatalog;
 use OCA\BuscadorDocumental\Search\ProfileException;
 use OCA\BuscadorDocumental\Search\ProfileManager;
 use OCP\IAppConfig;
+use PDO;
 
 /** `occ buscador:profile`: setting up, activating and dropping embedding generations. */
 class ProfileManagerTest extends DbTestCase {
@@ -23,8 +25,8 @@ class ProfileManagerTest extends DbTestCase {
 	private array $config = [];
 	private array|ProbeFailed $probe = ['digest' => 'sha256:aaa', 'dim' => 1024];
 
-	private function manager(): ProfileManager {
-		$db = new IndexDb($this->connection($this->app()));
+	private function manager(?PDO $session = null): ProfileManager {
+		$db = new IndexDb($this->connection($session ?? $this->app()));
 		$app = $this->createMock(IAppConfig::class);
 		$app->method('getValueString')->willReturnCallback(fn (string $a, string $k, string $d = '') => $this->config[$k] ?? $d);
 		$app->method('setValueString')->willReturnCallback(function (string $a, string $k, string $v, bool $lazy = false, bool $sensitive = false): bool {
@@ -42,7 +44,13 @@ class ProfileManagerTest extends DbTestCase {
 			}
 			return $this->probe;
 		});
-		return new ProfileManager($db, ProfileCatalog::shipped(), $embed, $app, new Settings($db), new AuditLog($db, new Pseudonyms($db)));
+		return new ProfileManager($db, ProfileCatalog::shipped(), $embed, $app, new Settings($db), new AuditLog($db, new Pseudonyms($db)), new CandidateQuery($db));
+	}
+
+	private function readyGeneration(int $gen): void {
+		$a = $this->app();
+		$a->exec("SELECT aps_search.create_generation($gen, 'bge-m3', 'bge-m3:567m', 'sha256:g$gen', 3, 'f16', '', '', 8192)");
+		$a->exec("SELECT aps_search.mark_generation_ready($gen)");
 	}
 
 	private function states(): array {
@@ -141,7 +149,7 @@ class ProfileManagerTest extends DbTestCase {
 			$app = self::connect('nextcloud', 'dev', $name);
 			\OCA\BuscadorDocumental\Migration\SqlScript::runAtomically($this->connection($app), \OCA\BuscadorDocumental\Migration\SqlScript::up());
 			$db = new IndexDb($this->connection($app));
-			$m = new ProfileManager($db, ProfileCatalog::shipped(), $this->createMock(EmbedClient::class), $this->createMock(IAppConfig::class), new Settings($db), new AuditLog($db, new Pseudonyms($db)));
+			$m = new ProfileManager($db, ProfileCatalog::shipped(), $this->createMock(EmbedClient::class), $this->createMock(IAppConfig::class), new Settings($db), new AuditLog($db, new Pseudonyms($db)), new CandidateQuery($db));
 			$this->refuses(fn () => $m->set('bge-m3', 'http://ollama:11434', null), 'CREATE EXTENSION vector');
 		} finally {
 			self::admin('nextcloud')->exec("DROP DATABASE IF EXISTS $name WITH (FORCE)");
@@ -155,6 +163,7 @@ class ProfileManagerTest extends DbTestCase {
 		$this->refuses(fn () => $m->activate(9), 'Unknown generation');
 		$this->app()->exec('SELECT aps_search.mark_generation_ready(1)');
 		(new Settings(new IndexDb($this->connection($this->app()))))->set('vec_coverage_1', '0.9700');
+		$this->candidates()->buildIndex(1);
 		$m->activate(1);
 		$this->assertSame(['1:active'], $this->states());
 		$this->assertSame('0.9700', $this->app()->query("SELECT value FROM aps_search.settings WHERE key = 'vec_coverage'")->fetchColumn());
@@ -165,6 +174,7 @@ class ProfileManagerTest extends DbTestCase {
 		$m = $this->manager();
 		$m->set('bge-m3', 'http://ollama:11434', null);
 		$this->app()->exec('SELECT aps_search.mark_generation_ready(1)');
+		$this->candidates()->buildIndex(1);
 		$m->activate(1);
 		$this->probe = ['digest' => 'sha256:two', 'dim' => 1024];
 		$m->set('bge-m3', 'http://ollama:11434', null);
@@ -179,11 +189,73 @@ class ProfileManagerTest extends DbTestCase {
 		$this->refuses(fn () => $m->semantic(true), 'active profile');
 		$m->set('bge-m3', 'http://ollama:11434', null);
 		$this->app()->exec('SELECT aps_search.mark_generation_ready(1)');
+		$this->candidates()->buildIndex(1);
 		$m->activate(1);
 		$m->semantic(true);
 		$this->assertSame('1', $this->app()->query("SELECT value FROM aps_search.settings WHERE key = 'semantic_enabled'")->fetchColumn());
 		$m->semantic(false);
 		$this->assertSame('0', $this->app()->query("SELECT value FROM aps_search.settings WHERE key = 'semantic_enabled'")->fetchColumn());
+	}
+
+	public function testOneGenerationsFailedIndexBuildDoesNotStopTheOthers(): void {
+		$this->readyGeneration(1);
+		$this->readyGeneration(2);
+		$su = self::connect('postgres', 'dev', self::$dbName);
+		$su->exec('CREATE SEQUENCE aps_search.chunk_vec_1_hnsw');               // takes the index's name, so generation 1 cannot build
+		try {
+			$session = $this->app();
+			$announced = [];
+			$r = $this->manager($session)->buildIndexes(static function (int $gen) use (&$announced): void {
+				$announced[] = $gen;
+			});
+			$this->assertSame([1], array_keys($r['failed']));
+			$this->assertNotSame('', $r['failed'][1]);
+			$this->assertSame([2], $r['built']);
+			$this->assertSame([1, 2], $announced);
+			$this->assertTrue((bool)$session->query('SELECT current_user = session_user')->fetchColumn(), 'the owner role is given back after a failure too');
+		} finally {
+			$su->exec('DROP SEQUENCE aps_search.chunk_vec_1_hnsw');
+		}
+	}
+
+	public function testAGenerationThatHasItsIndexIsLeftAloneWithoutWaitingForWriters(): void {
+		$this->readyGeneration(1);
+		$this->candidates()->buildIndex(1);
+		$oid = $this->indexOid();
+		$writer = $this->app();
+		$writer->beginTransaction();
+		$writer->exec('DELETE FROM aps_search.chunk_vec_1');                 // a stray DROP INDEX CONCURRENTLY would wait for it
+		$session = $this->app();
+		$session->exec("SET lock_timeout = '1s'");
+		$announced = [];
+		$started = microtime(true);
+		$r = $this->manager($session)->buildIndexes(static function (int $gen) use (&$announced): void {
+			$announced[] = $gen;
+		});
+		$this->assertLessThan(0.5, microtime(true) - $started);
+		$this->assertSame(['built' => [], 'failed' => []], $r);
+		$this->assertSame([], $announced);
+		$this->assertSame($oid, $this->indexOid(), 'not rebuilt');
+	}
+
+	public function testAReadyOrActiveGenerationThatLostItsIndexGetsItBackOnTheNextRefresh(): void {
+		$this->readyGeneration(1);
+		$this->manager()->buildIndexes(static fn (int $gen) => null);
+		$idx = static fn ($t) => (int)$t->app()->query("SELECT count(*) FROM pg_indexes WHERE tablename = 'chunk_vec_1' AND indexdef ILIKE '%hnsw%'")->fetchColumn();
+		$this->assertSame(1, $idx($this), 'built for a ready generation');
+		self::connect('postgres', 'dev', self::$dbName)->exec('DROP INDEX aps_search.chunk_vec_1_hnsw');
+		$this->manager()->buildIndexes(static fn (int $gen) => null);
+		$this->assertSame(1, $idx($this));
+	}
+
+	public function testActivationNeedsTheVectorIndex(): void {
+		$this->readyGeneration(1);
+		$m = $this->manager();
+		$this->refuses(fn () => $m->activate(1), 'no vector index');
+		$this->assertSame(['1:ready'], $this->states(), 'searches would scan every vector');
+		$this->candidates()->buildIndex(1);
+		$m->activate(1);
+		$this->assertSame(['1:active'], $this->states());
 	}
 
 	public function testShowListsGenerationsWithCoverageAndNeverTheSecrets(): void {
