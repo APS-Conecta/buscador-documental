@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace OCA\BuscadorDocumental\Ops;
 
+use OCA\BuscadorDocumental\Acl\ExclusionChecker;
 use OCA\BuscadorDocumental\Db\IndexDb;
 use OCA\BuscadorDocumental\Scope\Settings;
 use OCA\BuscadorDocumental\Search\EmbedClient;
@@ -27,6 +28,7 @@ class Doctor {
 		private IAppConfig $appConfig,
 		private IConfig $config,
 		private EmbedClient $embed,
+		private ExclusionChecker $exclusion,
 	) {
 	}
 
@@ -57,6 +59,8 @@ class Doctor {
 
 		$secretLen = strlen($this->appConfig->getValueString(self::APP, 'worker_secret', ''));
 		$c[] = $this->check('worker_secret', $secretLen >= 32 ? 'ok' : 'fail', $secretLen >= 32 ? 'configured' : 'not configured or shorter than 32 characters');
+		$tag = $this->exclusion->excludedTagIds() !== [];
+		$c[] = $this->check('exclusion_tag', $tag ? 'ok' : 'fail', $tag ? 'exists' : 'missing: no folder can be excluded until it exists; occ tag:add rag-excluded public creates it');
 
 		$paused = $this->settings->isPaused();
 		$c[] = $this->check('paused', $paused ? 'warn' : 'ok', $paused ? 'reading is paused: occ buscador:resume' : 'running');

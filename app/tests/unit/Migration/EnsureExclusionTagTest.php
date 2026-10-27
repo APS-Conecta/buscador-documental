@@ -6,20 +6,29 @@ declare(strict_types=1);
 
 namespace OCA\BuscadorDocumental\Tests\unit\Migration;
 
+use OCA\BuscadorDocumental\Acl\ExclusionChecker;
 use OCA\BuscadorDocumental\Migration\EnsureExclusionTag;
+use OCP\IDBConnection;
 use OCP\Migration\IOutput;
 use OCP\SystemTag\ISystemTag;
 use OCP\SystemTag\ISystemTagManager;
+use OCP\SystemTag\ISystemTagObjectMapper;
 use OCP\SystemTag\TagAlreadyExistsException;
 use PHPUnit\Framework\TestCase;
 
-/** Without the tag the exclusion check fails closed and nothing is ever indexed: the app creates it when it is enabled. */
+/** Folder owners can opt a folder out only while the tag exists: the app creates it when it is enabled. */
 class EnsureExclusionTagTest extends TestCase {
+	private function step(ISystemTagManager $m): EnsureExclusionTag {
+		return new EnsureExclusionTag(new ExclusionChecker($this->createMock(IDBConnection::class), $m, $this->createMock(ISystemTagObjectMapper::class)));
+	}
+
 	public function testItCreatesAPublicAssignableTagWhenNoneExists(): void {
 		$m = $this->createMock(ISystemTagManager::class);
 		$m->method('getAllTags')->willReturn([]);
 		$m->expects($this->once())->method('createTag')->with('rag-excluded', true, true);
-		(new EnsureExclusionTag($m))->run($this->createMock(IOutput::class));
+		$out = $this->createMock(IOutput::class);
+		$out->expects($this->once())->method('info')->with('rag-excluded tag created');
+		$this->step($m)->run($out);
 	}
 
 	public function testItLeavesAnExistingTagAlone(): void {
@@ -28,14 +37,15 @@ class EnsureExclusionTagTest extends TestCase {
 		$m = $this->createMock(ISystemTagManager::class);
 		$m->method('getAllTags')->willReturn([$tag]);
 		$m->expects($this->never())->method('createTag');
-		(new EnsureExclusionTag($m))->run($this->createMock(IOutput::class));
+		$this->step($m)->run($this->createMock(IOutput::class));
 	}
 
 	public function testARaceWithAnotherCreatorIsHarmless(): void {
 		$m = $this->createMock(ISystemTagManager::class);
 		$m->method('getAllTags')->willReturn([]);
 		$m->method('createTag')->willThrowException(new TagAlreadyExistsException('exists'));
-		(new EnsureExclusionTag($m))->run($this->createMock(IOutput::class));
-		$this->addToAssertionCount(1);
+		$out = $this->createMock(IOutput::class);
+		$out->expects($this->never())->method('info');
+		$this->step($m)->run($out);
 	}
 }
