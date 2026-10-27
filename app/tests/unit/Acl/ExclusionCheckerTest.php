@@ -65,6 +65,16 @@ class ExclusionCheckerTest extends TestCase {
 		$this->assertTrue($c->isExcluded(10));
 	}
 
+	public function testACaseVariantOfTheTagExcludes(): void {
+		$c = $this->checker([10 => 5, 5 => 1, 1 => -1], [$this->tag(3, 'RAG-Excluded')], ['10' => ['3']]);
+		$this->assertSame([10 => true], $c->excludedAmong([10]));
+	}
+
+	public function testANameThatOnlyContainsTheTagNameDoesNotExclude(): void {
+		$c = $this->checker([10 => 5, 5 => 1, 1 => -1], [$this->tag(3, 'rag-excluded'), $this->tag(4, 'rag-excluded-old')], ['10' => ['4']]);
+		$this->assertFalse($c->isExcluded(10));
+	}
+
 	public function testNoSuchTagFailsClosed(): void {
 		$this->expectException(ExclusionUnavailable::class);
 		$this->checker([10 => -1], [], [])->isExcluded(10);

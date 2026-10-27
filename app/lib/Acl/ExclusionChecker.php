@@ -13,13 +13,18 @@ use Throwable;
 
 /**
  * Is a file excluded from indexing by a `rag-excluded` system tag on itself or any ancestor?
- * - Every system tag named `rag-excluded` counts, whatever its visibility flags (M5).
+ * - Every system tag named `rag-excluded` in any letter case counts, whatever its visibility flags (M5).
  * - Ancestors come from oc_filecache parent ids, to the storage root, for tag lookup only; never `permissions` (D1).
  * - Any failure (no such tag, tag service error, broken or too deep walk) throws ExclusionUnavailable: fail closed.
  */
 class ExclusionChecker {
 	public const TAG_NAME = 'rag-excluded';
 	public const MAX_DEPTH = 64;
+
+	/** Nextcloud's own rule for duplicate tag names: equal after mb_strtolower. */
+	public static function isExclusionTagName(string $name): bool {
+		return mb_strtolower($name) === mb_strtolower(self::TAG_NAME);
+	}
 
 	public function __construct(
 		private IDBConnection $db,
@@ -88,7 +93,7 @@ class ExclusionChecker {
 	protected function excludedTagIds(): array {
 		$ids = [];
 		foreach ($this->tags->getAllTags(null, self::TAG_NAME) as $tag) {
-			if ($tag->getName() === self::TAG_NAME) {
+			if (self::isExclusionTagName($tag->getName())) {
 				$ids[] = (string)$tag->getId();
 			}
 		}
