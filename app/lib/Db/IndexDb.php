@@ -44,6 +44,14 @@ class IndexDb {
 	}
 
 	/**
+	 * SQLSTATE 57014 (query_canceled): a statement timeout or an administrator's cancel. PDO writes the SQLSTATE
+	 * untranslated whatever lc_messages says, and Nextcloud's DbalException keeps the driver message.
+	 */
+	public static function timedOut(\Throwable $e): bool {
+		return str_contains($e->getMessage(), 'SQLSTATE[57014]');
+	}
+
+	/**
 	 * Runs $work so that a failure cannot poison a transaction the caller is already in: Nextcloud nests transactions
 	 * with savepoints, so this is a savepoint inside the request's transaction and a plain transaction outside one.
 	 *
