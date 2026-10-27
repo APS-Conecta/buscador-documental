@@ -74,7 +74,6 @@ class IndexDbTest extends TestCase {
 		foreach (['beginTransaction' => 'begin', 'commit' => 'commit', 'rollBack' => 'rollback'] as $method => $event) {
 			$db->method($method)->willReturnCallback(static function () use (&$events, $event) {
 				$events[] = $event;
-				return true;
 			});
 		}
 		return $db;
