@@ -40,10 +40,10 @@ Use `NcButton` variants only. **Primary:** "Buscar" (search form), "Abrir en la 
 
 ## Results: paging, order and filters
 - **Page size:** "Resultados por página" 25 (default), 50, 100. Remembered per user and kept in the URL with page and order.
-- **Pager:** "Anterior", numbered pages (first, last, current ±1, ellipsis), "Siguiente". Summary line "Mostrando 26–50 de 137 documentos" (`aria-live="polite"`). Changing size, order or any filter returns to page 1.
+- **Pager:** "Anterior", numbered pages (first, last, current ±1, ellipsis), "Siguiente". Summary line "Mostrando 26–50 de 87 documentos" (`aria-live="polite"`). Changing size, order or any filter returns to page 1.
 - **Order ("Ordenar por"):** Relevancia (default with a query), Más recientes, Más antiguos, Nombre (A-Z), Nombre (Z-A). Without a query the default is Más recientes.
 - **Filters:** Tipo (PDF, Documentos, Planillas, Imágenes), Carpeta / carpeta de equipo, Modificado (cualquier fecha, última semana, último mes, último año, rango), Propiedad (Todos, Mis archivos, Compartidos conmigo), "Solo con lectura incierta". The navigation scopes set Propiedad and the low-confidence filter; "Quitar filtros" resets everything.
-- **Depth cap:** at most the first 1 000 matches are paged ("Se muestran los primeros 1 000; afine su búsqueda"); the total is shown exactly up to the cap and as "más de 1 000" beyond it.
+- **Depth cap:** at most the first 100 readable matches (`LISTED`, ADR-0010 amendment) are paged ("Se muestran los primeros 100; afine su búsqueda"); the total is shown exactly below the cap and as "más de 99" at it.
 - **Selection:** clicking a card (or its title) selects it and opens the sidebar; "Abrir en la página N" opens the file.
 
 ## Principles

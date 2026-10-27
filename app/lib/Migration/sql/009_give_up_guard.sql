@@ -1,4 +1,4 @@
--- Schema 6: a job given up for an old version of a file leaves the current version's state alone. Idempotent: it runs after 007
+-- Schema 6: a job given up for an old version of a file leaves the current version's state alone. Idempotent: it runs after 008
 -- on a fresh install and alone on a schema_ver 5 instance (SqlScript::upgradeToV6). bd_owner owns every object; CREATE OR REPLACE
 -- keeps the owner and the EXECUTE grants.
 SET ROLE bd_owner;

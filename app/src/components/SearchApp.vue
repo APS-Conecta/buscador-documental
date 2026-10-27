@@ -84,7 +84,7 @@
 						</span>
 					</div>
 					<p v-if="result.page.capped" class="bd-cap">
-						Se muestran los primeros 1 000; afine su búsqueda.
+						Se muestran los primeros {{ formatNumber(result.page.total) }}; afine su búsqueda.
 					</p>
 					<ul class="bd-results">
 						<ResultCard v-for="h in result.hits"
@@ -118,7 +118,7 @@ import ModeToggle from './ModeToggle.vue'
 import ResultCard from './ResultCard.vue'
 import ResultPager from './ResultPager.vue'
 import { api } from '../api.js'
-import { summaryLine } from '../lib/format.js'
+import { formatNumber, summaryLine } from '../lib/format.js'
 import { hasFilters, parseState, serializeState, toRequest, withoutFilters } from '../lib/urlState.js'
 
 const props = defineProps({ readiness: { type: Object, default: () => ({ semantic: false, reason: null, coverage: 0 }) } })
