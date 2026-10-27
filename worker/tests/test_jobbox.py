@@ -40,20 +40,28 @@ def test_roundtrip_returns_the_childs_result(work, tmp_path):
     assert not os.listdir(os.path.join(work, "in")), "input and request are removed after the job"
 
 
-def test_timeout_kills_the_whole_process_group(work, tmp_path):
-    marker = tmp_path / "grandchild.alive"
-    code = ("import subprocess,sys,time;"
-            f"subprocess.Popen([sys.executable,'-c','import time,pathlib;\\nwhile True:\\n pathlib.Path(r\"{marker}\").write_text(str(time.time()));time.sleep(0.1)']);"
-            "time.sleep(60)")
-    src = tmp_path / "a.pdf"
-    src.write_bytes(b"%PDF")
-    serve_in_thread(work, child(code))
-    out = jobbox.submit(work, "j2", str(src), {"kind": "pdf"}, timeout=1)
-    assert out == {"status": "error", "reason": "timeout"}
+def hanging_child(marker, first=""):
+    """A child that runs `first`, leaves a grandchild rewriting `marker` every 0.1 s, then hangs."""
+    return child("import subprocess,sys,time;" + first +
+                 f"subprocess.Popen([sys.executable,'-c','import time,pathlib;\\nwhile True:\\n pathlib.Path(r\"{marker}\").write_text(str(time.time()));time.sleep(0.1)']);"
+                 "time.sleep(60)")
+
+
+def assert_group_killed(marker):
     time.sleep(0.5)
     before = marker.read_text() if marker.exists() else None
     time.sleep(0.5)
     assert (marker.read_text() if marker.exists() else None) == before, "the grandchild stopped writing: group was killed"
+
+
+def test_timeout_kills_the_whole_process_group(work, tmp_path):
+    marker = tmp_path / "grandchild.alive"
+    src = tmp_path / "a.pdf"
+    src.write_bytes(b"%PDF")
+    serve_in_thread(work, hanging_child(marker))
+    out = jobbox.submit(work, "j2", str(src), {"kind": "pdf"}, timeout=1)
+    assert out == {"status": "error", "reason": "timeout"}
+    assert_group_killed(marker)
 
 
 def test_child_crash_is_reported_not_raised(work, tmp_path):
@@ -198,3 +206,57 @@ def test_job_ids_with_a_trailing_newline_are_refused(work, tmp_path):
     src.write_bytes(b"%PDF")
     with pytest.raises(ValueError):
         jobbox.submit(work, "ok\n", str(src), {"kind": "pdf"}, timeout=1)
+
+
+# ---------- issue 46: the child extends its own budget through a sidecar next to its result ----------
+@pytest.mark.parametrize("sidecar,budget", [
+    (None, 5), ("", 5), ("abc", 5), ("-5", 5), ("9" * 16, jobbox.MAX_TIMEOUT),
+    ("symlink", 5), ("directory", 5), ("fifo", 5),
+], ids=["missing", "empty", "not-a-number", "negative", "huge", "symlink", "directory", "fifo"])
+def test_a_bad_extension_never_shrinks_blocks_or_overflows_the_budget(tmp_path, sidecar, budget):
+    res = str(tmp_path / "j.json.tmp")
+    side = res + ".extra"
+    if sidecar == "symlink":
+        (tmp_path / "elsewhere").write_text("300")
+        os.symlink(tmp_path / "elsewhere", side)
+    elif sidecar == "directory":
+        os.mkdir(side)
+    elif sidecar == "fifo":
+        os.mkfifo(side)                     # no writer: a blocking open would hang the daemon or the supervisor
+    elif sidecar is not None:
+        open(side, "w").write(sidecar)
+    got = []
+    t = threading.Thread(target=lambda: got.append(jobbox.granted(5, res)), daemon=True)
+    t.start()
+    t.join(2)
+    assert got == [budget]
+
+
+def test_a_hung_child_is_killed_when_its_extended_budget_runs_out(work, tmp_path):
+    marker = tmp_path / "grandchild.alive"
+    src = tmp_path / "a.pdf"
+    src.write_bytes(b"%PDF")
+    serve_in_thread(work, hanging_child(marker, first="open(sys.argv[2] + '.extra', 'w').write('2');"))
+    start = time.monotonic()
+    out = jobbox.submit(work, "j30", str(src), {"kind": "pdf"}, timeout=1)
+    took = time.monotonic() - start
+    assert out == {"status": "error", "reason": "timeout"}
+    assert 2.5 <= took < 5, took                 # killed at base 1 s + the 2 s it announced, not at the base alone
+    assert_group_killed(marker)
+
+
+def test_a_dropped_request_is_given_up_on_within_its_extended_budget(work, tmp_path):
+    src = tmp_path / "a.pdf"
+    src.write_bytes(b"%PDF")
+
+    def parser_that_restarts():
+        time.sleep(0.3)
+        jobbox.announce(os.path.join(work, "out", "j31.json.tmp"), 2)      # the child counted its OCR'd pages ...
+        time.sleep(0.3)
+        jobbox.purge(work)                                                  # ... then the parser restarted
+    threading.Thread(target=parser_that_restarts, daemon=True).start()
+    start = time.monotonic()
+    with pytest.raises(jobbox.ParserUnavailable):
+        jobbox.submit(work, "j31", str(src), {"kind": "pdf"}, timeout=1, grace=1)
+    took = time.monotonic() - start
+    assert 3 <= took < 5, took                   # base 1 s + 2 s announced + 1 s grace, kept after the purge
