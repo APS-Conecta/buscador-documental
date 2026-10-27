@@ -21,7 +21,7 @@ use OCP\IConfig;
  */
 class Doctor {
 	private const APP = 'buscador_documental';
-	public const SCHEMA = 6;
+	public const SCHEMA = 7;
 
 	public function __construct(
 		private IndexDb $db,
@@ -150,7 +150,9 @@ class Doctor {
 			}
 		}
 		$out[] = $this->check('vector_index', $missing === 0 ? 'ok' : 'warn', $missing === 0 ? 'present' : "$missing generation(s) without the vector index: searches would scan everything; occ buscador:profile refresh builds it");
-		$failed = (int)$this->db->rows("SELECT count(*) AS n FROM aps_search.file_state WHERE vec_state = 'failed'")[0]['n'];
+		// vec_state tells only the generation searches use; a building or ready one keeps its failures in vec_failure.
+		$failed = (int)$this->db->rows("SELECT count(*) AS n FROM aps_search.file_state fs WHERE fs.vec_state = 'failed'
+			OR EXISTS (SELECT 1 FROM aps_search.vec_failure f JOIN aps_search.embedding_profile e ON e.gen = f.gen AND e.state <> 'retired' WHERE f.file_id = fs.file_id)")[0]['n'];
 		$out[] = $this->check('vector_failures', $failed === 0 ? 'ok' : 'warn', $failed === 0 ? 'none' : "$failed file(s) whose vectors were given up on: occ buscador:profile refresh --retry-failed");
 		return $out;
 	}

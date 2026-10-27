@@ -36,6 +36,9 @@ class GiveUpGuardSchemaTest extends DbTestCase {
 				}
 			}
 			$this->assertSame(6, (int)$app->query('SELECT schema_ver FROM aps_search.schema_meta')->fetchColumn());
+			foreach (SqlScript::upgradeToV7() as $st) {                       // schema 7 redefines both functions on top of this guard
+				$app->exec($st);
+			}
 			$this->assertSame($this->definitions($this->app()), $this->definitions($app), 'an upgraded instance runs what a fresh install runs');
 		} finally {
 			self::admin('nextcloud')->exec("DROP DATABASE IF EXISTS $name WITH (FORCE)");

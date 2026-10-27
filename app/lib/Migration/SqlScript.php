@@ -42,7 +42,7 @@ final class SqlScript {
 	/** @return list<string> the up steps in order */
 	public static function up(): array {
 		$all = [];
-		foreach (['000_preflight.sql', '001_schema.sql', '002_functions.sql', '003_roles.sql', '004_s3.sql', '005_s4.sql', '006_s5.sql', '007_s6.sql', '008_vec_index.sql', '009_give_up_guard.sql'] as $f) {
+		foreach (['000_preflight.sql', '001_schema.sql', '002_functions.sql', '003_roles.sql', '004_s3.sql', '005_s4.sql', '006_s5.sql', '007_s6.sql', '008_vec_index.sql', '009_give_up_guard.sql', '010_vec_failure.sql'] as $f) {
 			array_push($all, ...self::load($f));
 		}
 		return $all;
@@ -71,6 +71,11 @@ final class SqlScript {
 	/** @return list<string> what an instance at schema_ver 5 needs: the give-up guard step alone (it is idempotent) */
 	public static function upgradeToV6(): array {
 		return self::load('009_give_up_guard.sql');
+	}
+
+	/** @return list<string> what an instance at schema_ver 6 needs: the vector failure step alone (it is idempotent) */
+	public static function upgradeToV7(): array {
+		return self::load('010_vec_failure.sql');
 	}
 
 	/**

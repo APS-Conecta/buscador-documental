@@ -245,7 +245,7 @@ def test_the_supported_schema_passes():
     main.check_schema(VersionConn(main.SUPPORTED_SCHEMA))
 
 
-@pytest.mark.parametrize("version", [1, 2, 3, 4, 5, 7, 99])
+@pytest.mark.parametrize("version", [1, 2, 3, 4, 5, 6, 8, 99])
 def test_an_unknown_schema_stops_the_worker_with_a_clear_message(version):
     with pytest.raises(SystemExit) as e:
         main.check_schema(VersionConn(version))
