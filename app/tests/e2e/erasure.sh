@@ -88,7 +88,7 @@ dav er_d -T "$TMP/d.txt" "$DAV/files/er_d/Docs/d.txt" >/dev/null
 tick; work
 FD=$(fid er_d Docs/d.txt)
 [ "$(state "$FD")" = "indexed:" ] || die "er_d file: $(state "$FD")"
-$OCC buscador:purge-user er_d | grep -q "erased: 1" || die "purge-user output"
+$OCC buscador:purge-user er_d | grep "erased: 1" >/dev/null || die "purge-user output"
 [ "$(chunks "$FD")" = 0 ] && [ "$($PSQL -c "select count(*) from aps_search.file_state where file_id = $FD")" = 0 ] || die "purge-user left data"
 $OCC user:info er_d >/dev/null || die "the user must still exist"
 [ "$($PSQL -c "select count(*) from oc_filecache where fileid = $FD")" = 1 ] || die "the file itself must be untouched"
