@@ -9,6 +9,17 @@
 # file, which must be at least 32 bytes and readable by you only; keep it apart from the backup (anyone with both reads every
 # indexed word). CBC itself does not authenticate, so restore checks the keyed checksum (.hmac) before it decrypts anything; keep the key apart from the backup.
 set -euo pipefail
+# HMAC-SHA256 (RFC 2104) of stdin as lowercase hex, built from plain digests so the key stays off every command line.
+# $1 is the 64-character hex MAC key: exactly one SHA-256 block, used as is (no pre-hashing).
+hmac_sha256() {
+	local i c ipad='' opad=''
+	for (( i = 0; i < 64; i++ )); do
+		printf -v c '%d' "'${1:i:1}"
+		printf -v ipad '%s\\x%02x' "$ipad" $(( c ^ 0x36 ))
+		printf -v opad '%s\\x%02x' "$opad" $(( c ^ 0x5c ))
+	done
+	{ printf '%b' "$opad"; { printf '%b' "$ipad"; cat; } | openssl dgst -sha256 -binary; } | openssl dgst -sha256 -r | cut -d' ' -f1
+}
 OUT=${1:?usage: backup.sh OUT.bak}
 KEY=${BD_BACKUP_KEY_FILE:?set BD_BACKUP_KEY_FILE to a file holding the encryption key}
 [ -f "$KEY" ] && [ ! -L "$KEY" ] || { echo "backup: the key file does not exist (or is a symbolic link)" >&2; exit 2; }
@@ -31,7 +42,7 @@ trap 'rm -f "$OUT.part"' ERR EXIT
 pg_dump -Fc --schema=aps_search | openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -salt -pass env:BD_BACKUP_PASS > "$OUT.part"
 mv "$OUT.part" "$OUT"
 sha256sum "$OUT" | cut -d' ' -f1 > "$OUT.sha256"
-openssl dgst -sha256 -hmac "$BD_BACKUP_MAC" -r < "$OUT" | cut -d' ' -f1 > "$OUT.hmac"
+hmac_sha256 "$BD_BACKUP_MAC" < "$OUT" > "$OUT.hmac"
 psql -qAt -F' ' -c "select 'schema_ver', schema_ver from aps_search.schema_meta
 	union all select 'pages', count(*) from aps_search.page
 	union all select 'chunks', count(*) from aps_search.chunk

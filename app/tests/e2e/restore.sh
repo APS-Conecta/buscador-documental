@@ -94,6 +94,28 @@ if DBX psql -q -d bd_restore_test -c "set role bd_owner; alter role nextcloud su
 ok "bd_owner cannot run server programs or change roles (what a dump made with your own key may do is limited to the search schema)"
 BAD=$(DBX bash /tmp/restore.sh /tmp/x.bak bd_restore_test 2>&1 || true); grep -q "already has an aps_search schema" <<<"$BAD" || die "a second restore over the first was not refused: $BAD"
 ok "restoring over an existing schema is refused"
+# no key material in a process's arguments: every external command the scripts run is wrapped to log its argument list
+ARGV_KEY=bd-argv-toy-key-0123456789abcdef0123456789abcdef
+DBX sh -c "rm -rf /tmp/argv-bin /tmp/argv*.log /tmp/w.bak*; printf %s '$ARGV_KEY' > /tmp/argv.key; chmod 600 /tmp/argv.key"
+MAC=$(DBX sh -c '{ printf mac:; cat /tmp/argv.key; } | openssl dgst -sha256 -r | cut -d" " -f1')
+PASSPH=$(DBX sh -c 'openssl dgst -sha256 -r < /tmp/argv.key | cut -d" " -f1')
+case "$MAC" in *6*) ;; *) die "control: the toy key's MAC key must contain a 6 (a NUL byte in the inner pad)";; esac
+DBX sh -c 'mkdir /tmp/argv-bin && for c in openssl cat cut sha256sum wc stat psql pg_dump pg_restore mv rm rmdir chmod mktemp df awk sed sort grep date; do
+	p=$(command -v "$c") || { echo "missing $c" >&2; exit 1; }
+	printf "#!/bin/sh\nprintf \"%%s\\\\n\" \"\${0##*/} \$*\" >> /tmp/argv.log\nexec %s \"\$@\"\n" "$p" > "/tmp/argv-bin/$c" && chmod 755 "/tmp/argv-bin/$c" || exit 1
+done' || die "could not wrap the commands the scripts run"
+ARGV() { $C exec -T -e PGUSER=postgres -e PGDATABASE=nextcloud -e BD_BACKUP_KEY_FILE=/tmp/argv.key db sh -c 'PATH=/tmp/argv-bin:$PATH; export PATH; exec bash "$@"' sh "$@"; }
+ARGV /tmp/backup.sh /tmp/w.bak >/dev/null || die "the backup with wrapped commands failed"
+LOG=$(DBX cat /tmp/argv.log); grep -q '^openssl enc ' <<<"$LOG" && grep -q '^openssl dgst ' <<<"$LOG" || die "control: the wrapped backup logged no openssl call"
+DBX mv /tmp/argv.log /tmp/argv.backup.log
+BAD=$(ARGV /tmp/restore.sh /tmp/w.bak bd_restore_test 2>&1 || true); grep -q "already has an aps_search schema" <<<"$BAD" || die "the restore with wrapped commands did not reach the target check: $BAD"
+LOG=$(DBX cat /tmp/argv.log); grep -q '^openssl enc -d ' <<<"$LOG" && grep -q '^openssl dgst ' <<<"$LOG" || die "control: the wrapped restore logged no openssl call"
+DBX mv /tmp/argv.log /tmp/argv.restore.log
+LOG=$(DBX cat /tmp/argv.backup.log /tmp/argv.restore.log)
+if grep -qF -e "$MAC" -e "$PASSPH" -e "$ARGV_KEY" <<<"$LOG"; then die "a process's argument list holds key material"; fi
+ok "the backup and restore scripts pass no key material in process arguments"
+[ "$(DBX cat /tmp/w.bak.hmac)" = "$(DBX sh -c 'openssl dgst -sha256 -hmac "$1" -r < /tmp/w.bak | cut -d" " -f1' sh "$MAC")" ] || die "the keyed checksum is not HMAC-SHA256 under the derived key"
+ok "the keyed checksum is HMAC-SHA256 under the derived key, in the same format as before"
 DBX cp /tmp/x.bak.sha256 /tmp/x.sha.keep; DBX rm -f /tmp/x.bak.sha256
 BAD=$(DBX bash /tmp/restore.sh /tmp/x.bak bd_restore_test 2>&1 || true); grep -q "checksum file" <<<"$BAD" || die "a backup without its checksum was accepted: $BAD"
 DBX mv /tmp/x.sha.keep /tmp/x.bak.sha256
