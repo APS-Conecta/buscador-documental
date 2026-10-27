@@ -19,28 +19,34 @@ class SnapshotAndStatePgTest extends DbTestCase {
 
 	public function testASnapshotRoundTripsIdsInOrderForItsOwnerOnly(): void {
 		$s = new SnapshotStore($this->db());
-		$qid = $s->save('alice', [30, 10, 20], [301, 101, 201]);
+		$qid = $s->save('alice', [30, 10, 20], [301, 101, 201], false);
 		$this->assertMatchesRegularExpression('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', $qid);
-		$this->assertSame(['file_ids' => [30, 10, 20], 'chunk_ids' => [301, 101, 201]], $s->load($qid, 'alice'));
+		$this->assertSame(['file_ids' => [30, 10, 20], 'chunk_ids' => [301, 101, 201], 'capped' => false], $s->load($qid, 'alice'));
 		$this->assertNull($s->load($qid, 'bob'), 'a snapshot belongs to the user who built it');
 		$this->assertNull($s->load('00000000-0000-4000-8000-000000000000', 'alice'));
 		$this->assertNull($s->load('not a uuid', 'alice'));
 	}
 
+	public function testASnapshotKeepsWhetherItsListIsIncomplete(): void {
+		$s = new SnapshotStore($this->db());
+		$this->assertTrue($s->load($s->save('alice', [1], [2], true), 'alice')['capped']);
+		$this->assertFalse($s->load($s->save('alice', [1], [2], false), 'alice')['capped']);
+	}
+
 	public function testTheSnapshotHoldsOnlyIdsAndAHashedUser(): void {
-		(new SnapshotStore($this->db()))->save('alice', [1], [2]);
+		(new SnapshotStore($this->db()))->save('alice', [1], [2], false);
 		$row = $this->app()->query('SELECT * FROM aps_search.search_snapshot')->fetch(\PDO::FETCH_ASSOC);
 		$this->assertStringNotContainsString('alice', json_encode($row));
-		$this->assertSame(['qid', 'uid_hash', 'created_at', 'file_ids', 'chunk_ids', 'ver'], array_keys($row));
+		$this->assertSame(['qid', 'uid_hash', 'created_at', 'file_ids', 'chunk_ids', 'ver', 'capped'], array_keys($row));
 	}
 
 	public function testAnExpiredSnapshotIsGoneAndOldOnesArePruned(): void {
 		$s = new SnapshotStore($this->db());
-		$qid = $s->save('alice', [1], [2]);
+		$qid = $s->save('alice', [1], [2], false);
 		$this->app()->exec("UPDATE aps_search.search_snapshot SET created_at = now() - interval '11 minutes'");
 		$this->assertNull($s->load($qid, 'alice'));
 		$this->app()->exec("UPDATE aps_search.search_snapshot SET created_at = now() - interval '25 minutes'");
-		$s->save('alice', [3], [4]);
+		$s->save('alice', [3], [4], false);
 		$this->assertSame(1, (int)$this->app()->query('SELECT count(*) FROM aps_search.search_snapshot')->fetchColumn(), 'saving prunes what is long dead');
 	}
 
@@ -48,9 +54,9 @@ class SnapshotAndStatePgTest extends DbTestCase {
 		$s = new SnapshotStore($this->db());
 		$ids = [];
 		for ($i = 0; $i < SnapshotStore::PER_USER + 5; $i++) {
-			$ids[] = $s->save('alice', [$i], [$i]);
+			$ids[] = $s->save('alice', [$i], [$i], false);
 		}
-		$s->save('bob', [1], [1]);
+		$s->save('bob', [1], [1], false);
 		$this->assertSame(SnapshotStore::PER_USER, (int)$this->app()->query("SELECT count(*) FROM aps_search.search_snapshot WHERE uid_hash = '" . \OCA\BuscadorDocumental\Search\Cursor::uidHash('alice') . "'")->fetchColumn());
 		$this->assertNull($s->load($ids[0], 'alice'), 'the oldest went');
 		$this->assertNotNull($s->load(end($ids), 'alice'), 'the newest stayed');
@@ -59,7 +65,7 @@ class SnapshotAndStatePgTest extends DbTestCase {
 
 	public function testAnEmptyListIsAValidSnapshot(): void {
 		$s = new SnapshotStore($this->db());
-		$this->assertSame(['file_ids' => [], 'chunk_ids' => []], $s->load($s->save('alice', [], []), 'alice'));
+		$this->assertSame(['file_ids' => [], 'chunk_ids' => [], 'capped' => false], $s->load($s->save('alice', [], [], false), 'alice'));
 	}
 
 	public function testSemanticSearchIsOffUntilProfileValidationAndCoverageAllowIt(): void {

@@ -182,12 +182,30 @@ class SearcherPgTest extends DbTestCase {
 		$p1 = $s->search('b', $this->req(['query' => 'REM', 'page_size' => 25]));
 		$this->assertCount(25, $p1['hits']);
 		$this->assertSame(30, $p1['page']['total']);
+		$this->assertFalse($p1['page']['capped'], 'every match was ranked: the total is exact');
 		$p2 = $this->searcher()->search('b', $this->req(['query' => 'REM', 'cursor' => $p1['cursors']['next']]));
 		$this->assertCount(5, $p2['hits']);
 		$this->assertSame([], array_intersect($this->ids($p1), $this->ids($p2)));
 		$this->assertCount(30, array_unique([...$this->ids($p1), ...$this->ids($p2)]));
 		$newest = $this->searcher()->search('b', $this->req(['query' => 'REM', 'sort' => 'modified_desc']));
 		$this->assertSame([30, 29, 28], array_slice($this->ids($newest), 0, 3));
+	}
+
+	public function testAFullKeywordWindowIsCappedWithFewerFilesThanTheReadableBound(): void {
+		$a = $this->app();                                                      // one session: doc() opens one per file
+		$a->exec("INSERT INTO aps_search.file_state (file_id, etag, text_state) SELECT g, 'e1', 'indexed' FROM generate_series(1, 60) g");
+		$a->exec("INSERT INTO aps_search.file_acl (file_id, principals) SELECT g, ARRAY['u:b'] FROM generate_series(1, 60) g");
+		$a->exec("INSERT INTO aps_search.file_meta (file_id, name, mime, mtime, ancestors) SELECT g, 'f' || g || '.pdf', 'application/pdf', 100, ARRAY[1]::bigint[] FROM generate_series(1, 60) g");
+		$a->exec("INSERT INTO aps_search.page (file_id, page_no, text, source) SELECT g, 1, 'hemoglobina glicosilada', 'layer' FROM generate_series(1, 60) g");
+		// 10 050 matching chunks over 60 files: more than the 10 000 newest the keyword leg ranks for a reader of few files.
+		$a->exec("INSERT INTO aps_search.chunk (file_id, page_no, ord, text) SELECT 1 + g % 60, 1, g / 60, 'hemoglobina glicosilada de control ' || g FROM generate_series(0, 10049) g");
+		for ($i = 1; $i <= 60; $i++) {
+			$this->nodes[$i] = [$this->node("f$i.pdf")];
+		}
+		$p1 = $this->searcher()->search('b', $this->req(['mode' => 'exacta']));
+		$this->assertSame([60, true], [$p1['page']['total'], $p1['page']['capped']], 'older matches were never ranked: the list is incomplete');
+		$p2 = $this->searcher()->search('b', $this->req(['mode' => 'exacta', 'cursor' => $p1['cursors']['next']]));
+		$this->assertSame([60, true], [$p2['page']['total'], $p2['page']['capped']], 'the next page reads the flag from the stored snapshot');
 	}
 
 	public function testFiltersApplyInEveryMode(): void {
