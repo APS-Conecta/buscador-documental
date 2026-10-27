@@ -278,9 +278,36 @@ def test_a_new_titulo_clears_the_chapter_below_it():
     assert [c["heading"] for c in out if c["text"].startswith("Artículo 2")] == ["TÍTULO II › Artículo 2"]
 
 
+def test_word_numeral_sections_open_their_own_level():
+    sections = ["TÍTULO IV", "Párrafo 3º De las sanciones", "TÍTULO FINAL", "LIBRO PRIMERO", "CAPÍTULO ÚNICO"]
+    page = "\n".join(["TÍTULO IV", "Párrafo 3º De las sanciones", "Artículo 49.- Multa por la infracción.",
+                      "TÍTULO FINAL", "Artículo 50.- Vigencia de la ley.",
+                      "LIBRO PRIMERO", "DE LAS PERSONAS", "Artículo 51.- Personas naturales.",
+                      "CAPÍTULO ÚNICO", "Artículo 52.- Domicilio de las personas."])
+    out = chunk.split([page])
+    heading = {c["text"].split(".-")[0]: c["heading"] for c in out if c["text"].startswith("Artículo")}
+    assert heading["Artículo 50"].startswith("TÍTULO FINAL") and "Párrafo 3º" not in heading["Artículo 50"]
+    assert heading["Artículo 51"].startswith("LIBRO PRIMERO") and "TÍTULO" not in heading["Artículo 51"]
+    assert "CAPÍTULO ÚNICO" in heading["Artículo 52"]
+    assert not [c["text"] for c in out if any(c["text"].endswith(s) for s in sections)], "a section line is never body text"
+
+
+@pytest.mark.parametrize("line", ["TÍTULO PRELIMINAR", "Título Preliminar", "TÍTULO FINAL", "CAPÍTULO ÚNICO", "PÁRRAFO ÚNICO",
+                                  "LIBRO PRIMERO", "TÍTULO PRIMERO", "TÍTULO III bis", "Título II", "Libro Segundo",
+                                  "Párrafo 3º bis"])
+def test_word_and_suffixed_numerals_are_section_lines(line):
+    assert chunk.RE_ESTRUCTURA.match(line)
+
+
+@pytest.mark.parametrize("line", ["Capítulo IIbis", "Título 5ter Normas"])
+def test_a_suffix_glued_to_the_numeral_is_not_a_section_line(line):
+    assert not chunk.RE_ESTRUCTURA.match(line)
+
+
 @pytest.mark.parametrize("line", ["Párrafo segundo del artículo 5 dice que los datos se tratan.",
                                   "Capítulo anterior al presente es aplicable en todo caso.",
-                                  "Capítulo 3 del presente reglamento establece que los datos personales deben tratarse con cuidado."])
+                                  "Capítulo 3 del presente reglamento establece que los datos personales deben tratarse con cuidado.",
+                                  "Título primero de este reglamento establece que los datos se tratan."])
 def test_wrapped_body_lines_are_not_headings(line):
     out = chunk.split([f"Artículo 1.- Texto inicial.\n{line}"])
     assert len(out) == 1 and line.split()[0] in out[0]["text"] and "›" not in (out[0]["heading"] or "").replace("Artículo 1", "")
