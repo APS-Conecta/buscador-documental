@@ -20,7 +20,7 @@ import time
 
 ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 DEFAULT_CHILD = [sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "parse_job.py")]
-RESULT_MAX = 96 * 1024 * 1024        # a 64 MB page payload plus overhead; anything bigger is not a legitimate answer
+RESULT_MAX = 96 * 1024 * 1024        # a 64 MB page payload plus overhead; a bigger answer means the file's text is too large to index
 ERR_TAIL = 400
 CHILD_FSIZE = 512 * 1024 * 1024      # no child writes a file bigger than this (stderr floods, runaway temp files)
 MAX_TIMEOUT = 3600
@@ -84,7 +84,7 @@ def _read_answer(path: str) -> dict:
         return {"status": "error", "reason": "ocr_failed", "detail": "answer is not a regular file"}
     with fh:
         if os.fstat(fh.fileno()).st_size > RESULT_MAX:
-            return {"status": "error", "reason": "ocr_failed", "detail": "answer too large"}
+            return {"status": "error", "reason": "too_large", "detail": "answer too large"}
         try:
             return json.loads(fh.read(RESULT_MAX + 1))
         except (ValueError, RecursionError):
