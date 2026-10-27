@@ -104,7 +104,7 @@ class OutboxListenerTest extends TestCase {
 		$l->handle(new TagAssignedEvent('files', ['10'], [4]));
 		$l->handle(new TagAssignedEvent('calendar', ['11'], [3]));
 		$l->handle(new TagAssignedEvent('files', ['12'], [4, 3]));
-		$this->assertSame([[7, 'file'], [8, 'file'], [9, 'file'], [12, 'file']], $this->touched);
+		$this->assertSame([[7, 'subtree'], [8, 'subtree'], [9, 'subtree'], [12, 'subtree']], $this->touched);
 	}
 
 	public function testACaseVariantOfTheExclusionTagOnFilesTriggersAnEvaluation(): void {

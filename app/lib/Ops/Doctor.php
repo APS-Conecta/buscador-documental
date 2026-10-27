@@ -8,6 +8,7 @@ namespace OCA\BuscadorDocumental\Ops;
 
 use OCA\BuscadorDocumental\Db\IndexDb;
 use OCA\BuscadorDocumental\Scope\Settings;
+use OCA\BuscadorDocumental\Search\CandidateQuery;
 use OCA\BuscadorDocumental\Search\EmbedClient;
 use OCA\BuscadorDocumental\Search\ProbeFailed;
 use OCP\IAppConfig;
@@ -19,7 +20,7 @@ use OCP\IConfig;
  */
 class Doctor {
 	private const APP = 'buscador_documental';
-	public const SCHEMA = 5;
+	public const SCHEMA = 6;
 
 	public function __construct(
 		private IndexDb $db,
@@ -27,6 +28,7 @@ class Doctor {
 		private IAppConfig $appConfig,
 		private IConfig $config,
 		private EmbedClient $embed,
+		private CandidateQuery $candidates,
 	) {
 	}
 
@@ -140,7 +142,7 @@ class Doctor {
 		$missing = 0;
 		foreach ($gens as $row) {
 			if ($row['state'] !== 'building') {
-				$missing += $this->db->rows("SELECT 1 FROM pg_indexes WHERE schemaname = 'aps_search' AND tablename = ? AND indexdef ILIKE '%hnsw%'", ['chunk_vec_' . (int)$row['gen']]) === [] ? 1 : 0;
+				$missing += !$this->candidates->hasAnnIndex((int)$row['gen']) ? 1 : 0;
 			}
 		}
 		$out[] = $this->check('vector_index', $missing === 0 ? 'ok' : 'warn', $missing === 0 ? 'present' : "$missing generation(s) without the vector index: searches would scan everything; occ buscador:profile refresh builds it");

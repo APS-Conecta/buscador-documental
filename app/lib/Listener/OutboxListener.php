@@ -53,7 +53,7 @@ class OutboxListener implements IEventListener {
 				}
 			} elseif ($event instanceof TagAssignedEvent || $event instanceof TagUnassignedEvent) {
 				if ($event->getObjectType() === 'files' && $this->hasExclusionTag($event->getTags())) {
-					$this->outbox->touchMany(array_map('intval', $event->getObjectIds()), 'file');
+					$this->outbox->touchMany(array_map('intval', $event->getObjectIds()), 'subtree');
 				}
 			} elseif ($event instanceof ManagerEvent) {
 				if ($event->getEvent() === ManagerEvent::EVENT_DELETE && ExclusionChecker::isExclusionTagName($event->getTag()->getName())) {
