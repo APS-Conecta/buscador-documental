@@ -45,7 +45,7 @@ class VecBackfill {
 				}
 				// A ready or active generation without its index would be searched by full scan: (re)build it, whatever stopped it before.
 				if ($g['state'] !== 'building' || in_array($gen, $ready, true)) {
-					$this->db->rows('SELECT aps_search.build_vec_index(?)', [$gen]);
+					$this->db->execute('SELECT aps_search.build_vec_index(?)', [$gen]);
 				}
 			} catch (\Throwable) {
 				continue;                                          // one generation's trouble must not stop the others; the next tick tries again

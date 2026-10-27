@@ -19,7 +19,9 @@ class IndexDb {
 
 	/** @return list<array<string, mixed>> */
 	public function rows(string $sql, array $params = []): array {
-		return $this->db->executeQuery($sql, $params)->fetchAll();
+		$run = fn (): array => $this->db->executeQuery($sql, $params)->fetchAll();
+		// Outside a transaction Nextcloud sends executeQuery() to dbreplica and tracks read-after-write only for *PREFIX* tables; a transaction pins the primary.
+		return $this->db->inTransaction() ? $run() : $this->guarded($run);
 	}
 
 	/**
