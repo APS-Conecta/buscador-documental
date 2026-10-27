@@ -28,7 +28,7 @@ class MigrationTest extends DbTestCase {
 
 	public function testSchemaAndTextSearchConfigExist(): void {
 		$app = $this->app();
-		$this->assertSame(5, (int)$app->query("SELECT schema_ver FROM aps_search.schema_meta")->fetchColumn());
+		$this->assertSame(7, (int)$app->query("SELECT schema_ver FROM aps_search.schema_meta")->fetchColumn());
 		$this->assertSame(1, (int)$app->query("SELECT count(*) FROM pg_ts_config c JOIN pg_namespace n ON n.oid = c.cfgnamespace WHERE n.nspname = 'aps_search' AND c.cfgname = 'spanish_unaccent'")->fetchColumn());
 		$this->assertSame(0, (int)$app->query("SELECT count(*) FROM pg_tables WHERE tablename LIKE 'oc\\_buscador%'")->fetchColumn());
 	}

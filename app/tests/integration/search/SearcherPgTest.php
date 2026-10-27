@@ -115,6 +115,10 @@ class SearcherPgTest extends DbTestCase {
 			$out = $s->search('b', $this->req(['mode' => $mode]));
 			$this->assertSame('ok', $out['status'], $mode);
 			$this->assertSame([1], $this->ids($out), $mode);
+			$this->assertSame(1, $out['page']['total'], "$mode: the stale file is not counted");
+			$this->assertSame(1, $out['page']['to'], "$mode: and does not move the page position");
+			$this->assertNull($out['cursors']['next'], $mode);
+			$this->assertNull($out['cursors']['last'], $mode);
 			$this->assertGreaterThanOrEqual(1, $this->recheck->dropped(), "$mode: the stale id reached the live recheck and was dropped");
 			$this->assertNull($out['notice'], $mode);
 		}
@@ -188,8 +192,8 @@ class SearcherPgTest extends DbTestCase {
 
 	public function testFiltersApplyInEveryMode(): void {
 		$this->boot();
-		$this->doc(1, ['u:b'], 'hemoglobina glicosilada pdf', [1, 0, 0], 'application/pdf', 100);
-		$this->doc(2, ['u:b'], 'hemoglobina glicosilada imagen', [1, 0, 0], 'image/png', 200);
+		$this->doc(1, ['u:b'], 'hemoglobina glicosilada pdf', [1, 0, 0], 'application/pdf', 1760000000);
+		$this->doc(2, ['u:b'], 'hemoglobina glicosilada imagen', [1, 0, 0], 'image/png', 1760000100);
 		foreach (['exacta', 'significado', 'mixta'] as $mode) {
 			$out = $this->searcher()->search('b', $this->req(['mode' => $mode, 'filters' => ['types' => ['imagen'], 'modified_from' => '1970-01-01']]));
 			$this->assertSame([2], $this->ids($out), $mode);

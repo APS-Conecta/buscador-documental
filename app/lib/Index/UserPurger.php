@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace OCA\BuscadorDocumental\Index;
 
+use OCA\BuscadorDocumental\Audit\Actor;
 use OCA\BuscadorDocumental\Audit\AuditLog;
 use OCA\BuscadorDocumental\Audit\Pseudonyms;
 use OCA\BuscadorDocumental\Db\IndexDb;
@@ -45,7 +46,7 @@ class UserPurger {
 		try {
 			$rows = $this->db->rows('SELECT storage_numeric_id FROM aps_search.purge_pending WHERE token = ?', [$token]);
 			$erased = $rows === [] ? 0 : $this->purgeStorage((int)$rows[0]['storage_numeric_id']);
-			$this->audit->record('system', 'purge_user', $uid, ['count' => $erased, 'reason' => 'user_deleted']);
+			$this->audit->record(Actor::System, 'purge_user', $uid, ['count' => $erased, 'reason' => 'user_deleted']);
 			return $erased;
 		} finally {
 			// also when the erasure failed: the uid must not stay linkable to the audit rows, and what was missed is
@@ -63,14 +64,14 @@ class UserPurger {
 		}
 		$this->learnStorage($storage);
 		$erased = $this->purgeStorage($storage);
-		$this->audit->record('occ', 'purge_user', $uid, ['count' => $erased, 'reason' => 'admin_purge']);
+		$this->audit->record(Actor::Occ, 'purge_user', $uid, ['count' => $erased, 'reason' => 'admin_purge']);
 		return $erased;
 	}
 
 	/** `occ buscador:purge-user --storage-id` (a user already deleted): audited like the other way. */
 	public function purgeStorageAudited(int $storageId): int {
 		$erased = $this->purgeStorage($storageId);
-		$this->audit->record('occ', 'purge_user', null, ['count' => $erased, 'reason' => 'admin_purge', 'storage_id' => $storageId]);
+		$this->audit->record(Actor::Occ, 'purge_user', null, ['count' => $erased, 'reason' => 'admin_purge', 'storage_id' => $storageId]);
 		return $erased;
 	}
 

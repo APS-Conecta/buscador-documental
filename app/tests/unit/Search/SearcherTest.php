@@ -42,10 +42,10 @@ class SearcherTest extends TestCase {
 	private ?array $queryVector = [1.0, 0.0, 0.0];
 	private int $accessible = 50;
 	private bool $ann = true;
-	/** @var list<int> files stored with x:recheck (access the prefilter cannot model) */
-	private array $unmodelled = [];
-	/** @var array<int, list<Node>> */
+	/** @var array<int, list<Node>|\Throwable> */
 	private array $nodes = [];
+	/** @var array<string, list<string>> object id => tag ids (tag 3 is rag-excluded) */
+	private array $tagged = [];
 
 	private function node(string $name, string $etag = 'e1'): Node {
 		$n = $this->createMock(Node::class);
@@ -61,6 +61,19 @@ class SearcherTest extends TestCase {
 			$this->nodes[$i] = [$this->node("f$i.pdf")];
 			$this->meta[$i] = ['name' => "f$i.pdf", 'mtime' => 1000 + $i];
 			$this->keywordRows[] = ['file_id' => $i, 'chunk_id' => $i * 10];
+		}
+	}
+
+	/** The ranked list is exactly these file ids, in this order; the refused ones are stored for the caller but no longer readable. */
+	private function rankedList(array $ids, array $refused = []): void {
+		$this->keywordRows = [];
+		$this->nodes = [];
+		$this->meta = [];
+		$refused = array_flip($refused);
+		foreach ($ids as $i) {
+			$this->keywordRows[] = ['file_id' => $i, 'chunk_id' => $i * 10];
+			$this->nodes[$i] = isset($refused[$i]) ? [] : [$this->node("f$i.pdf")];
+			$this->meta[$i] = ['name' => "f$i.pdf", 'mtime' => 1000 + $i];
 		}
 	}
 
@@ -89,7 +102,6 @@ class SearcherTest extends TestCase {
 			$this->seen[] = ['significado', [$gen, $f, $limit, $exact]];
 			return array_slice($this->vectorRows, 0, $limit);
 		});
-		$cand->method('unmodelledAmong')->willReturnCallback(fn (array $ids) => array_values(array_intersect($ids, $this->unmodelled)));
 		$cand->method('accessibleFiles')->willReturnCallback(fn () => $this->accessible);
 		$cand->method('hasAnnIndex')->willReturnCallback(fn () => $this->ann);
 
@@ -119,7 +131,7 @@ class SearcherTest extends TestCase {
 		$store->method('load')->willReturnCallback(fn (string $qid, string $uid) => (($this->snapshots[$qid]['uid'] ?? null) === $uid) ? $this->snapshots[$qid] : null);
 
 		$tree = array_fill_keys(array_keys($this->nodes), 9000) + [9000 => -1];
-		$recheck = ScriptedRecheck::make($this->nodes, TreeChecker::make($tree, [[3, 'rag-excluded']], []));
+		$recheck = ScriptedRecheck::make($this->nodes, TreeChecker::make($tree, [[3, 'rag-excluded']], $this->tagged));
 		return new Searcher($db, $principals, $cand, $recheck, $hits, new Glossary([['key' => 'rem', 'expansion' => 'resumen estadistico mensual', 'ambiguous' => false]]),
 			$embed, $state, $store, new Cursor(self::SECRET), $log ?? $this->createMock(LoggerInterface::class));
 	}
@@ -155,44 +167,65 @@ class SearcherTest extends TestCase {
 		$this->assertSame(range(51, 60), $this->ids($last));
 	}
 
-	public function testFilesTheStoredPrincipalsCannotJudgeAreRecheckedBeforeAnythingIsCounted(): void {
-		$this->corpus(30);
-		$this->unmodelled = [2, 5, 7];                                         // e.g. shared with a circle or a Talk room
-		$this->nodes[2] = [];                                                  // B cannot read file 2 or 5
-		$this->nodes[5] = [];
-		$s = $this->searcher();
-		$out = $s->search('b', $this->req());
-		$this->assertSame(28, $out['page']['total'], 'unreadable unmodelled files are not in the total');
-		$this->assertNotContains(2, $this->ids($out));
-		$this->assertContains(7, $this->ids($out), 'a readable unmodelled file stays');
+	public function testFilesTheCallerCanNoLongerReadAreNeverCounted(): void {
+		$this->corpus(3);
+		foreach ([1, 2, 3] as $gone) {
+			$this->nodes[$gone] = [];                                           // the stored principals still name the caller
+		}
+		$out = $this->searcher()->search('b', $this->req());
+		$this->assertSame('ok', $out['status']);
+		$this->assertSame([], $this->ids($out));
+		$this->assertSame(['from' => 0, 'to' => 0, 'total' => 0, 'capped' => false, 'size' => 25], $out['page']);
+		$this->assertNull($out['cursors']['next']);
+		$this->assertNull($out['cursors']['last']);
+	}
+
+	public function testOneReadableMatchBesideRefusedFilesCountsOne(): void {
+		$this->corpus(4);
+		foreach ([1, 2, 3] as $gone) {
+			$this->nodes[$gone] = [];
+		}
+		$out = $this->searcher()->search('b', $this->req());
+		$this->assertSame([4], $this->ids($out));
+		$this->assertSame([1, 1, 1], [$out['page']['from'], $out['page']['to'], $out['page']['total']]);
+	}
+
+	public function testAFileTaggedForExclusionIsNotCounted(): void {
+		$this->corpus(4);
+		$this->tagged = ['2' => ['3']];                                         // tagged; its erasure has not run yet
+		$out = $this->searcher()->search('b', $this->req());
+		$this->assertSame([1, 3, 4], $this->ids($out));
+		$this->assertSame(3, $out['page']['total']);
 	}
 
 	public function testPreviousGoesBackToWhereThePreviousPageReallyStarted(): void {
 		$this->corpus(80);
-		foreach (range(1, 10) as $gone) {
-			$this->nodes[$gone] = [];                                           // page 1 will use 35 positions to show 25 hits
+		$p1 = $this->searcher()->search('b', $this->req());
+		foreach (range(30, 39) as $gone) {
+			$this->nodes[$gone] = [];                                           // revoked after page 1: page 2 uses 35 positions to show 25 hits
 		}
-		$s = $this->searcher();
-		$p1 = $s->search('b', $this->req());
-		$this->assertSame(range(11, 35), $this->ids($p1));
+		$s = $this->searcher();                                                 // fresh recheck state, same snapshots
 		$p2 = $s->search('b', $this->req(['cursor' => $p1['cursors']['next']]));
-		$this->assertSame(range(36, 60), $this->ids($p2));
-		$back = $s->search('b', $this->req(['cursor' => $p2['cursors']['prev']]));
-		$this->assertSame(range(11, 35), $this->ids($back), 'not a page that starts inside page 1');
-		$this->assertSame([], array_intersect($this->ids($back), $this->ids($p2)));
+		$this->assertSame([...range(26, 29), ...range(40, 60)], $this->ids($p2));
+		$p3 = $s->search('b', $this->req(['cursor' => $p2['cursors']['next']]));
+		$this->assertSame(range(61, 80), $this->ids($p3));
+		$back = $s->search('b', $this->req(['cursor' => $p3['cursors']['prev']]));
+		$this->assertSame($this->ids($p2), $this->ids($back), 'not a page that starts inside page 2');
+		$this->assertSame([], array_intersect($this->ids($back), $this->ids($p3)));
 	}
 
 	public function testHitsDroppedByTheRecheckAreRefilledFromLaterPositions(): void {
 		$this->corpus(60);
-		foreach ([2, 3, 5, 8] as $gone) {
-			$this->nodes[$gone] = [];                                          // revoked since indexing
+		$p1 = $this->searcher()->search('b', $this->req());
+		foreach ([27, 28, 30, 33] as $gone) {
+			$this->nodes[$gone] = [];                                           // revoked after page 1 was shown
 		}
-		$s = $this->searcher();
-		$p1 = $s->search('b', $this->req());
-		$this->assertSame([1, 4, 6, 7, ...range(9, 29)], $this->ids($p1), 'a full page despite four drops');
+		$s = $this->searcher();                                                 // fresh recheck state, same snapshots
 		$p2 = $s->search('b', $this->req(['cursor' => $p1['cursors']['next']]));
-		$this->assertSame(range(30, 54), $this->ids($p2), 'the next page continues right after the last position used');
-		$this->assertSame([], array_intersect($this->ids($p1), $this->ids($p2)));
+		$this->assertSame([26, 29, 31, 32, ...range(34, 54)], $this->ids($p2), 'a full page despite four drops');
+		$p3 = $s->search('b', $this->req(['cursor' => $p2['cursors']['next']]));
+		$this->assertSame(range(55, 60), $this->ids($p3), 'the next page continues right after the last position used');
+		$this->assertSame([], array_intersect($this->ids($p2), $this->ids($p3)));
 	}
 
 	public function testAPermissionRevokedBetweenPagesNeverSkipsAReadableFile(): void {
@@ -233,17 +266,37 @@ class SearcherTest extends TestCase {
 		$this->assertCount(40, array_unique($seen), 'every file exactly once across the pages');
 	}
 
-	public function testTheListIsCappedAtAThousandAndSaysSo(): void {
-		$this->corpus(5);
-		$this->keywordRows = [];
-		for ($i = 1; $i <= 1200; $i++) {
-			$this->keywordRows[] = ['file_id' => $i, 'chunk_id' => $i];
-			$this->nodes[$i] = [$this->node("f$i.pdf")];
-			$this->meta[$i] = ['name' => "f$i.pdf", 'mtime' => $i];
-		}
+	public function testTheStoredListStopsAtTheReadableBoundAndSaysSo(): void {
+		$this->rankedList(range(1, 1200));
+		$s = $this->searcher();
+		$out = $s->search('b', $this->req());
+		$this->assertSame([Searcher::LISTED, true], [$out['page']['total'], $out['page']['capped']]);
+		$last = $s->search('b', $this->req(['cursor' => $out['cursors']['last']]));
+		$this->assertSame(range(76, 100), $this->ids($last), 'the last page of 25 opens position 75');
+
+		$this->rankedList(range(1, 50 + Searcher::LISTED + 10), range(1, 50));
 		$out = $this->searcher()->search('b', $this->req());
-		$this->assertSame(1000, $out['page']['total']);
-		$this->assertTrue($out['page']['capped']);
+		$this->assertSame([Searcher::LISTED, true], [$out['page']['total'], $out['page']['capped']]);
+		$this->assertSame(51, $this->ids($out)[0]);
+
+		$this->rankedList(range(1, Searcher::LISTED - 1));
+		$without = $this->searcher()->search('b', $this->req());
+		$this->rankedList(range(1, Searcher::LISTED + 49), range(Searcher::LISTED, Searcher::LISTED + 49));
+		$with = $this->searcher()->search('b', $this->req());
+		$this->assertSame([Searcher::LISTED - 1, false], [$with['page']['total'], $with['page']['capped']]);
+		$this->assertSame($without['page'], $with['page']);
+		$this->assertSame(array_map('is_null', $without['cursors']), array_map('is_null', $with['cursors']));
+	}
+
+	public function testOneFileFailingInALaterRecheckBatchDoesNotFailTheSearch(): void {
+		$this->rankedList(range(1, 130), [1]);
+		$this->nodes[101] = new ExclusionUnavailable('the file layer failed for this file');
+		$s = $this->searcher();
+		$out = $s->search('b', $this->req());
+		$this->assertSame('ok', $out['status']);
+		$this->assertSame([Searcher::LISTED, true], [$out['page']['total'], $out['page']['capped']]);
+		$last = $s->search('b', $this->req(['cursor' => $out['cursors']['last']]));
+		$this->assertSame([...range(77, 100), 102], $this->ids($last), 'file 101 is not stored');
 	}
 
 	public function testMixtaFusesBothLegsAndRunsThemUnderTheSameFilters(): void {

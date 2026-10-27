@@ -9,6 +9,7 @@ namespace OCA\BuscadorDocumental\Tests\integration\db;
 use OCA\BuscadorDocumental\Db\IndexDb;
 use OCA\BuscadorDocumental\Scope\Settings;
 use OCA\BuscadorDocumental\Search\VecBackfill;
+use PDO;
 
 /** Housekeeping for the vector lane: queue what lacks vectors, measure coverage, ready a generation when it is full enough. */
 class VecBackfillTest extends DbTestCase {
@@ -33,8 +34,8 @@ class VecBackfillTest extends DbTestCase {
 		$this->app()->exec("INSERT INTO aps_search.chunk_vec_$gen (chunk_id, file_id, vec) VALUES ($chunk, $file, '[1,0,0]')");
 	}
 
-	private function backfill(): VecBackfill {
-		$db = new IndexDb($this->connection($this->app()));
+	private function backfill(?PDO $session = null): VecBackfill {
+		$db = new IndexDb($this->connection($session ?? $this->app()));
 		return new VecBackfill($db, new Settings($db));
 	}
 
@@ -55,7 +56,7 @@ class VecBackfillTest extends DbTestCase {
 		$this->assertSame(4, $this->backfill()->tick(4)['queued'], 'the next batch of four');
 	}
 
-	public function testAGenerationBecomesReadyOnceCoverageReachesTheThresholdAndGetsItsIndex(): void {
+	public function testAGenerationBecomesReadyOnceCoverageReachesTheThreshold(): void {
 		$chunks = [];
 		for ($i = 1; $i <= 20; $i++) {
 			$chunks[$i] = $this->indexed($i);
@@ -71,7 +72,6 @@ class VecBackfillTest extends DbTestCase {
 		$r = $this->backfill()->tick(100);
 		$this->assertEqualsWithDelta(0.95, $r['coverage'][1], 1e-9);
 		$this->assertSame('ready', $this->app()->query('SELECT state FROM aps_search.embedding_profile WHERE gen = 1')->fetchColumn());
-		$this->assertSame(1, (int)$this->app()->query("SELECT count(*) FROM pg_indexes WHERE tablename = 'chunk_vec_1' AND indexdef ILIKE '%hnsw%'")->fetchColumn());
 		$this->assertSame([1], $r['ready'], 'the report names the generation it readied');
 	}
 
@@ -116,15 +116,106 @@ class VecBackfillTest extends DbTestCase {
 		$this->assertSame(1.0, $r['coverage'][1]);
 	}
 
-	public function testAReadyOrActiveGenerationThatLostItsIndexGetsItBackOnTheNextTick(): void {
+	public function testATickNeverBuildsTheVectorIndex(): void {
 		$this->indexed(1);
 		$this->gen(1, 'ready');
 		$this->backfill()->tick(10);
-		$idx = static fn ($t) => (int)$t->app()->query("SELECT count(*) FROM pg_indexes WHERE tablename = 'chunk_vec_1' AND indexdef ILIKE '%hnsw%'")->fetchColumn();
-		$this->assertSame(1, $idx($this), 'built for a ready generation even though it was not readied by this tick');
-		self::connect('postgres', 'dev', self::$dbName)->exec('DROP INDEX aps_search.chunk_vec_1_hnsw');
-		$this->backfill()->tick(10);
-		$this->assertSame(1, $idx($this));
+		$this->assertFalse($this->candidates()->hasAnnIndex(1), 'building needs the owner role: occ buscador:profile refresh does it');
+	}
+
+	public function testATickDoesNotWaitForAnOpenWriteOnAGenerationThatHasItsIndex(): void {
+		$chunk = $this->indexed(1);
+		$this->gen(1, 'ready');
+		$this->embed(1, $chunk, 1);
+		$this->candidates()->buildIndex(1);
+		$oid = $this->indexOid();
+		$writer = $this->app();
+		$writer->beginTransaction();
+		$writer->exec('DELETE FROM aps_search.chunk_vec_1');                 // an erasure or a re-index still running
+		$session = $this->app();
+		$session->exec("SET lock_timeout = '1s'");
+		$started = microtime(true);
+		$r = $this->backfill($session)->tick(10);
+		$this->assertLessThan(0.5, microtime(true) - $started, 'the tick queued behind the open write');
+		$this->assertSame(1.0, $r['coverage'][1]);
+		$this->assertSame('1.0000', $this->setting('vec_coverage_1'));
+		$this->assertSame($oid, $this->indexOid(), 'the index is the one built before');
+	}
+
+	/** @return list<string> idem keys of the file's vec jobs, in generation order */
+	private function vecJobs(int $file): array {
+		return $this->app()->query("SELECT idem_key FROM aps_search.job WHERE lane = 'vec' AND file_id = $file ORDER BY gen")->fetchAll(\PDO::FETCH_COLUMN);
+	}
+
+	public function testABuildingGenerationStopsRequeuingAFileItGaveUpOn(): void {
+		$this->gen(1, 'active');
+		$this->embed(1, $this->indexed(7), 7);
+		$this->gen(2);
+		$this->backfill()->tick(100);
+		$c = $this->claim($this->worker(), 'vec-w', lane: 'vec');
+		$this->assertSame(['7:e1:2'], [$this->vecJobs(7)[0]], 'only generation 2 lacks the vectors');
+		$this->giveUpVecJob($c);
+		$this->backfill()->tick(100);
+		$this->assertSame([], $this->vecJobs(7), 'the generation that gave up does not queue the file again');
+	}
+
+	public function testANewGenerationQueuesAFileThatFailedOnlyInTheActiveOne(): void {
+		$this->indexed(7);
+		$this->gen(1, 'active');
+		$this->backfill()->tick(100);
+		$this->giveUpVecJob($this->claim($this->worker(), 'vec-w', lane: 'vec'));
+		$this->gen(2);
+		$this->backfill()->tick(100);
+		$this->assertSame(['7:e1:2'], $this->vecJobs(7), 'generation 2 gets its own try; generation 1 does not try again');
+	}
+
+	public function testAFailureInTheActiveGenerationStillStopsItsRequeue(): void {
+		$this->indexed(7);
+		$this->gen(1, 'active');
+		$this->backfill()->tick(100);
+		$this->giveUpVecJob($this->claim($this->worker(), 'vec-w', lane: 'vec'));
+		$this->backfill()->tick(100);
+		$this->assertSame([], $this->vecJobs(7));
+		$this->assertSame('failed', $this->app()->query('SELECT vec_state FROM aps_search.file_state WHERE file_id = 7')->fetchColumn());
+	}
+
+	public function testTheAttemptsCapRecordsAFailureForTheJobsGeneration(): void {
+		$this->gen(1, 'active');
+		$this->embed(1, $this->indexed(7), 7);
+		$this->gen(2);
+		$this->backfill()->tick(100);
+		$this->claim($this->worker(), 'vec-w', lane: 'vec');
+		$this->app()->exec("UPDATE aps_search.job SET attempts = 5, lease_until = now() - interval '1 second' WHERE lane = 'vec'");
+		$this->worker()->query("SELECT * FROM aps_search.claim_job('vec', 1, 'other', 900)")->fetchAll();     // runs the give-up step
+		$this->assertSame([], $this->vecJobs(7), 'given up after five claims');
+		$this->backfill()->tick(100);
+		$this->assertSame([], $this->vecJobs(7), 'and generation 2 does not queue it again');
+	}
+
+	public function testNewTextClearsFailureRecordsAndQueuesEveryLiveGeneration(): void {
+		$this->gen(1, 'active');
+		$this->embed(1, $this->indexed(7), 7);
+		$this->gen(2);
+		$this->backfill()->tick(100);
+		$this->giveUpVecJob($this->claim($this->worker(), 'vec-w', lane: 'vec'));     // generation 2 gave up on file 7
+		$this->app()->exec("INSERT INTO aps_search.job (lane, file_id, idem_key) VALUES ('text', 7, '7:e1:again')");
+		$w = $this->worker();
+		$this->write($w, $this->claim($w));                                 // the file is read again
+		$this->app()->exec("DELETE FROM aps_search.job WHERE lane = 'vec'");     // leave the queueing to the backfill
+		$this->backfill()->tick(100);
+		$this->assertSame(['7:e1:1', '7:e1:2'], $this->vecJobs(7));
+	}
+
+	public function testAGiveUpForAnOlderVersionRecordsNothing(): void {
+		$this->indexed(7);
+		$this->gen(1, 'active');
+		$this->backfill()->tick(100);
+		$c = $this->claim($this->worker(), 'vec-w', lane: 'vec');
+		$this->app()->exec("UPDATE aps_search.file_state SET etag = 'e2' WHERE file_id = 7");       // the file changed meanwhile
+		$this->giveUpVecJob($c);
+		$this->assertSame('pending', $this->app()->query('SELECT vec_state FROM aps_search.file_state WHERE file_id = 7')->fetchColumn());
+		$this->backfill()->tick(100);
+		$this->assertSame(['7:e2:1'], $this->vecJobs(7), 'the new version gets its own job');
 	}
 
 	public function testRetryFailedPutsFailedFilesBackInTheQueue(): void {

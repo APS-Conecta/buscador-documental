@@ -17,7 +17,7 @@ DB=${2:?usage: restore.sh IN.bak TARGET_DATABASE}
 KEY=${BD_BACKUP_KEY_FILE:?set BD_BACKUP_KEY_FILE to the file holding the encryption key}
 # The schema version this script (and the app that ships it) writes and reads. A backup of any other version is refused: restore
 # it with the app version that made it, then upgrade the app (a newer schema would be read by code that does not know it).
-SUPPORTED_SCHEMA=5
+SUPPORTED_SCHEMA=7
 fail() { echo "restore: $*" >&2; exit 2; }
 # HMAC-SHA256 (RFC 2104) of stdin as lowercase hex, built from plain digests so the key stays off every command line.
 # $1 is the 64-character hex MAC key: exactly one SHA-256 block, used as is (no pre-hashing).
@@ -38,14 +38,41 @@ BD_BACKUP_MAC=$( { printf 'mac:'; cat "$KEY"; } | openssl dgst -sha256 -r | cut 
 [ "$(hmac_sha256 "$BD_BACKUP_MAC" < "$IN")" = "$(cat "$IN.hmac")" ] || fail "the keyed checksum does not match: the backup was altered, or the key is not the one that made it"
 [ -f "$IN.sha256" ] || fail "the checksum file $IN.sha256 is missing: a backup without it cannot be checked for damage"
 [ "$(sha256sum "$IN" | cut -d' ' -f1)" = "$(cat "$IN.sha256")" ] || fail "the checksum does not match: the backup is damaged"
+q() { psql -qAt -d "$DB" -c "$1"; }
+[ "$(q "select 1 from pg_database where datname = current_database()")" = 1 ] || fail "cannot connect to the target database"
 
-# the decrypted dump lives in a private directory (memory when there is some), never in a shared temp file
-# (a backup bigger than the free memory goes to a private directory on disk instead: BD_RESTORE_TMPDIR or the default temp dir;
-# the decrypted text is then on that disk until the restore ends, so put it on an encrypted volume)
+# The decrypted dump lives in a private directory, never in a shared temp file. It goes to memory (/dev/shm) only when the dump
+# plus the target's maintenance_work_mem plus HEADROOM fits in each of: /dev/shm's free space, the kernel's MemAvailable and,
+# under a cgroup v2 memory limit, memory.max minus the working set (memory.current minus inactive_file), because inside a
+# container MemAvailable reports the host. maintenance_work_mem counts because the final index build takes that much (in
+# /dev/shm when it runs in parallel, as backend memory otherwise) while the dump is still staged; HEADROOM (64 MiB) covers
+# openssl, pg_restore and psql. A figure that cannot be read means disk, and BD_RESTORE_NO_SHM forces disk. On disk the dump
+# goes to a private directory in BD_RESTORE_TMPDIR or the default temp dir; the decrypted text is then on that disk until the
+# restore ends, so put it on an encrypted volume.
 NEED=$(( $(wc -c < "$IN") + 1048576 ))
-if [ -z "${BD_RESTORE_NO_SHM:-}" ] && [ -d /dev/shm ] && [ -w /dev/shm ] && [ "$(df -PB1 /dev/shm | awk 'NR==2{print $4}')" -gt "$NEED" ]; then WORK=$(mktemp -d -p /dev/shm); else WORK=$(mktemp -d ${BD_RESTORE_TMPDIR:+-p "$BD_RESTORE_TMPDIR"}); fi
+HEADROOM=67108864
+digits() { case "$1" in ''|*[!0-9]*) return 1;; esac; }
+# errexit is off inside a function called from `if`: every read returns explicitly, and figures are checked before arithmetic
+fits_in_memory() {
+	local mwm need free avail cg dir max cur inactive
+	[ -z "${BD_RESTORE_NO_SHM:-}" ] && [ -d /dev/shm ] && [ -w /dev/shm ] || return 1
+	mwm=$(q "select pg_size_bytes(current_setting('maintenance_work_mem'))") && digits "$mwm" || return 1
+	need=$(( NEED + mwm + HEADROOM ))
+	free=$(df -PB1 /dev/shm | awk 'NR==2{print $4}') && digits "$free" && [ "$free" -gt "$need" ] || return 1
+	avail=$(awk '$1=="MemAvailable:"{print $2}' /proc/meminfo) && digits "$avail" && [ $(( avail * 1024 )) -gt "$need" ] || return 1
+	cg=$(sed -n 's/^0:://p' /proc/self/cgroup) || return 1
+	dir=/sys/fs/cgroup${cg%/}
+	[ -n "$cg" ] && [ -f "$dir/memory.max" ] || return 0
+	max=$(cat "$dir/memory.max") || return 1
+	[ "$max" != max ] || return 0
+	cur=$(cat "$dir/memory.current") || return 1
+	inactive=$(awk '$1=="inactive_file"{print $2}' "$dir/memory.stat") || return 1
+	digits "$max" && digits "$cur" && digits "$inactive" && [ $(( max - cur + inactive )) -gt "$need" ]
+}
+if fits_in_memory; then AT='in memory'; WORK=$(mktemp -d -p /dev/shm); else AT='on disk'; WORK=$(mktemp -d ${BD_RESTORE_TMPDIR:+-p "$BD_RESTORE_TMPDIR"}); fi
 FREE=$(df -PB1 "$WORK" | awk 'NR==2{print $4}')
 [ "$FREE" -gt "$NEED" ] || { rmdir "$WORK" 2>/dev/null; fail "not enough free space to hold the decrypted backup ($(( NEED / 1048576 )) MB needed): set BD_RESTORE_TMPDIR to a directory with room"; }
+echo "restore: the decrypted backup is staged $AT ($WORK)" >&2
 chmod 700 "$WORK"
 CREATED=0
 cleanup() { if [ "$CREATED" = 1 ]; then psql -qAt -d "$DB" -c "drop schema if exists aps_search cascade" >/dev/null 2>&1 || true; fi; rm -rf "$WORK"; }
@@ -59,8 +86,6 @@ TOC=$(pg_restore -l "$TMP" 2>/dev/null) || fail "the decrypted data is not a val
 DUMP_VER=$(pg_restore -a -n aps_search -t schema_meta -f - "$TMP" 2>/dev/null | awk '/^COPY /{f=1; next} f{print $1; exit}')
 [ "$DUMP_VER" = "$SUPPORTED_SCHEMA" ] || fail "the backup holds schema version ${DUMP_VER:-unknown} and this restore script supports version $SUPPORTED_SCHEMA: restore it with the app version that made it, then upgrade"
 
-q() { psql -qAt -d "$DB" -c "$1"; }
-[ "$(q "select 1 from pg_database where datname = current_database()")" = 1 ] || fail "cannot connect to the target database"
 [ -z "$(q "select 1 from pg_namespace where nspname = 'aps_search'")" ] || fail "the target already has an aps_search schema; drop it first (occ buscador_documental:schema:drop --force) if you mean to replace it"
 for role in bd_owner bd_worker; do
 	[ -n "$(q "select 1 from pg_roles where rolname = '$role'")" ] || fail "the role $role does not exist in the cluster: create it first (see the install runbook)"

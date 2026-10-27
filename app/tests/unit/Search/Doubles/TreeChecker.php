@@ -31,6 +31,17 @@ final class TreeChecker extends ExclusionChecker {
 			$objects[] = $t;
 		}
 		$manager->method('getAllTags')->willReturn($objects);
+		return self::over($tree, $manager, $tagged, $mapperFails);
+	}
+
+	/**
+	 * The same over a tag manager the caller scripts (for example one whose tags change while the test runs).
+	 *
+	 * @param array<int, int> $tree
+	 * @param array<string, list<string>> $tagged object id => tag ids
+	 */
+	public static function over(array $tree, ISystemTagManager $manager, array $tagged = [], ?\Throwable $mapperFails = null): self {
+		$gen = new Generator();
 		$mapper = $gen->testDouble(ISystemTagObjectMapper::class, true);
 		if ($mapperFails !== null) {
 			$mapper->method('getTagIdsForObjects')->willThrowException($mapperFails);

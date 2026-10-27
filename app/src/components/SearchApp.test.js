@@ -43,6 +43,14 @@ describe('SearchApp states', () => {
 		w.unmount()
 	})
 
+	it('names the stored bound when the list is capped', async () => {
+		api.search.mockResolvedValue(ok([hit(1)], { page: { from: 1, to: 25, total: 100, capped: true, size: 25 } }))
+		const w = await open('?q=vacunacion')
+		expect(w.find('.bd-cap').text()).toContain('Se muestran los primeros 100')
+		expect(w.text()).not.toMatch(/1\s000/)
+		w.unmount()
+	})
+
 	it('shows the no-results state and offers to clear filters only when some are on', async () => {
 		api.search.mockResolvedValue(ok([]))
 		let w = await open('?q=zzz')
