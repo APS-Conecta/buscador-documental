@@ -261,8 +261,8 @@ class OutboxProcessorTest extends DbTestCase {
 	public function testAMoveIsSeenWhenOnlySomeIndexedDescendantsCarryTheOldParent(): void {
 		[$db, $rules, , $p] = $this->build();
 		$rules->addFolder(10, 'occ');
-		$this->indexedRow(13, [12, 11, 99]);                            // evaluated while 11 still sat in folder 99
-		$this->indexedRow(17, [12, 11, 10]);                            // evaluated after 11 came back to 10
+		$this->indexedRow(13, [12, 11, 10]);                            // evaluated after 11 came back to 10
+		$this->indexedRow(17, [12, 11, 99]);                            // evaluated while 11 still sat in folder 99
 		$this->assertSame('expanded', $p->process(11, 'file'), 'every indexed descendant is compared, not a sample');
 		$this->assertSame([13, 17], $this->queued($db));
 	}
