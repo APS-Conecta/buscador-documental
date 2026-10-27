@@ -1,3 +1,5 @@
+import { calendarDay } from './format.js'
+
 export const DEFAULTS = Object.freeze({ q: '', mode: 'mixta', sort: '', size: 25, types: [], when: '', from: '', to: '', folder: null, owner: '', uncertain: false })
 
 const MODES = { exacta: 'exacta', significado: 'significado', mixta: 'mixta' }
@@ -58,7 +60,8 @@ export function toRequest(s, cursor = null, today = new Date()) {
 		if (s.to) filters.modified_to = s.to
 	} else if (s.when) {
 		const back = { week: 7, month: 30, year: 365 }[s.when]
-		filters.modified_from = ymd(new Date(today.getTime() - back * 86400000))
+		const [y, m, d] = calendarDay(today)
+		filters.modified_from = ymd(new Date(Date.UTC(y, m - 1, d - back)))
 	}
 	if (s.folder) filters.folder_id = s.folder
 	if (s.owner) filters.owner = s.owner

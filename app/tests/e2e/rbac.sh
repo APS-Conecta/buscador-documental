@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # S3 phase 7 (A-SEC-1): the adversarial permission matrix on the live stack, with the REAL mechanisms: circles (Teams),
-# team-folder advanced ACL deny, share expiry, a file moved out of a shared folder (stale index), a file reachable twice
-# (multi-mount), an owner who is deleted. Shares go through the OCS HTTP API so Nextcloud's own events fire. Every check
-# asserts on the FULL search JSON (status, hit shape, dropped), like the canary. Runs against the bd-s1 stack only.
+# a team folder granted only to a Team, team-folder advanced ACL deny, share expiry, a file moved out of a shared folder
+# (stale index), a file reachable twice (multi-mount), an owner who is deleted. Shares go through the OCS HTTP API so
+# Nextcloud's own events fire. Every check asserts on the FULL search JSON (status, hit shape, dropped), like the canary.
+# Runs against the bd-s1 stack only.
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
 C="docker compose -f compose.yaml"
@@ -22,7 +23,7 @@ $OCC app:enable buscador_documental >/dev/null
 $OCC config:system:set trusted_domains 2 --value=nextcloud >/dev/null
 $OCC config:app:set buscador_documental worker_secret --value="$SECRET" --sensitive >/dev/null
 $C exec -T nextcloud chown www-data:www-data /var/www/html/custom_apps
-$OCC app:list 2>/dev/null | grep -q groupfolders || $OCC app:install groupfolders >/dev/null
+$OCC app:list 2>/dev/null | grep groupfolders >/dev/null || $OCC app:install groupfolders >/dev/null
 $OCC app:enable groupfolders >/dev/null 2>&1 || true
 $PSQL -c "TRUNCATE aps_search.job, aps_search.page, aps_search.chunk, aps_search.file_state, aps_search.file_meta, aps_search.file_acl, aps_search.outbox, aps_search.tombstone, aps_search.scope_rule, aps_search.audit_log, aps_search.settings, aps_search.pseudonym, aps_search.reconcile_run, aps_search.reconcile_node RESTART IDENTITY CASCADE"
 $C --profile worker build worker >/dev/null
@@ -74,6 +75,7 @@ TMP=$(mktemp -d /tmp/bd-s1-rb.XXXXXX); trap 'rm -rf "$TMP"' EXIT
 note() { printf '%s\n' "$2" > "$TMP/$1"; }
 note circ.txt "Documento circulo hemoglobina"; note exp.txt "Documento caduco hemoglobina"; note mv.txt "Documento movido hemoglobina"
 note mm.txt "Documento multiple hemoglobina"; note open.txt "Acta abierto hemoglobina"; note sec.txt "Acta confidencial hemoglobina"; note orf.txt "Documento huerfano hemoglobina"
+note team.txt "Documento equipo hemoglobina"
 for d in Docs Shared Priv; do dav rb_a -X MKCOL "$BASE/remote.php/dav/files/rb_a/$d" >/dev/null; done
 dav rb_d -X MKCOL "$BASE/remote.php/dav/files/rb_d/Docs" >/dev/null
 $OCC files:scan --all >/dev/null
@@ -84,15 +86,19 @@ dav rb_d -T "$TMP/orf.txt" "$BASE/remote.php/dav/files/rb_d/Docs/orf.txt" >/dev/
 for f in Docs Shared Priv; do $OCC buscador:scope:add --folder-id="$(fid home::rb_a files/$f)" >/dev/null; done
 $OCC buscador:scope:add --folder-id="$(fid home::rb_d files/Docs)" >/dev/null
 # team folder with advanced permissions, enabled BEFORE indexing so the stored principals carry x:recheck
-$OCC groupfolders:list --output=json | python3 -c 'import json,sys; [print(f["id"]) for f in json.load(sys.stdin) if f["mountPoint"]=="rb_team"]' | while read -r old; do $OCC groupfolders:delete "$old" --force >/dev/null; done
+$OCC groupfolders:list --output=json | python3 -c 'import json,sys; [print(f["id"]) for f in json.load(sys.stdin) if f["mountPoint"] in ("rb_team", "rb_teamc")]' | while read -r old; do $OCC groupfolders:delete "$old" --force >/dev/null; done
 TF=$($OCC groupfolders:create rb_team | tail -1)
 $OCC groupfolders:group "$TF" rb_staff write >/dev/null
 $OCC groupfolders:permissions "$TF" --enable >/dev/null
+# team folder granted only to the Team, without advanced permissions: groupfolders stores group_id '' and the Team in circle_id
+TF2=$($OCC groupfolders:create rb_teamc | tail -1)
+$OCC groupfolders:group "$TF2" "$CIRCLE" write >/dev/null
 $OCC buscador:scope:add --groupfolders >/dev/null
 dav rb_m1 -X MKCOL "$BASE/remote.php/dav/files/rb_m1/rb_team/Open" >/dev/null; dav rb_m1 -X MKCOL "$BASE/remote.php/dav/files/rb_m1/rb_team/Secret" >/dev/null
 dav rb_m1 -T "$TMP/open.txt" "$BASE/remote.php/dav/files/rb_m1/rb_team/Open/open.txt" >/dev/null
 dav rb_m1 -T "$TMP/sec.txt" "$BASE/remote.php/dav/files/rb_m1/rb_team/Secret/sec.txt" >/dev/null
 $OCC groupfolders:permissions "$TF" Secret -u rb_m2 -- -read >/dev/null || die "could not set the ACL deny"
+[ "$(dav rb_a -T "$TMP/team.txt" "$BASE/remote.php/dav/files/rb_a/rb_teamc/team.txt")" = 201 ] || die "a Team member could not upload to the Team-only team folder"
 
 echo "== 1. circle (Teams): a share nobody models in file_acl"
 CIRC=$(fid home::rb_a files/Docs/circ.txt)
@@ -161,4 +167,12 @@ $OCC user:delete rb_d >/dev/null
 check "$(search rb_b huerfano)" "owner deleted: gone, and nothing left to drop" "$GONE_PREFILTER"
 [ "$($PSQL -c "select count(*) from aps_search.chunk where file_id = $ORF")" = 0 ] || die "text of a deleted owner's file remains"
 ok "no text of the deleted owner's file remains in the index"
+
+echo "== 7. team folder granted only to a Team: no group to model"
+tick; work
+TEAM=$(fid "local::/var/www/html/data/__groupfolders/$TF2/" files/team.txt)
+[ "$(principals "$TEAM")" = "x:recheck" ] || die "Team-only team-folder principals: $(principals "$TEAM")"
+ok "a Team-only team folder stores only the catch-all marker (x:recheck), no empty group"
+check "$(search rb_b equipo)" "a Team member finds it" "$HITS1"
+check "$(search rb_c equipo)" "a non-member does not: the prefilter let it through, the live recheck dropped it" "$GONE_RECHECK"
 echo "rbac OK ($PASS checks)"

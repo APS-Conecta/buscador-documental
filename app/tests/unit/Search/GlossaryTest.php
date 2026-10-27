@@ -52,10 +52,20 @@ class GlossaryTest extends TestCase {
 		$this->assertCount(Glossary::MAX_ALTERNATIVES, $alt);
 	}
 
+	public function testPairsNameTheWordsEachAlternativeStandsFor(): void {
+		$g = $this->glossary();
+		$this->assertSame([['centro de salud familiar', 'cesfam']], $g->pairs('informe del centro de salud familiar de junio'));
+		$this->assertSame([['cesfam', 'centro de salud familiar']], $g->pairs('CESFAM norte'));
+		$this->assertSame([['cie 10', 'clasificacion internacional de enfermedades 10 version']], $g->pairs('codigo CIE-10'));
+	}
+
 	public function testAlternativesAreInertPlainWordsWhateverTheQueryHolds(): void {
 		foreach (["rem & | ! <-> ( ) \"x\" -aps 'DROP", 'rem:* aps\\ ; --', "rem\0aps\n"] as $q) {
 			foreach ($this->glossary()->alternatives($q) as $a) {
 				$this->assertMatchesRegularExpression('/^[a-z0-9]+( [a-z0-9]+)*$/', $a);
+			}
+			foreach ($this->glossary()->pairs($q) as [$words]) {
+				$this->assertMatchesRegularExpression('/^[a-z0-9]+( [a-z0-9]+)*$/', $words);
 			}
 		}
 		$this->assertSame([], $this->glossary()->alternatives(''));

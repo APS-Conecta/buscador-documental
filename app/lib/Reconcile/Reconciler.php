@@ -188,7 +188,7 @@ class Reconciler {
 		return "WITH RECURSIVE excl AS (
 				SELECT m.objectid::bigint AS fileid FROM *PREFIX*systemtag_object_mapping m
 				JOIN *PREFIX*systemtag t ON t.id = m.systemtagid
-				WHERE t.name = '" . ExclusionChecker::TAG_NAME . "' AND m.objecttype = 'files' AND m.objectid ~ '^[0-9]+\$'
+				WHERE lower(t.name) = '" . ExclusionChecker::TAG_NAME . "' AND m.objecttype = 'files' AND m.objectid ~ '^[0-9]+\$'
 				UNION
 				SELECT c.fileid FROM *PREFIX*filecache c JOIN excl p ON c.parent = p.fileid WHERE c.parent > 0
 			)
@@ -253,7 +253,7 @@ class Reconciler {
 		$n = 0;
 		foreach ($this->db->rows('SELECT uid FROM aps_search.pseudonym') as $r) {
 			$uid = (string)$r['uid'];
-			if (!in_array($uid, Pseudonyms::NON_PEOPLE, true) && !$this->users->userExists($uid)) {
+			if (!$this->users->userExists($uid)) {
 				(new Pseudonyms($this->db))->forget($uid);
 				$n++;
 			}

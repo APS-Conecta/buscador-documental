@@ -69,7 +69,7 @@ $C exec -T nextcloud chown www-data:www-data /var/www/html/data/eg_a/files/nota.
 $OCC files:scan eg_a >/dev/null
 FID=$($PSQL -c "select f.fileid from oc_filecache f join oc_storages s on s.numeric_id=f.storage where s.id='home::eg_a' and f.path='files/nota.txt'")
 $ENQ ensure-tag >/dev/null
-$ENQ enqueue "$FID" | grep -q enqueued || die "enqueue refused"
+$ENQ enqueue "$FID" | grep enqueued >/dev/null || die "enqueue refused"
 $C --profile worker run --rm --no-deps -T worker python3 main.py --once >/dev/null
 [ "$($PSQL -c "select text_state from aps_search.file_state where file_id=$FID")" = indexed ] || die "the file was not indexed on the internal network"
 $CTL search eg_a hemoglobina | python3 -c 'import json,sys; assert len(json.load(sys.stdin)["hits"]) == 1' || die "the search found nothing"

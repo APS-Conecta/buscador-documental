@@ -39,7 +39,7 @@ SUPPORTED_MIMES = {
 SILENT_DB_ERRORS = ("stale_lease", "etag_mismatch", "hash_mismatch", "file_skipped")
 
 
-SUPPORTED_SCHEMA = 5           # aps_search.schema_meta.schema_ver this worker was written for (S4 migration)
+SUPPORTED_SCHEMA = 7           # aps_search.schema_meta.schema_ver this worker was written for
 
 
 def check_schema(conn):
@@ -87,8 +87,10 @@ class Heartbeat(threading.Thread):
 
 
 def timeout_for(size):
-    """Per-file budget: 120 s plus 20 s per MiB (a scan is about 0.7 MiB a page and 6-13 s to read), at most an hour."""
-    return min(3600, 120 + 20 * (int(size) // (1024 * 1024)))
+    """Base parse allowance: 120 s plus 20 s per whole MiB, at most MAX_TIMEOUT. It covers extraction, and it is the whole
+    budget until the parser has counted its OCR'd pages, which extend it by pdfocr.OCR_PAGE_SECONDS each, capped at
+    MAX_TIMEOUT (jobbox.granted)."""
+    return min(jobbox.MAX_TIMEOUT, 120 + 20 * (int(size) // (1024 * 1024)))
 
 
 def parse(job_id, epoch, path, size):

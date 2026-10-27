@@ -94,8 +94,8 @@ class SearcherTest extends TestCase {
 
 		/** @var CandidateQuery&MockObject $cand */
 		$cand = $this->createMock(CandidateQuery::class);
-		$cand->method('exacta')->willReturnCallback(function (string $q, array $alt, string $set, Filters $f, int $limit, ?bool $relax = null) {
-			$this->seen[] = ['exacta', [$q, $alt, $f, $limit, $relax]];
+		$cand->method('exacta')->willReturnCallback(function (string $q, array $pairs, string $set, Filters $f, int $limit, ?bool $relax = null) {
+			$this->seen[] = ['exacta', [$q, $pairs, $f, $limit, $relax]];
 			return array_slice($this->keywordRows, 0, $limit);
 		});
 		$cand->method('significado')->willReturnCallback(function (array $v, int $gen, string $set, Filters $f, int $limit, bool $exact) {
@@ -338,7 +338,7 @@ class SearcherTest extends TestCase {
 	public function testGlossaryAlternativesReachTheKeywordLegButNotTheVectorOne(): void {
 		$this->corpus(2);
 		$this->searcher()->search('b', $this->req(['query' => 'REM junio']));
-		$this->assertSame([['resumen estadistico mensual']], [$this->seen[0][1][1]]);
+		$this->assertSame([['rem', 'resumen estadistico mensual']], $this->seen[0][1][1]);
 	}
 
 	public function testSemanticModesFallBackToKeywordWithANoticeWhenNotAvailable(): void {

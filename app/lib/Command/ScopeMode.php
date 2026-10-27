@@ -7,6 +7,7 @@ declare(strict_types=1);
 namespace OCA\BuscadorDocumental\Command;
 
 use InvalidArgumentException;
+use OCA\BuscadorDocumental\Audit\Actor;
 use OCA\BuscadorDocumental\Audit\AuditLog;
 use OCA\BuscadorDocumental\Scope\ScopeLocked;
 use OCA\BuscadorDocumental\Scope\Settings;
@@ -33,7 +34,7 @@ class ScopeMode extends Command {
 			$output->writeln('<error>' . $e->getMessage() . '</error>');
 			return 1;
 		}
-		$this->audit->record('occ', 'scope.mode', null, ['mode' => $mode]);
+		$this->audit->record(Actor::Occ, 'scope.mode', null, ['mode' => $mode]);
 		$output->writeln("mode: $mode");
 		return 0;
 	}

@@ -15,7 +15,8 @@ class GroupfolderPollTest extends DbTestCase {
 		$admin = self::connect('postgres', 'dev', self::$dbName);
 		$admin->exec('DROP TABLE IF EXISTS oc_group_folders, oc_group_folders_groups, oc_group_folders_acl');
 		$admin->exec('CREATE TABLE oc_group_folders (folder_id bigint primary key, storage_id bigint, acl int default 0)');
-		$admin->exec('CREATE TABLE oc_group_folders_groups (folder_id bigint, group_id text, permissions int)');
+		// groupfolders keeps a Team grant as group_id '' plus the Team id in circle_id, and a group grant with circle_id ''
+		$admin->exec("CREATE TABLE oc_group_folders_groups (folder_id bigint, group_id text, permissions int, circle_id text DEFAULT '')");
 		$admin->exec('CREATE TABLE oc_group_folders_acl (id serial primary key, fileid bigint, mapping_type text, mapping_id text, mask bigint, permissions bigint)');
 		$admin->exec("INSERT INTO oc_group_folders VALUES (1, 100, 0), (2, 200, 0)");
 		$admin->exec("INSERT INTO oc_group_folders_groups VALUES (1, 'med', 31), (2, 'enf', 31)");
@@ -52,6 +53,48 @@ class GroupfolderPollTest extends DbTestCase {
 		$this->assertSame(1, $g->check(), 'one folder changed');
 		$this->assertSame([1], $this->dirty($db), 'file 1 is on folder 1; file 3 is on folder 2; file 2 is on no folder storage');
 		$this->assertSame(0, $g->check(), 'the new state is the baseline');
+	}
+
+	public function testAddingATeamGrantMarksTheFolderDirty(): void {
+		$this->fixture();
+		[$g, $db] = $this->poll();
+		$g->check();
+		self::connect('postgres', 'dev', self::$dbName)->exec("INSERT INTO oc_group_folders_groups VALUES (1, '', 31, 'teamA')");
+		$this->assertSame(1, $g->check());
+		$this->assertSame([1], $this->dirty($db));
+	}
+
+	public function testSwappingOneTeamForAnotherMarksTheFolderDirty(): void {
+		$this->fixture();
+		$admin = self::connect('postgres', 'dev', self::$dbName);
+		$admin->exec("INSERT INTO oc_group_folders_groups VALUES (1, '', 31, 'teamA')");
+		[$g, $db] = $this->poll();
+		$g->check();
+		$admin->exec("DELETE FROM oc_group_folders_groups WHERE circle_id = 'teamA'");
+		$admin->exec("INSERT INTO oc_group_folders_groups VALUES (1, '', 31, 'teamB')");
+		$this->assertSame(1, $g->check(), 'same permissions, another Team');
+		$this->assertSame([1], $this->dirty($db));
+	}
+
+	public function testTwoUnchangedTeamGrantsMarkNothing(): void {
+		$this->fixture();
+		self::connect('postgres', 'dev', self::$dbName)->exec("INSERT INTO oc_group_folders_groups VALUES (1, '', 31, 'teamA'), (1, '', 31, 'teamB')");
+		[$g, $db] = $this->poll();
+		$g->check();
+		$this->assertSame(0, $g->check(), 'two Team grants share the empty group id: the order stays stable');
+		$this->assertSame(0, $g->check());
+		$this->assertSame([], $this->dirty($db));
+	}
+
+	public function testABaselineFromTheOldFormulaMovesOnce(): void {
+		$this->fixture();
+		// what the poll stored before the Team id was part of the grants (group_id:permissions only)
+		$this->set('gf_fp:1', md5('100|0|' . md5('med:31')));
+		$this->set('gf_fp:2', md5('200|0|' . md5('enf:31')));
+		[$g, $db] = $this->poll();
+		$this->assertSame(2, $g->check(), 'every folder refreshes once, so principals stored as {g:} are rewritten');
+		$this->assertSame([1, 3], $this->dirty($db));
+		$this->assertSame(0, $g->check());
 	}
 
 	public function testEnablingAdvancedAclOrChangingRulesMarksEverything(): void {
