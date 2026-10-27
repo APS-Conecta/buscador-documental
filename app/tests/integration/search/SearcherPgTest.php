@@ -188,8 +188,8 @@ class SearcherPgTest extends DbTestCase {
 
 	public function testFiltersApplyInEveryMode(): void {
 		$this->boot();
-		$this->doc(1, ['u:b'], 'hemoglobina glicosilada pdf', [1, 0, 0], 'application/pdf', 100);
-		$this->doc(2, ['u:b'], 'hemoglobina glicosilada imagen', [1, 0, 0], 'image/png', 200);
+		$this->doc(1, ['u:b'], 'hemoglobina glicosilada pdf', [1, 0, 0], 'application/pdf', 1760000000);
+		$this->doc(2, ['u:b'], 'hemoglobina glicosilada imagen', [1, 0, 0], 'image/png', 1760000100);
 		foreach (['exacta', 'significado', 'mixta'] as $mode) {
 			$out = $this->searcher()->search('b', $this->req(['mode' => $mode, 'filters' => ['types' => ['imagen'], 'modified_from' => '1970-01-01']]));
 			$this->assertSame([2], $this->ids($out), $mode);
