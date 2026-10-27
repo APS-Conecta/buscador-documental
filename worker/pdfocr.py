@@ -21,10 +21,9 @@ from functools import lru_cache
 import ocr
 from ocr import LANGS, OcrFailed, OcrTimeout
 
-POLICY = "perpage-2"
+POLICY = "perpage-3"
 ROTATE_THRESHOLD = "2.0"       # ocrmypdf default 14 ignores sparse pages (OSD confidence ~4.5 on a four-line page)
 PAGE_TIMEOUT = int(os.environ.get("BD_PAGE_TIMEOUT", "300"))
-TESSERACT_TIMEOUT = 180
 OCR_PAGE_SECONDS = 13         # perpage-2 cost of one OCR'd page, confidence pass included (capacity-sheet.md, S2 additions)
 MIN_CHARS = 5
 MAX_BAD_SHARE = 0.02          # U+FFFD, private-use and control characters
@@ -94,7 +93,8 @@ def _ocr_page_once(src: str, force: bool, workdir: str, image: bool = False) -> 
     out_pdf = os.path.join(workdir, "out.pdf")
     cmd = ["ocrmypdf", "--sidecar", sidecar, "--force-ocr" if force else "--skip-text", "--deskew", "--rotate-pages",
            "--rotate-pages-threshold", ROTATE_THRESHOLD, "-l", LANGS, "--output-type", "pdf", "--optimize", "0", "--jobs", "1",
-           "--tesseract-timeout", str(TESSERACT_TIMEOUT), "-q"]
+           # tesseract's own limit makes ocrmypdf exit 0 with a blank page, so it must never fire before this call's timeout
+           "--tesseract-timeout", str(PAGE_TIMEOUT), "-q"]
     if image:
         cmd += ["--image-dpi", "300"]
     try:

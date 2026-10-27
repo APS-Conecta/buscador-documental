@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace OCA\BuscadorDocumental\Search;
 
+use OCA\BuscadorDocumental\Audit\Actor;
 use OCA\BuscadorDocumental\Audit\AuditLog;
 use OCA\BuscadorDocumental\Db\IndexDb;
 use OCA\BuscadorDocumental\Scope\Settings;
@@ -79,7 +80,7 @@ class ProfileManager {
 			throw $e;
 		}
 		$this->settings->set('vec_coverage_' . $gen, '0.0000');
-		$this->audit->record('occ', 'profile.set', null, ['gen' => $gen, 'profile' => $profile['id']]);
+		$this->audit->record(Actor::Occ, 'profile.set', null, ['gen' => $gen, 'profile' => $profile['id']]);
 		$host = strtolower(trim((string)$parts['host'], '[]'));
 		$loopback = in_array($host, ['localhost', '127.0.0.1', '::1'], true);
 		$sameNetworkName = !str_contains($host, '.') && !str_contains($host, ':');       // a service name such as `ollama`
@@ -101,7 +102,7 @@ class ProfileManager {
 		}
 		$this->db->rows('SELECT aps_search.activate_generation(?)', [$gen]);
 		$this->settings->set('vec_coverage', $this->settings->get('vec_coverage_' . $gen) ?? '0.0000');
-		$this->audit->record('occ', 'profile.activate', null, ['gen' => $gen]);
+		$this->audit->record(Actor::Occ, 'profile.activate', null, ['gen' => $gen]);
 	}
 
 	/**
@@ -138,7 +139,7 @@ class ProfileManager {
 		}
 		$this->db->rows('SELECT aps_search.drop_generation(?)', [$gen]);
 		$this->db->execute('DELETE FROM aps_search.settings WHERE key = ?', ['vec_coverage_' . $gen]);
-		$this->audit->record('occ', 'profile.drop', null, ['gen' => $gen]);
+		$this->audit->record(Actor::Occ, 'profile.drop', null, ['gen' => $gen]);
 	}
 
 	/** @throws ProfileException */
@@ -147,7 +148,7 @@ class ProfileManager {
 			throw new ProfileException('There is no active profile. Set one up and activate it first.');
 		}
 		$this->settings->set('semantic_enabled', $on ? '1' : '0');
-		$this->audit->record('occ', 'semantic.set', null, ['paused' => !$on]);
+		$this->audit->record(Actor::Occ, 'semantic.set', null, ['paused' => !$on]);
 	}
 
 	/** @return array{generations: list<array<string, mixed>>, endpoint_configured: bool, semantic_enabled: bool, coverage: ?float, min_coverage: float} */

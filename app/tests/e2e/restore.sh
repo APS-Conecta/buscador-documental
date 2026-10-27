@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # A-OPS-2: the backup holds the page text and the vectors, is unreadable without the key, and a restore into a fresh database
 # reproduces the counts and answers a search. Measures backup, restore and re-reading times and writes them to
-# spikes/s5/results-s5/restore_rehearsal.json. Runs against the bd-s1 stack only; the scripts run inside the database container.
+# spikes/s5/results-s5/restore_rehearsal.json. Runs against the bd-s1 stack only; the scripts run inside the database container, and some restores
+# run in a side container from the db image that shares its network.
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
 C="docker compose -f compose.yaml"
@@ -74,9 +75,11 @@ BAD=$($C exec -T -e PGUSER=postgres -e BD_BACKUP_KEY_FILE=/tmp/other.key db bash
 [ -z "$(DBX psql -qAt -d bd_restore_test -c "select 1 from pg_namespace where nspname='aps_search'")" ] || die "a refused restore left a schema behind"
 ok "a wrong key is refused and nothing is restored"
 # 3. the real restore
-T0=$(date +%s%N); OUT=$(DBX bash /tmp/restore.sh /tmp/x.bak bd_restore_test); RESTORE_MS=$(( ($(date +%s%N) - T0) / 1000000 ))
+T0=$(date +%s%N); OUT=$(DBX bash /tmp/restore.sh /tmp/x.bak bd_restore_test 2>&1); RESTORE_MS=$(( ($(date +%s%N) - T0) / 1000000 ))
 echo "$OUT" | grep "^chunks $N$" >/dev/null || die "restored chunk count differs: $OUT"
 ok "restored in $RESTORE_MS ms; counts: $(echo "$OUT" | tail -5 | tr '\n' ' ')"
+grep -q "staged in memory" <<<"$OUT" || die "a small backup was not staged in memory: $OUT"
+ok "a small backup is staged in memory"
 RESTORED=$(DBX psql -qAt -d bd_restore_test -c "select count(*) from aps_search.chunk where tsv @@ websearch_to_tsquery('aps_search.spanish_unaccent', 'hemoglobina glicosilada')")
 [ "$RESTORED" = "$N" ] || die "the restored index answers $RESTORED of $N"
 ok "a keyword search on the restored database finds all $N chunks"
@@ -123,9 +126,9 @@ ok "a backup without its checksum file is refused"
 # a backup of another schema version is refused (the live schema here is the version the script supports)
 DBX sh -c 'rm -f /tmp/newer.bak*'
 $PSQL -c "UPDATE aps_search.schema_meta SET schema_ver = 99" >/dev/null
-DBX bash /tmp/backup.sh /tmp/newer.bak >/dev/null || { $PSQL -c "UPDATE aps_search.schema_meta SET schema_ver = 6" >/dev/null; die "could not back up the newer-schema copy"; }
-$PSQL -c "UPDATE aps_search.schema_meta SET schema_ver = 6" >/dev/null     # never leave the stack on a schema the worker refuses
-BAD=$(DBX bash /tmp/restore.sh /tmp/newer.bak bd_restore_test2 2>&1 || true); grep -q "holds schema version 99" <<<"$BAD" || die "a backup of a newer schema was not refused: $BAD"
+DBX bash /tmp/backup.sh /tmp/newer.bak >/dev/null || { $PSQL -c "UPDATE aps_search.schema_meta SET schema_ver = 8" >/dev/null; die "could not back up the newer-schema copy"; }
+$PSQL -c "UPDATE aps_search.schema_meta SET schema_ver = 8" >/dev/null     # never leave the stack on a schema the worker refuses
+BAD=$(DBX bash /tmp/restore.sh /tmp/newer.bak bd_restore_test 2>&1 || true); grep -q "holds schema version 99" <<<"$BAD" || die "a backup of a newer schema was not refused: $BAD"
 ok "a backup of a newer schema version is refused before anything is created"
 # a file altered by someone WITHOUT the key is refused even if they recompute the plain checksum
 DBX sh -c 'cp /tmp/x.bak /tmp/t.bak && printf "\x01" | dd of=/tmp/t.bak bs=1 seek=100 conv=notrunc 2>/dev/null && sha256sum /tmp/t.bak | cut -d" " -f1 > /tmp/t.bak.sha256 && cp /tmp/x.bak.hmac /tmp/t.bak.hmac'
@@ -144,7 +147,34 @@ DBX dropdb --if-exists bd_restore_test2; DBX createdb bd_restore_test2; DBX psql
 # a backup that does not fit in memory is staged on disk: forced here with BD_RESTORE_NO_SHM (the 15 GB backup of the S7 load test needed it)
 OUT=$($C exec -T -e PGUSER=postgres -e BD_BACKUP_KEY_FILE=/tmp/bd.key -e BD_RESTORE_NO_SHM=1 db bash /tmp/restore.sh /tmp/x.bak bd_restore_test2 2>&1) || die "the restore staged on disk failed: $OUT"
 grep -q "chunks 3" <<<"$OUT" || die "the disk-staged restore did not bring the chunks: $OUT"
+grep -q "staged on disk" <<<"$OUT" || die "BD_RESTORE_NO_SHM did not stage the decrypted backup on disk: $OUT"
+ok "BD_RESTORE_NO_SHM stages the decrypted backup on disk"
 ok "a restore whose decrypted dump is staged on disk (not memory) gives the same result"
+# where the decrypted backup is staged: restores in a side container from the db image (sharing its network), whose memory
+# limit, /proc/meminfo or cgroup files are set per run
+for f in x.bak x.bak.hmac x.bak.sha256 bd.key; do $C cp "db:/tmp/$f" "$TMP/$f" >/dev/null; done
+IMG=$(docker inspect -f '{{.Config.Image}}' "$($C ps -q db)")
+SIDE() { docker run --rm --shm-size=256m --network "container:$($C ps -q db)" -e PGHOST=127.0.0.1 -e PGUSER=postgres -e PGPASSWORD=dev -e BD_BACKUP_KEY_FILE=/work/bd.key -v "$TMP:/work:ro" -v "$PWD/tools/restore.sh:/restore.sh:ro" "$@"; }
+DBX dropdb --if-exists bd_restore_test2; DBX createdb bd_restore_test2; DBX psql -q -d bd_restore_test2 -c "CREATE EXTENSION unaccent; CREATE EXTENSION vector"
+OUT=$(SIDE --memory=64m --memory-swap=64m "$IMG" bash /restore.sh /work/x.bak bd_restore_test2 2>&1) || die "the restore in a 64 MiB container failed: $OUT"
+grep -q "staged on disk" <<<"$OUT" || die "a 64 MiB container with a 256 MiB /dev/shm staged the decrypted backup in memory: $OUT"
+grep -q "^chunks $N$" <<<"$OUT" || die "the restore in a 64 MiB container did not bring the chunks: $OUT"
+ok "a container with less memory than its /dev/shm stages the decrypted backup on disk, and the restore succeeds"
+BAD=$(SIDE "$IMG" bash /restore.sh /work/x.bak bd_restore_test 2>&1 || true)
+grep -q "already has an aps_search schema" <<<"$BAD" && grep -q "staged in memory" <<<"$BAD" || die "control: the side container without a memory limit should stage in memory: $BAD"
+ok "control: the side container without a memory limit stages the decrypted backup in memory"
+printf 'MemTotal:       16384000 kB\nMemFree:         8192000 kB\n' > "$TMP/meminfo"
+BAD=$(SIDE -v "$TMP/meminfo:/proc/meminfo:ro" "$IMG" bash /restore.sh /work/x.bak bd_restore_test 2>&1 || true)
+grep -q "already has an aps_search schema" <<<"$BAD" && grep -q "staged on disk" <<<"$BAD" || die "an unreadable MemAvailable did not stage on disk: $BAD"
+ok "an unreadable MemAvailable stages the decrypted backup on disk"
+mkdir "$TMP/cg"; echo 1073741824 > "$TMP/cg/memory.max"
+BAD=$(SIDE -v "$TMP/cg:/sys/fs/cgroup:ro" "$IMG" bash /restore.sh /work/x.bak bd_restore_test 2>&1 || true)
+grep -q "already has an aps_search schema" <<<"$BAD" && grep -q "staged on disk" <<<"$BAD" || die "a cgroup memory limit with an unreadable usage did not stage on disk: $BAD"
+ok "a cgroup memory limit whose usage cannot be read stages the decrypted backup on disk"
+BAD=$(DBX bash /tmp/restore.sh /tmp/x.bak bd_restore_absent 2>&1 || true)
+grep -q "cannot connect to the target database" <<<"$BAD" || die "a target database that does not exist was not refused: $BAD"
+if grep -q "staged" <<<"$BAD"; then die "the backup was decrypted before the target connection was checked: $BAD"; fi
+ok "a target that cannot be reached is refused before anything is decrypted"
 DBX dropdb --if-exists bd_restore_test2
 ok "the whole key file is the passphrase: a file that only shares the first line does not decrypt"
 

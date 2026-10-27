@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace OCA\BuscadorDocumental\Command;
 
+use OCA\BuscadorDocumental\Audit\Actor;
 use OCA\BuscadorDocumental\Scope\FileTree;
 use OCA\BuscadorDocumental\Scope\ScopeRules;
 use OCP\Files\Folder;
@@ -36,7 +37,7 @@ class ScopeAdd extends Command {
 			return 1;
 		}
 		if ($input->getOption('groupfolders')) {
-			$id = $this->rules->addGroupfolders('occ');
+			$id = $this->rules->addGroupfolders(Actor::Occ);
 			$output->writeln("rule $id: all team folders");
 			return 0;
 		}
@@ -58,7 +59,7 @@ class ScopeAdd extends Command {
 			$output->writeln('<error>That id is not a folder among the files (trash, versions and plain files are not scopes)</error>');
 			return 1;
 		}
-		$id = $this->rules->addFolder($folderId, 'occ');
+		$id = $this->rules->addFolder($folderId, Actor::Occ);
 		$output->writeln("rule $id: folder $folderId");
 		return 0;
 	}

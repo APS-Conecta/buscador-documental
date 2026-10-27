@@ -17,7 +17,7 @@ class AuditLog {
 	}
 
 	/** @param array<string, int|bool|string> $detail */
-	public function record(string $actorUid, string $action, ?string $subjectUid, array $detail = []): void {
+	public function record(Actor|string $actor, string $action, ?string $subjectUid, array $detail = []): void {
 		if (!in_array($action, self::ACTIONS, true)) {
 			throw new InvalidArgumentException("Unknown audit action '$action'");
 		}
@@ -25,7 +25,7 @@ class AuditLog {
 		$this->db->execute(
 			'INSERT INTO aps_search.audit_log (actor, action, subject_token, detail) VALUES (?, ?, ?, ?::jsonb)',
 			[
-				$this->pseudonyms->tokenFor($actorUid),
+				$this->pseudonyms->actorToken($actor),
 				$action,
 				$subjectUid === null ? null : $this->pseudonyms->tokenFor($subjectUid),
 				json_encode($detail === [] ? new \stdClass() : $detail, JSON_THROW_ON_ERROR),

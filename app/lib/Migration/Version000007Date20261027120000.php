@@ -13,8 +13,8 @@ use OCP\Migration\IOutput;
 use OCP\Migration\SimpleMigrationStep;
 
 /**
- * Schema 6 (the snapshot capped flag) for instances created at schema 1 to 5. A fresh install runs the first migration, whose SQL
- * already includes this step, so this one finds schema_ver 6 and does nothing. Works in changeSchema like the others.
+ * Schema 6 (give-up guard) for instances created at schema 1 to 5. A fresh install runs the first migration, whose SQL already
+ * includes this step, so this one finds schema_ver 6 and does nothing. Works in changeSchema like the others.
  */
 class Version000007Date20261027120000 extends SimpleMigrationStep {
 	public function __construct(private IDBConnection $db) {

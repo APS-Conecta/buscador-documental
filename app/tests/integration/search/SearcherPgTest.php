@@ -210,8 +210,8 @@ class SearcherPgTest extends DbTestCase {
 
 	public function testFiltersApplyInEveryMode(): void {
 		$this->boot();
-		$this->doc(1, ['u:b'], 'hemoglobina glicosilada pdf', [1, 0, 0], 'application/pdf', 100);
-		$this->doc(2, ['u:b'], 'hemoglobina glicosilada imagen', [1, 0, 0], 'image/png', 200);
+		$this->doc(1, ['u:b'], 'hemoglobina glicosilada pdf', [1, 0, 0], 'application/pdf', 1760000000);
+		$this->doc(2, ['u:b'], 'hemoglobina glicosilada imagen', [1, 0, 0], 'image/png', 1760000100);
 		foreach (['exacta', 'significado', 'mixta'] as $mode) {
 			$out = $this->searcher()->search('b', $this->req(['mode' => $mode, 'filters' => ['types' => ['imagen'], 'modified_from' => '1970-01-01']]));
 			$this->assertSame([2], $this->ids($out), $mode);
@@ -287,5 +287,18 @@ class SearcherPgTest extends DbTestCase {
 			$this->assertSame([2], $this->ids($this->searcher()->search('b', $this->req(['mode' => $mode, 'filters' => ['owner' => 'shared']]))), "$mode shared: file 3 is not b's to see");
 			$this->assertSame([2], $this->ids($this->searcher()->search('b', $this->req(['mode' => $mode, 'filters' => ['uncertain' => true]]))), "$mode uncertain");
 		}
+	}
+
+	public function testAStatementTimeoutIsRecognisedByItsSqlStateAndLeavesTheConnectionUsable(): void {
+		$db = $this->db();
+		$e = null;
+		try {
+			$db->withTimeout(1, fn () => $db->rows('SELECT pg_sleep(1)'));
+		} catch (\Throwable $caught) {
+			$e = $caught;
+		}
+		$this->assertNotNull($e);
+		$this->assertTrue(IndexDb::timedOut($e));
+		$this->assertSame(1, (int)$db->rows('SELECT 1 AS one')[0]['one'], 'the timed-out transaction was rolled back');
 	}
 }

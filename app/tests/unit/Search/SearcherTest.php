@@ -96,8 +96,8 @@ class SearcherTest extends TestCase {
 
 		/** @var CandidateQuery&MockObject $cand */
 		$cand = $this->createMock(CandidateQuery::class);
-		$cand->method('exacta')->willReturnCallback(function (string $q, array $alt, string $set, Filters $f, int $limit, ?bool $relax = null) {
-			$this->seen[] = ['exacta', [$q, $alt, $f, $limit, $relax]];
+		$cand->method('exacta')->willReturnCallback(function (string $q, array $pairs, string $set, Filters $f, int $limit, ?bool $relax = null) {
+			$this->seen[] = ['exacta', [$q, $pairs, $f, $limit, $relax]];
 			return [array_slice($this->keywordRows, 0, $limit), $this->windowFull];
 		});
 		$cand->method('significado')->willReturnCallback(function (array $v, int $gen, string $set, Filters $f, int $limit, bool $exact) {
@@ -374,7 +374,7 @@ class SearcherTest extends TestCase {
 	public function testGlossaryAlternativesReachTheKeywordLegButNotTheVectorOne(): void {
 		$this->corpus(2);
 		$this->searcher()->search('b', $this->req(['query' => 'REM junio']));
-		$this->assertSame([['resumen estadistico mensual']], [$this->seen[0][1][1]]);
+		$this->assertSame([['rem', 'resumen estadistico mensual']], $this->seen[0][1][1]);
 	}
 
 	public function testSemanticModesFallBackToKeywordWithANoticeWhenNotAvailable(): void {
@@ -448,13 +448,20 @@ class SearcherTest extends TestCase {
 	}
 
 	public function testStatementTimeoutAndExclusionOutageHaveTheirOwnAnswers(): void {
-		$db = $this->createMock(IndexDb::class);
-		$db->method('withTimeout')->willThrowException(new \RuntimeException('canceling statement due to statement timeout'));
 		$principals = $this->createMock(PrincipalResolver::class);
 		$principals->method('forUser')->willReturn(['u:b']);
 		$mk = fn (IndexDb $d, $recheck) => new Searcher($d, $principals, $this->createMock(CandidateQuery::class), $recheck, $this->createMock(HitBuilder::class), new Glossary([]),
 			$this->createMock(EmbedClient::class), $this->createMock(VectorState::class), $this->createMock(SnapshotStore::class), new Cursor(self::SECRET), $this->createMock(LoggerInterface::class));
-		$this->assertSame('too_many', $mk($db, ScriptedRecheck::make([], TreeChecker::make([1 => 1], [], [])))->search('b', $this->req())['status']);
+		foreach ([
+			// what Nextcloud wraps when the server's lc_messages is Spanish
+			'An exception occurred while executing a query: SQLSTATE[57014]: Query canceled: 7 ERROR:  cancelando la sentencia debido a que se agotó el tiempo de espera de sentencias' => 'too_many',
+			'SQLSTATE[57014]: Query canceled: 7 ERROR:  canceling statement due to statement timeout' => 'too_many',
+			'SQLSTATE[55P03]: Lock not available: 7 ERROR:  canceling statement due to lock timeout' => 'unavailable',
+		] as $message => $status) {
+			$db = $this->createMock(IndexDb::class);
+			$db->method('withTimeout')->willThrowException(new \RuntimeException($message));
+			$this->assertSame($status, $mk($db, ScriptedRecheck::make([], TreeChecker::make([1 => 1], [], [])))->search('b', $this->req())['status'], $message);
+		}
 
 		$this->corpus(3);
 		$ok = $this->createMock(IndexDb::class);
