@@ -108,24 +108,6 @@ class CandidateQuery {
 		return (int)$rows[0]['n'];
 	}
 
-	/**
-	 * Of these files, the ones whose stored principals carry x:recheck: access the prefilter cannot model (circle, Talk, Deck,
-	 * mail or federated shares, team folders with advanced ACL). Whether the caller may read them is only known to Nextcloud.
-	 *
-	 * @param list<int> $fileIds
-	 * @return list<int>
-	 */
-	public function unmodelledAmong(array $fileIds): array {
-		if ($fileIds === []) {
-			return [];
-		}
-		$rows = $this->db->rows(
-			'SELECT file_id FROM aps_search.file_acl WHERE file_id = ANY(?::bigint[]) AND principals @> ARRAY[?]::text[]',
-			[IndexDb::textArray(array_map('strval', $fileIds)), \OCA\BuscadorDocumental\Acl\PrincipalResolver::RECHECK],
-		);
-		return array_map(static fn (array $r): int => (int)$r['file_id'], $rows);
-	}
-
 	public function hasAnnIndex(int $gen): bool {
 		$this->dimOf($gen);
 		return $this->db->rows(
