@@ -17,7 +17,7 @@ DB=${2:?usage: restore.sh IN.bak TARGET_DATABASE}
 KEY=${BD_BACKUP_KEY_FILE:?set BD_BACKUP_KEY_FILE to the file holding the encryption key}
 # The schema version this script (and the app that ships it) writes and reads. A backup of any other version is refused: restore
 # it with the app version that made it, then upgrade the app (a newer schema would be read by code that does not know it).
-SUPPORTED_SCHEMA=6
+SUPPORTED_SCHEMA=7
 fail() { echo "restore: $*" >&2; exit 2; }
 # HMAC-SHA256 (RFC 2104) of stdin as lowercase hex, built from plain digests so the key stays off every command line.
 # $1 is the 64-character hex MAC key: exactly one SHA-256 block, used as is (no pre-hashing).

@@ -1,6 +1,6 @@
--- Schema 6: a permanent vector failure is remembered per (file, generation), since vec_state holds one value per file (the
--- generation searches use). Idempotent: it runs after 007 on a fresh install and alone on a schema_ver 5 instance
--- (SqlScript::upgradeToV6). bd_owner owns every object.
+-- Schema 7: a permanent vector failure is remembered per (file, generation), since vec_state holds one value per file (the
+-- generation searches use). Idempotent: it runs after 009 on a fresh install and alone on a schema_ver 6 instance
+-- (SqlScript::upgradeToV7). bd_owner owns every object.
 SET ROLE bd_owner;
 -- @@
 SET search_path = aps_search, pg_catalog;
@@ -21,7 +21,7 @@ INSERT INTO vec_failure (file_id, gen)
 	WHERE fs.vec_state = 'failed'
 	ON CONFLICT DO NOTHING;
 -- @@
--- fail_job: as in 005, plus the failure record for the job's generation, kept only for the file version the job was for.
+-- fail_job: as in 009, plus the failure record for the job's generation (009's guard keeps it to the file version the job was for).
 CREATE OR REPLACE FUNCTION aps_search.fail_job(p_job_id bigint, p_lease_epoch bigint, p_reason text, p_retryable boolean)
 RETURNS void
 LANGUAGE plpgsql SECURITY DEFINER
@@ -46,22 +46,24 @@ BEGIN
 		UPDATE job SET lease_until = NULL, claimed_by = NULL,
 			not_before = clock_timestamp() + make_interval(mins => power(2, j.attempts)::int)
 			WHERE id = p_job_id;
-	ELSIF j.lane = 'vec' THEN
-		-- A give-up for an older version of the file records nothing: the new version gets its own job.
-		IF EXISTS (SELECT 1 FROM file_state WHERE file_id = j.file_id AND etag IS NOT DISTINCT FROM j.claimed_etag) THEN
+		RETURN;
+	END IF;
+	-- Job row first, then file_state, as write_result takes them. The lock holds the etag until the bookkeeping below is done.
+	PERFORM 1 FROM file_state WHERE file_id = j.file_id AND etag IS NOT DISTINCT FROM j.claimed_etag FOR UPDATE;
+	IF FOUND THEN
+		IF j.lane = 'vec' THEN
 			INSERT INTO vec_failure (file_id, gen)
 				SELECT j.file_id, j.gen WHERE EXISTS (SELECT 1 FROM embedding_profile e WHERE e.gen = j.gen AND e.state <> 'retired')
 				ON CONFLICT DO NOTHING;
 			UPDATE file_state SET vec_state = 'failed', updated_at = now() WHERE file_id = j.file_id
 				AND (j.gen = (SELECT e.gen FROM embedding_profile e WHERE e.state = 'active')
 					OR NOT EXISTS (SELECT 1 FROM embedding_profile e WHERE e.state = 'active'));
+		ELSE
+			UPDATE file_state SET text_state = 'skipped', skip_reason = p_reason, updated_at = now()
+				WHERE file_id = j.file_id;
 		END IF;
-		DELETE FROM job WHERE id = p_job_id;
-	ELSE
-		UPDATE file_state SET text_state = 'skipped', skip_reason = p_reason, updated_at = now()
-			WHERE file_id = j.file_id;
-		DELETE FROM job WHERE id = p_job_id;
 	END IF;
+	DELETE FROM job WHERE id = p_job_id;
 END
 $$;
 -- @@
@@ -95,7 +97,7 @@ BEGIN
 END
 $$;
 -- @@
--- claim_job: as in 006, plus the failure record when the attempts cap gives a vec job up.
+-- claim_job: as in 009, plus the failure record when the attempts cap gives a vec job up.
 CREATE OR REPLACE FUNCTION aps_search.claim_job(p_lane text, p_n int, p_worker text, p_lease_seconds int DEFAULT 900)
 RETURNS TABLE (job_id bigint, lease_epoch bigint, file_id bigint, etag text)
 LANGUAGE plpgsql SECURITY DEFINER
@@ -114,6 +116,7 @@ DECLARE
 	v_to time;
 	v_inside boolean;
 	v_cap text;
+	v_cap_at timestamptz;
 	r record;
 BEGIN
 	IF p_worker IS NULL OR length(p_worker) = 0 THEN
@@ -170,25 +173,32 @@ BEGIN
 	IF v_n <= 0 THEN
 		RETURN;
 	END IF;
-	-- A job whose lease keeps expiring (worker killed by the file, or file gone) is given up after 5 claims.
-	-- Job rows first, in id order, then file_state: the same order write_result and fail_job take, so two claimers cannot deadlock.
-	PERFORM 1 FROM job j WHERE j.attempts >= 5 AND j.lease_until IS NOT NULL AND j.lease_until <= clock_timestamp() ORDER BY j.id FOR UPDATE;
-	-- A vec give-up is recorded for the job's generation, and only for the file version the job was for (see fail_job).
+	-- A job whose lease keeps expiring (worker killed by the file, or file gone) is given up after 5 claims, judged at one instant.
+	-- Job rows first, in id order, then file_state, in file order: the same order write_result and fail_job take, so two claimers
+	-- cannot deadlock. As in fail_job, a job for an overwritten version is only dropped and the current version's state stays.
+	v_cap_at := clock_timestamp();
+	PERFORM 1 FROM job j WHERE j.attempts >= 5 AND j.lease_until IS NOT NULL AND j.lease_until <= v_cap_at ORDER BY j.id FOR UPDATE;
+	PERFORM 1 FROM file_state fs
+		WHERE fs.file_id IN (SELECT j.file_id FROM job j WHERE j.attempts >= 5 AND j.lease_until IS NOT NULL AND j.lease_until <= v_cap_at)
+		ORDER BY fs.file_id FOR UPDATE;
+	DELETE FROM job j USING file_state fs
+		WHERE fs.file_id = j.file_id AND j.attempts >= 5 AND j.lease_until IS NOT NULL AND j.lease_until <= v_cap_at
+		  AND fs.etag IS DISTINCT FROM j.claimed_etag;
+	-- A vec give-up is recorded for the job's generation; the jobs left are for the file version they claimed.
 	INSERT INTO vec_failure (file_id, gen)
 		SELECT j.file_id, j.gen FROM job j
-		JOIN file_state fs ON fs.file_id = j.file_id AND fs.etag IS NOT DISTINCT FROM j.claimed_etag
 		JOIN embedding_profile e ON e.gen = j.gen AND e.state <> 'retired'
-		WHERE j.lane = 'vec' AND j.attempts >= 5 AND j.lease_until IS NOT NULL AND j.lease_until <= clock_timestamp()
+		WHERE j.lane = 'vec' AND j.attempts >= 5 AND j.lease_until IS NOT NULL AND j.lease_until <= v_cap_at
 		ON CONFLICT DO NOTHING;
 	UPDATE file_state fs SET text_state = 'skipped', skip_reason = 'internal', updated_at = now()
 		FROM job j WHERE j.lane = 'text' AND j.file_id = fs.file_id AND j.attempts >= 5
-		  AND j.lease_until IS NOT NULL AND j.lease_until <= clock_timestamp();
+		  AND j.lease_until IS NOT NULL AND j.lease_until <= v_cap_at;
 	UPDATE file_state fs SET vec_state = 'failed', updated_at = now()
 		FROM job j WHERE j.lane = 'vec' AND j.file_id = fs.file_id AND j.attempts >= 5
-		  AND j.lease_until IS NOT NULL AND j.lease_until <= clock_timestamp() AND fs.etag IS NOT DISTINCT FROM j.claimed_etag
+		  AND j.lease_until IS NOT NULL AND j.lease_until <= v_cap_at
 		  AND (j.gen = (SELECT e.gen FROM embedding_profile e WHERE e.state = 'active')
 			OR NOT EXISTS (SELECT 1 FROM embedding_profile e WHERE e.state = 'active'));
-	DELETE FROM job j WHERE j.attempts >= 5 AND j.lease_until IS NOT NULL AND j.lease_until <= clock_timestamp();
+	DELETE FROM job j WHERE j.attempts >= 5 AND j.lease_until IS NOT NULL AND j.lease_until <= v_cap_at;
 	-- Jobs for files that were excluded meanwhile are dropped instead of claimed.
 	DELETE FROM job j USING file_state fs
 		WHERE fs.file_id = j.file_id AND fs.text_state = 'skipped';
@@ -358,7 +368,7 @@ $$;
 -- @@
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA aps_search TO SESSION_USER;
 -- @@
-UPDATE schema_meta SET schema_ver = 6 WHERE schema_ver < 6;
+UPDATE schema_meta SET schema_ver = 7 WHERE schema_ver < 7;
 -- @@
 RESET search_path;      -- Nextcloud keeps using this connection: leave the session as it was found
 -- @@

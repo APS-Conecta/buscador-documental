@@ -27,6 +27,7 @@ class ProfileManager {
 		private IAppConfig $config,
 		private Settings $settings,
 		private AuditLog $audit,
+		private CandidateQuery $candidates,
 	) {
 	}
 
@@ -95,9 +96,38 @@ class ProfileManager {
 		if ($state !== 'ready' && $state !== 'active') {
 			throw new ProfileException("Generation $gen is not ready (it is $state). Wait until coverage reaches the threshold; see `occ buscador:profile show`.");
 		}
+		if (!$this->candidates->hasAnnIndex($gen)) {
+			throw new ProfileException("Generation $gen has no vector index yet: run `occ buscador:profile refresh` first.");
+		}
 		$this->db->rows('SELECT aps_search.activate_generation(?)', [$gen]);
 		$this->settings->set('vec_coverage', $this->settings->get('vec_coverage_' . $gen) ?? '0.0000');
 		$this->audit->record('occ', 'profile.activate', null, ['gen' => $gen]);
+	}
+
+	/**
+	 * Builds the vector index of every ready or active generation that lacks one; $onBuild hears of each build before it starts.
+	 * One generation's failure does not stop the others: its message is returned under its number.
+	 *
+	 * @param callable(int): void $onBuild
+	 * @return array{built: list<int>, failed: array<int, string>}
+	 */
+	public function buildIndexes(callable $onBuild): array {
+		$built = [];
+		$failed = [];
+		foreach ($this->db->rows("SELECT gen FROM aps_search.embedding_profile WHERE state IN ('ready', 'active') ORDER BY gen") as $row) {
+			$gen = (int)$row['gen'];
+			try {
+				if ($this->candidates->hasAnnIndex($gen)) {
+					continue;
+				}
+				$onBuild($gen);
+				$this->candidates->buildIndex($gen);
+				$built[] = $gen;
+			} catch (Throwable $e) {
+				$failed[$gen] = $e->getMessage();
+			}
+		}
+		return ['built' => $built, 'failed' => $failed];
 	}
 
 	/** @throws ProfileException */

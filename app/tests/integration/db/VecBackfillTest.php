@@ -9,6 +9,7 @@ namespace OCA\BuscadorDocumental\Tests\integration\db;
 use OCA\BuscadorDocumental\Db\IndexDb;
 use OCA\BuscadorDocumental\Scope\Settings;
 use OCA\BuscadorDocumental\Search\VecBackfill;
+use PDO;
 
 /** Housekeeping for the vector lane: queue what lacks vectors, measure coverage, ready a generation when it is full enough. */
 class VecBackfillTest extends DbTestCase {
@@ -33,8 +34,8 @@ class VecBackfillTest extends DbTestCase {
 		$this->app()->exec("INSERT INTO aps_search.chunk_vec_$gen (chunk_id, file_id, vec) VALUES ($chunk, $file, '[1,0,0]')");
 	}
 
-	private function backfill(): VecBackfill {
-		$db = new IndexDb($this->connection($this->app()));
+	private function backfill(?PDO $session = null): VecBackfill {
+		$db = new IndexDb($this->connection($session ?? $this->app()));
 		return new VecBackfill($db, new Settings($db));
 	}
 
@@ -55,7 +56,7 @@ class VecBackfillTest extends DbTestCase {
 		$this->assertSame(4, $this->backfill()->tick(4)['queued'], 'the next batch of four');
 	}
 
-	public function testAGenerationBecomesReadyOnceCoverageReachesTheThresholdAndGetsItsIndex(): void {
+	public function testAGenerationBecomesReadyOnceCoverageReachesTheThreshold(): void {
 		$chunks = [];
 		for ($i = 1; $i <= 20; $i++) {
 			$chunks[$i] = $this->indexed($i);
@@ -71,7 +72,6 @@ class VecBackfillTest extends DbTestCase {
 		$r = $this->backfill()->tick(100);
 		$this->assertEqualsWithDelta(0.95, $r['coverage'][1], 1e-9);
 		$this->assertSame('ready', $this->app()->query('SELECT state FROM aps_search.embedding_profile WHERE gen = 1')->fetchColumn());
-		$this->assertSame(1, (int)$this->app()->query("SELECT count(*) FROM pg_indexes WHERE tablename = 'chunk_vec_1' AND indexdef ILIKE '%hnsw%'")->fetchColumn());
 		$this->assertSame([1], $r['ready'], 'the report names the generation it readied');
 	}
 
@@ -116,15 +116,30 @@ class VecBackfillTest extends DbTestCase {
 		$this->assertSame(1.0, $r['coverage'][1]);
 	}
 
-	public function testAReadyOrActiveGenerationThatLostItsIndexGetsItBackOnTheNextTick(): void {
+	public function testATickNeverBuildsTheVectorIndex(): void {
 		$this->indexed(1);
 		$this->gen(1, 'ready');
 		$this->backfill()->tick(10);
-		$idx = static fn ($t) => (int)$t->app()->query("SELECT count(*) FROM pg_indexes WHERE tablename = 'chunk_vec_1' AND indexdef ILIKE '%hnsw%'")->fetchColumn();
-		$this->assertSame(1, $idx($this), 'built for a ready generation even though it was not readied by this tick');
-		self::connect('postgres', 'dev', self::$dbName)->exec('DROP INDEX aps_search.chunk_vec_1_hnsw');
-		$this->backfill()->tick(10);
-		$this->assertSame(1, $idx($this));
+		$this->assertFalse($this->candidates()->hasAnnIndex(1), 'building needs the owner role: occ buscador:profile refresh does it');
+	}
+
+	public function testATickDoesNotWaitForAnOpenWriteOnAGenerationThatHasItsIndex(): void {
+		$chunk = $this->indexed(1);
+		$this->gen(1, 'ready');
+		$this->embed(1, $chunk, 1);
+		$this->candidates()->buildIndex(1);
+		$oid = $this->indexOid();
+		$writer = $this->app();
+		$writer->beginTransaction();
+		$writer->exec('DELETE FROM aps_search.chunk_vec_1');                 // an erasure or a re-index still running
+		$session = $this->app();
+		$session->exec("SET lock_timeout = '1s'");
+		$started = microtime(true);
+		$r = $this->backfill($session)->tick(10);
+		$this->assertLessThan(0.5, microtime(true) - $started, 'the tick queued behind the open write');
+		$this->assertSame(1.0, $r['coverage'][1]);
+		$this->assertSame('1.0000', $this->setting('vec_coverage_1'));
+		$this->assertSame($oid, $this->indexOid(), 'the index is the one built before');
 	}
 
 	/** @return list<string> idem keys of the file's vec jobs, in generation order */

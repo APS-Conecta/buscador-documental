@@ -9,17 +9,17 @@ namespace OCA\BuscadorDocumental\Tests\integration\db;
 use OCA\BuscadorDocumental\Migration\SqlScript;
 use PDO;
 
-/** Schema 6: permanent vector failures recorded per generation, and the upgrade from schema 5 that seeds them from vec_state. */
+/** Schema 7: permanent vector failures recorded per generation, and the upgrade from schema 6 that seeds them from vec_state. */
 class VecFailureSchemaTest extends DbTestCase {
 	/**
-	 * Builds a schema 5 database, lets $seed fill it, then applies the schema 6 step twice.
+	 * Builds a schema 6 database, lets $seed fill it, then applies the schema 7 step twice.
 	 *
 	 * @param callable(PDO): void $seed
 	 * @param bool $vector whether pgvector is installed (a keyword-only install has none)
 	 * @return array{ver: int, records: list<string>, before: list<string>, after: list<string>}
 	 */
-	private function upgradeFromFive(callable $seed, bool $vector = true): array {
-		$name = 'bd_t_up6_' . bin2hex(random_bytes(3));
+	private function upgradeFromSix(callable $seed, bool $vector = true): array {
+		$name = 'bd_t_up7_' . bin2hex(random_bytes(3));
 		self::admin('nextcloud')->exec("CREATE DATABASE $name OWNER nextcloud");
 		try {
 			self::connect('postgres', 'dev', $name)->exec('CREATE EXTENSION unaccent' . ($vector ? '; CREATE EXTENSION vector' : ''));
@@ -29,17 +29,17 @@ class VecFailureSchemaTest extends DbTestCase {
 					$app->exec($st);
 				}
 			}
-			foreach ([SqlScript::upgradeToV2(), SqlScript::upgradeToV3(), SqlScript::upgradeToV4(), SqlScript::upgradeToV5()] as $step) {
+			foreach ([SqlScript::upgradeToV2(), SqlScript::upgradeToV3(), SqlScript::upgradeToV4(), SqlScript::upgradeToV5(), SqlScript::upgradeToV6()] as $step) {
 				foreach ($step as $st) {
 					$app->exec($st);
 				}
 			}
-			$this->assertSame(5, (int)$app->query('SELECT schema_ver FROM aps_search.schema_meta')->fetchColumn());
+			$this->assertSame(6, (int)$app->query('SELECT schema_ver FROM aps_search.schema_meta')->fetchColumn());
 			$seed($app);
 			$states = static fn (): array => $app->query("SELECT file_id || ':' || text_state || ':' || vec_state FROM aps_search.file_state ORDER BY file_id")->fetchAll(PDO::FETCH_COLUMN);
 			$before = $states();
 			foreach ([1, 2] as $_) {
-				foreach (SqlScript::upgradeToV6() as $st) {
+				foreach (SqlScript::upgradeToV7() as $st) {
 					$app->exec($st);
 				}
 			}
@@ -70,19 +70,19 @@ class VecFailureSchemaTest extends DbTestCase {
 	}
 
 	public function testTheUpgradeRecordsTheFailuresVecStateHeldForTheActiveGeneration(): void {
-		$r = $this->upgradeFromFive(static function (PDO $app): void {
+		$r = $this->upgradeFromSix(static function (PDO $app): void {
 			self::generation($app, 1, 'active');
 			self::generation($app, 2, 'active');                            // generation 1 is retired
 			self::generation($app, 3, 'building');
 			self::files($app);
 		});
-		$this->assertSame(6, $r['ver']);
+		$this->assertSame(7, $r['ver']);
 		$this->assertSame(['1:2', '4:2'], $r['records'], 'vec_state described generation 2 only');
 		$this->assertSame($r['before'], $r['after'], 'no state is changed');
 	}
 
 	public function testWithoutAnActiveGenerationTheFailuresCountForEveryLiveOne(): void {
-		$r = $this->upgradeFromFive(static function (PDO $app): void {
+		$r = $this->upgradeFromSix(static function (PDO $app): void {
 			self::generation($app, 1, 'ready');
 			self::generation($app, 2, 'building');
 			self::files($app);
@@ -92,7 +92,7 @@ class VecFailureSchemaTest extends DbTestCase {
 	}
 
 	public function testAKeywordOnlyInstallUpgradesWithNothingToRecord(): void {
-		$r = $this->upgradeFromFive(self::files(...), vector: false);
-		$this->assertSame([6, []], [$r['ver'], $r['records']]);
+		$r = $this->upgradeFromSix(self::files(...), vector: false);
+		$this->assertSame([7, []], [$r['ver'], $r['records']]);
 	}
 }

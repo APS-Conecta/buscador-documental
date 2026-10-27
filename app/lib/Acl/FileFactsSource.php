@@ -73,7 +73,12 @@ class FileFactsSource {
 				[$folderId],
 			)->fetchAll();
 			foreach ($rows as $r) {
-				$gfGroups[] = (string)$r['group_id'];
+				$gid = (string)$r['group_id'];
+				if ($gid === '') {
+					$unmodelled = true; // a Team grant (groupfolders keeps the Team in circle_id): the live recheck decides
+				} else {
+					$gfGroups[] = $gid;
+				}
 			}
 			try {
 				$acl = $this->db->executeQuery('SELECT acl FROM *PREFIX*group_folders WHERE folder_id = ?', [$folderId])->fetchOne();

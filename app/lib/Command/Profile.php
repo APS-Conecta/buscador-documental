@@ -55,7 +55,16 @@ class Profile extends Command {
 					foreach ($r['coverage'] as $gen => $c) {
 						$output->writeln(sprintf('generation %d: coverage %.1f%%', $gen, $c * 100));
 					}
-					return 0;
+					$index = $this->manager->buildIndexes(static function (int $gen) use ($output): void {
+						$output->writeln("generation $gen: building the vector index (writes continue; this can take a while)");
+					});
+					foreach ($index['built'] as $gen) {
+						$output->writeln("generation $gen: vector index built");
+					}
+					foreach ($index['failed'] as $gen => $message) {
+						$output->writeln("<error>generation $gen: vector index could not be built: $message</error>");
+					}
+					return $index['failed'] === [] ? 0 : 1;
 				case 'set':
 					return $this->set($input, $output, $value);
 				case 'activate':
@@ -106,7 +115,7 @@ class Profile extends Command {
 		foreach ($r['warnings'] as $w) {
 			$output->writeln('<comment>' . $w . '</comment>');
 		}
-		$output->writeln('then: occ buscador:profile activate ' . $r['gen']);
+		$output->writeln('when it is ready: occ buscador:profile refresh, then occ buscador:profile activate ' . $r['gen']);
 		return 0;
 	}
 

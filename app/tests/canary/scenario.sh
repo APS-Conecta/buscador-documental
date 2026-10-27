@@ -30,7 +30,7 @@ PY
 principals() { $PSQL -c "select array_to_string(principals, ',') from aps_search.file_acl where file_id=$FID"; }
 counts() { $PSQL -c "select (select count(*) from aps_search.page where file_id=$FID) || '/' || (select count(*) from aps_search.chunk where file_id=$FID)"; }
 index_it() {
-	$ENQ enqueue "$FID" | grep -q enqueued || die "enqueue refused"
+	$ENQ enqueue "$FID" | grep enqueued >/dev/null || die "enqueue refused"
 	$C --profile worker run --rm --no-deps -T worker python3 main.py --once >/dev/null
 	[ "$($PSQL -c "select text_state from aps_search.file_state where file_id=$FID")" = indexed ] || die "file not indexed"
 }
@@ -70,7 +70,7 @@ $CTL share canary_a top/mid user canary_b
 $CTL acl "$FID" >/dev/null
 check "$(search canary_b)" "B finds it through the share" "$FULL"
 $CTL unshare canary_a top/mid canary_b
-principals | grep -q 'u:canary_b' || die "file_acl lost u:canary_b"
+principals | grep 'u:canary_b' >/dev/null || die "file_acl lost u:canary_b"
 ok "stored principals still contain u:canary_b"
 check "$(search canary_b)" "B no longer finds it: SQL returned the id, recheck dropped it" 'j["hits"] == [] and j["dropped"] == 1'
 
@@ -86,7 +86,7 @@ $CTL group add canary_team canary_b
 $CTL acl "$FID" >/dev/null
 check "$(search canary_b)" "B finds it through the group" "$FULL"
 $CTL group remove canary_team canary_b
-principals | grep -q 'g:canary_team' || die "file_acl lost g:canary_team"
+principals | grep 'g:canary_team' >/dev/null || die "file_acl lost g:canary_team"
 check "$(search canary_b)" "B no longer finds it after leaving the group (stored g:canary_team stays, B's own set shrinks)" 'j["hits"] == [] and j["dropped"] == 0'
 $CTL unshare canary_a top/mid canary_team
 
