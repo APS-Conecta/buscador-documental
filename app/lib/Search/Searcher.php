@@ -100,7 +100,7 @@ class Searcher {
 			$this->logger->warning('buscador_documental: exclusion state unavailable, search refused (' . get_class($e) . ')');
 			return $this->empty('unavailable', 'La búsqueda no está disponible en este momento.');
 		} catch (Throwable $e) {
-			if (str_contains($e->getMessage(), 'statement timeout')) {
+			if (IndexDb::timedOut($e)) {
 				return $this->empty('too_many', 'Demasiados resultados: acote la búsqueda con más términos.');
 			}
 			$this->logger->error('buscador_documental: search failed (' . get_class($e) . ')');
@@ -130,7 +130,7 @@ class Searcher {
 		}
 		// Mixta keeps the keyword leg strict: the OR relaxation of plain keyword search only adds common-word noise that dilutes the
 		// fusion, while the vector leg already covers the fuzzy matches (S4 evaluation: recall@10 0.67 with it, 0.79 without).
-		$keyword = $mode === 'significado' ? [] : $this->candidates->exacta($r->query, $this->glossary->alternatives($r->query), $set, $filters, self::CAP, $mode === 'mixta' ? false : null);
+		$keyword = $mode === 'significado' ? [] : $this->candidates->exacta($r->query, $this->glossary->pairs($r->query), $set, $filters, self::CAP, $mode === 'mixta' ? false : null);
 		$semantic = [];
 		if ($mode !== 'exacta') {
 			$exact = !$this->candidates->hasAnnIndex($profile['gen'])

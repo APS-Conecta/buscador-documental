@@ -22,7 +22,7 @@ class GroupfolderFingerprint {
 	public function check(): int {
 		try {
 			$folders = $this->db->rows("SELECT g.folder_id, g.storage_id, g.acl,
-				coalesce((SELECT md5(string_agg(gg.group_id || ':' || gg.permissions, ',' ORDER BY gg.group_id)) FROM *PREFIX*group_folders_groups gg WHERE gg.folder_id = g.folder_id), '') AS grants
+				coalesce((SELECT md5(string_agg(concat(gg.group_id, ':', gg.circle_id, ':', gg.permissions), ',' ORDER BY gg.group_id, gg.circle_id)) FROM *PREFIX*group_folders_groups gg WHERE gg.folder_id = g.folder_id), '') AS grants
 				FROM *PREFIX*group_folders g ORDER BY g.folder_id");
 			$rules = (string)$this->db->rows("SELECT coalesce(md5(string_agg(a.fileid || ':' || a.mapping_type || ':' || a.mapping_id || ':' || a.mask || ':' || a.permissions, ',' ORDER BY a.fileid, a.mapping_type, a.mapping_id)), '') AS fp FROM *PREFIX*group_folders_acl a")[0]['fp'];
 		} catch (Throwable) {

@@ -19,7 +19,9 @@ class IndexDb {
 
 	/** @return list<array<string, mixed>> */
 	public function rows(string $sql, array $params = []): array {
-		return $this->db->executeQuery($sql, $params)->fetchAll();
+		$run = fn (): array => $this->db->executeQuery($sql, $params)->fetchAll();
+		// Outside a transaction Nextcloud sends executeQuery() to dbreplica and tracks read-after-write only for *PREFIX* tables; a transaction pins the primary.
+		return $this->db->inTransaction() ? $run() : $this->guarded($run);
 	}
 
 	/**
@@ -41,6 +43,14 @@ class IndexDb {
 			$this->db->rollBack();
 			throw $e;
 		}
+	}
+
+	/**
+	 * SQLSTATE 57014 (query_canceled): a statement timeout or an administrator's cancel. PDO writes the SQLSTATE
+	 * untranslated whatever lc_messages says, and Nextcloud's DbalException keeps the driver message.
+	 */
+	public static function timedOut(\Throwable $e): bool {
+		return str_contains($e->getMessage(), 'SQLSTATE[57014]');
 	}
 
 	/**

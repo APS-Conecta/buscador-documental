@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace OCA\BuscadorDocumental\Command;
 
+use OCA\BuscadorDocumental\Audit\Actor;
 use OCA\BuscadorDocumental\Audit\AuditLog;
 use OCA\BuscadorDocumental\Scope\Settings;
 use Symfony\Component\Console\Command\Command;
@@ -24,7 +25,7 @@ class Reconcile extends Command {
 
 	protected function execute(InputInterface $input, OutputInterface $output): int {
 		$this->settings->requestEvaluation();
-		$this->audit->record('occ', 'reconcile', null, []);
+		$this->audit->record(Actor::Occ, 'reconcile', null, []);
 		$output->writeln('reconciliation requested: it runs on the next pass of the background job (use cron)');
 		return 0;
 	}

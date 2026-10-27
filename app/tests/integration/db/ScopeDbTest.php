@@ -28,6 +28,11 @@ class ScopeDbTest extends DbTestCase {
 		return new AuditLog($db, new Pseudonyms($db));
 	}
 
+	private function rules(IndexDb $db): ScopeRules {
+		$pseudonyms = new Pseudonyms($db);
+		return new ScopeRules($db, new AuditLog($db, $pseudonyms), $pseudonyms);
+	}
+
 	// ---- settings ----
 	public function testDefaultsAreOptInAndNotPaused(): void {
 		$s = new Settings($this->db());
@@ -78,7 +83,7 @@ class ScopeDbTest extends DbTestCase {
 	// ---- rules ----
 	public function testRulesAreDeduplicatedListedAndRemovedAndAuditedWithoutNames(): void {
 		$db = $this->db();
-		$rules = new ScopeRules($db, $this->audit($db));
+		$rules = $this->rules($db);
 		$a = $rules->addFolder(11, 'admin');
 		$this->assertSame($a, $rules->addFolder(11, 'admin'), 'adding the same folder twice is one rule');
 		$rules->addGroupfolders('admin');
@@ -92,9 +97,17 @@ class ScopeDbTest extends DbTestCase {
 		$this->assertStringNotContainsString('admin', json_encode($log), 'actors are pseudonyms');
 	}
 
+	public function testTheRuleAndItsAuditRowResolveTheActorTheSameWay(): void {
+		$db = $this->db();
+		$id = $this->rules($db)->addFolder(11, 'occ');
+		$token = $db->rows('SELECT created_by_token FROM aps_search.scope_rule WHERE id = ?', [$id])[0]['created_by_token'];
+		$this->assertMatchesRegularExpression('/^[0-9a-f]{32}$/', $token, 'a user named occ is named by a random token');
+		$this->assertSame([$token], array_column($db->rows("SELECT actor FROM aps_search.audit_log WHERE action = 'scope.add'"), 'actor'));
+	}
+
 	public function testTheFingerprintChangesWithRulesAndModeOnly(): void {
 		$db = $this->db();
-		$rules = new ScopeRules($db, $this->audit($db));
+		$rules = $this->rules($db);
 		$f0 = $rules->fingerprint();
 		$id = $rules->addFolder(5, 'admin');
 		$f1 = $rules->fingerprint();
@@ -112,8 +125,10 @@ class ScopeDbTest extends DbTestCase {
 		$this->assertMatchesRegularExpression('/^[0-9a-f]{32}$/', $t);
 		$this->assertSame($t, $p->tokenFor('alice'));
 		$this->assertNotSame($t, $p->tokenFor('bob'));
-		$this->assertSame('system', $p->tokenFor('system'), 'the system actor is not a person');
-		$this->assertSame('occ', $p->tokenFor('occ'), 'neither is the command line');
+		foreach (['system', 'occ'] as $uid) {
+			$this->assertMatchesRegularExpression('/^[0-9a-f]{32}$/', $p->tokenFor($uid), "a user named $uid is a person like any other");
+			$this->assertSame($p->tokenFor($uid), $p->tokenFor($uid));
+		}
 		$this->audit($db)->record('alice', 'scope.add', 'bob', ['rule_id' => 1]);
 		$p->forget('bob');
 		$this->assertSame(0, (int)$db->rows("SELECT count(*) AS n FROM aps_search.pseudonym WHERE uid = 'bob'")[0]['n']);
