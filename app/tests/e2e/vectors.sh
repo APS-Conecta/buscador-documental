@@ -73,8 +73,8 @@ $OCC files:scan vec_a >/dev/null
 fid() { $PSQL -c "select f.fileid from oc_filecache f join oc_storages s on s.numeric_id=f.storage where s.id='home::vec_a' and f.path='files/$1'"; }
 FID=$(fid scan.pdf); export FID
 NOTE=$(fid nota.txt)
-$ENQ enqueue "$FID" | grep -q enqueued || die "enqueue refused"
-$ENQ enqueue "$NOTE" | grep -q enqueued || die "enqueue refused (note)"
+$ENQ enqueue "$FID" | grep enqueued >/dev/null || die "enqueue refused"
+$ENQ enqueue "$NOTE" | grep enqueued >/dev/null || die "enqueue refused (note)"
 for _ in 1 2 3; do work; done
 [ "$($PSQL -c "select text_state from aps_search.file_state where file_id=$FID")" = indexed ] || die "scan not indexed"
 CH=$($PSQL -c "select count(*) from aps_search.chunk where file_id in ($FID, $NOTE)")
@@ -95,7 +95,7 @@ EARLY=$($OCC buscador:profile semantic on 2>&1 || true)
 grep -q "active profile" <<<"$EARLY" || die "semantic on before activation should be refused: $EARLY"
 $OCC buscador:profile activate 1 >/dev/null
 $OCC buscador:profile semantic on >/dev/null
-$OCC buscador:profile show | grep -q "semantic modes: on" || die "show does not say on"
+$OCC buscador:profile show | grep "semantic modes: on" >/dev/null || die "show does not say on"
 ok "activate and semantic on are explicit administrator acts"
 
 echo "== 4. the three modes, filters, paging fields"

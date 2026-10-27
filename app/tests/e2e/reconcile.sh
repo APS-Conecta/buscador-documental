@@ -88,7 +88,7 @@ ok "a file that vanished without any event is purged (the user-deletion residue 
 echo "== 5. the outbox settles and the run is recorded"
 tick
 [ "$($PSQL -c "select count(*) from aps_search.outbox where processed_at is null and attempts < 5")" = 0 ] || die "rows waiting"
-$OCC buscador:status | grep -q "last reconciliation: 20" || die "status does not show the last run"
+$OCC buscador:status | grep "last reconciliation: 20" >/dev/null || die "status does not show the last run"
 COUNTS=$($PSQL -c "select counts::text from aps_search.reconcile_run where finished_at is not null order by run_id desc limit 1")
 grep -q '"forward"' <<<"$COUNTS" && grep -q '"reverse"' <<<"$COUNTS" || die "counts missing: $COUNTS"
 ok "the last run's counts are recorded and shown by status"
