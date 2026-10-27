@@ -6,20 +6,27 @@ declare(strict_types=1);
 
 namespace OCA\BuscadorDocumental\Tests\integration\db;
 
+use OCA\BuscadorDocumental\Acl\ExclusionChecker;
 use OCA\BuscadorDocumental\Db\IndexDb;
 use OCA\BuscadorDocumental\Ops\Doctor;
 use OCA\BuscadorDocumental\Scope\Settings;
 use OCA\BuscadorDocumental\Search\CandidateQuery;
 use OCA\BuscadorDocumental\Search\EmbedClient;
 use OCA\BuscadorDocumental\Search\ProbeFailed;
+use OCA\BuscadorDocumental\Search\VecBackfill;
 use OCP\IAppConfig;
 use OCP\IConfig;
+use OCP\IDBConnection;
+use OCP\SystemTag\ISystemTag;
+use OCP\SystemTag\ISystemTagManager;
+use OCP\SystemTag\ISystemTagObjectMapper;
 
 class DoctorTest extends DbTestCase {
 	/** @var array<string, string> */
 	private array $app = ['worker_secret' => 'a-long-enough-worker-secret-0123456789ab', 'embed_url' => 'http://x'];
 	private string $cron = 'cron';
 	private string|ProbeFailed $digest = 'sha256:abc';
+	private bool $tagExists = true;
 
 	private function doctor(): Doctor {
 		$db = new IndexDb($this->connection($this->app()));
@@ -34,7 +41,18 @@ class DoctorTest extends DbTestCase {
 			}
 			return $this->digest;
 		});
-		return new Doctor($db, new Settings($db), $cfg, $sys, $embed, new CandidateQuery($db));
+		$tags = $this->createMock(ISystemTagManager::class);
+		$tags->method('getAllTags')->willReturnCallback(function (): array {
+			if (!$this->tagExists) {
+				return [];
+			}
+			$t = $this->createMock(ISystemTag::class);
+			$t->method('getId')->willReturn('3');
+			$t->method('getName')->willReturn(ExclusionChecker::TAG_NAME);
+			return [$t];
+		});
+		$exclusion = new ExclusionChecker($this->createMock(IDBConnection::class), $tags, $this->createMock(ISystemTagObjectMapper::class));
+		return new Doctor($db, new Settings($db), $cfg, $sys, $embed, new CandidateQuery($db), $exclusion);
 	}
 
 	/** @return array<string, array{status: string, detail: string}> */
@@ -63,6 +81,16 @@ class DoctorTest extends DbTestCase {
 		$bad = array_filter($this->checks(), static fn (array $c): bool => $c['status'] !== 'ok');
 		$this->assertSame([], $bad);
 		$this->assertCount(0, array_filter($this->doctor()->run(), static fn (array $c): bool => !in_array($c['status'], ['ok', 'warn', 'fail'], true)));
+	}
+
+	public function testAMissingExclusionTagFailsWithARemedyThatWorksOnAnEnabledApp(): void {
+		$this->assertSame('ok', $this->statusOf('exclusion_tag'));
+		$this->tagExists = false;
+		$checks = $this->checks();
+		$this->assertSame('fail', $checks['exclusion_tag']['status'] ?? 'missing');
+		$this->assertStringContainsString('occ tag:add rag-excluded public', $checks['exclusion_tag']['detail']);
+		$this->assertStringNotContainsString('enable', $checks['exclusion_tag']['detail'], 'enabling an enabled app does nothing');
+		$this->assertSame(1, Doctor::exitCode($this->doctor()->run()));
 	}
 
 	public function testAnUnboundedWorkerRoleIsAWarning(): void {
@@ -151,6 +179,31 @@ class DoctorTest extends DbTestCase {
 		$this->candidates()->buildIndex(1);
 		self::connect('postgres', 'dev', self::$dbName)->exec("UPDATE pg_index SET indisvalid = false WHERE indexrelid = 'aps_search.chunk_vec_1_hnsw'::regclass");
 		$this->assertSame('warn', $this->statusOf('vector_index'), 'a failed concurrent build leaves an index searches do not use');
+	}
+
+	public function testAFailureInABuildingGenerationIsAWarningAndRetryFailedQueuesItAgain(): void {
+		[$f, $g] = [1, 2];
+		$this->profile();
+		$a = $this->app();
+		foreach ([$f, $g] as $id) {
+			$a->exec("INSERT INTO aps_search.file_state (file_id, etag, text_state) VALUES ($id, 'e1', 'indexed')");
+			$a->exec("INSERT INTO aps_search.chunk (file_id, page_no, ord, text) VALUES ($id, 1, 0, 't')");
+		}
+		$a->exec("INSERT INTO aps_search.chunk_vec_1 (chunk_id, file_id, vec) SELECT chunk_id, file_id, '[1,0,0]' FROM aps_search.chunk WHERE file_id = $f");
+		$a->exec('SELECT aps_search.enqueue_vec_backfill(1, 10)');
+		$this->giveUpVecJob($this->claim($this->worker(), 'vec-w', lane: 'vec'));     // the active generation gives up on G
+		$a->exec("SELECT aps_search.create_generation(2, 'bge-m3', 'bge-m3:567m', 'sha256:new', 3, 'f16', '', '', 512)");
+		$a->exec('SELECT aps_search.enqueue_vec_backfill(2, 1)');
+		$this->giveUpVecJob($this->claim($this->worker(), 'vec-w', lane: 'vec'));     // generation 2, still building, gives up on F
+		$r = $this->checks()['vector_failures'];
+		$this->assertSame('warn', $r['status']);
+		$this->assertStringStartsWith('2 file(s)', $r['detail'], "F's failure counts although searches do not use generation 2 yet");
+		$db = new IndexDb($this->connection($this->app()));
+		$backfill = new VecBackfill($db, new Settings($db));
+		$this->assertSame(2, $backfill->retryFailed());
+		$this->assertSame('ok', $this->statusOf('vector_failures'));
+		$backfill->tick(100);
+		$this->assertSame(1, (int)$a->query("SELECT count(*) FROM aps_search.job WHERE lane = 'vec' AND file_id = $f AND gen = 2")->fetchColumn(), 'generation 2 tries F again');
 	}
 
 	public function testNothingSecretOrTextCanAppearInTheReport(): void {

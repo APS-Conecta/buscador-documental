@@ -106,6 +106,16 @@ def test_parser_errors_become_the_matching_failure(monkeypatch, reason, expected
     assert retry is (reason in ("timeout", "ocr_failed"))
 
 
+def test_an_answer_over_the_cap_is_too_large_and_not_retried(monkeypatch, tmp_path):
+    monkeypatch.setattr(main.jobbox, "RESULT_MAX", 100)
+    answer = tmp_path / "out.json"
+    answer.write_text('{"status": "ok", "pages": ["%s"]}' % ("x" * 1000))
+    monkeypatch.setattr(main, "parse", lambda *a: main.jobbox._read_answer(str(answer)))
+    conn = FakeConn()
+    assert run(conn, FakeApi()) == "failed:too_large"
+    assert [c for c in conn.calls if "fail_job" in c[0]][0][1][3] is False
+
+
 def test_unknown_parser_reason_is_failed_as_ocr_failed(monkeypatch):
     monkeypatch.setattr(main, "parse", lambda *a: {"status": "error", "reason": "weird"})
     assert run(FakeConn(), FakeApi()) == "failed:ocr_failed"
@@ -235,7 +245,7 @@ def test_the_supported_schema_passes():
     main.check_schema(VersionConn(main.SUPPORTED_SCHEMA))
 
 
-@pytest.mark.parametrize("version", [1, 2, 3, 4, 6, 99])
+@pytest.mark.parametrize("version", [1, 2, 3, 4, 5, 6, 8, 99])
 def test_an_unknown_schema_stops_the_worker_with_a_clear_message(version):
     with pytest.raises(SystemExit) as e:
         main.check_schema(VersionConn(version))

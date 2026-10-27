@@ -7,22 +7,26 @@ declare(strict_types=1);
 namespace OCA\BuscadorDocumental\Tests\unit\Acl;
 
 use OCA\BuscadorDocumental\Acl\FileFactsSource;
+use OCA\BuscadorDocumental\Acl\PrincipalWriter;
 use OCP\DB\IResult;
 use OCP\IDBConnection;
 use PHPUnit\Framework\TestCase;
 
 class FileFactsSourceTest extends TestCase {
-	/** @param list<array<string, mixed>> $shares */
-	private function source(string $path, array $shares, int|false $gfAcl = false, string $storageId = 'home::alice'): FileFactsSource {
+	/**
+	 * @param list<array<string, mixed>> $shares
+	 * @param list<array<string, mixed>> $grants the groupfolder's grant rows with permissions > 0
+	 */
+	private function source(string $path, array $shares, int|false $gfAcl = false, string $storageId = 'home::alice', array $grants = [['group_id' => 'med']]): FileFactsSource {
 		$db = $this->createMock(IDBConnection::class);
-		$db->method('executeQuery')->willReturnCallback(function (string $sql) use ($path, $shares, $gfAcl, $storageId): IResult {
+		$db->method('executeQuery')->willReturnCallback(function (string $sql) use ($path, $shares, $gfAcl, $storageId, $grants): IResult {
 			$r = $this->createMock(IResult::class);
 			if (str_contains($sql, 'FROM *PREFIX*filecache f')) {
 				$r->method('fetch')->willReturn(['fileid' => 5, 'name' => 'a.pdf', 'path' => $path, 'etag' => 'e', 'mtime' => 1, 'parent' => 0, 'mimetype' => 'application/pdf', 'storage' => 42, 'storage_id' => $storageId]);
 			} elseif (str_contains($sql, '*PREFIX*share')) {
 				$r->method('fetchAll')->willReturn($shares);
 			} elseif (str_contains($sql, 'group_folders_groups')) {
-				$r->method('fetchAll')->willReturn([['group_id' => 'med']]);
+				$r->method('fetchAll')->willReturn($grants);
 			} elseif (str_contains($sql, 'FROM *PREFIX*group_folders ')) {
 				$r->method('fetchOne')->willReturn($gfAcl);
 			}
@@ -96,6 +100,21 @@ class FileFactsSourceTest extends TestCase {
 		$this->assertSame(['med'], $f->groupfolderGroupIds);
 		$this->assertNull($f->ownerUid, 'a team folder has no owner');
 		$this->assertFalse($f->unmodelledAccess);
+		$this->assertSame(['g:med'], PrincipalWriter::principalsFor($f));
+	}
+
+	/** groupfolders stores a Team grant with an empty group id (the Team id is in circle_id): the live recheck decides (ADR-0003). */
+	public function testATeamOnlyGrantIsUnmodelledAndStoresNoEmptyGroup(): void {
+		$f = $this->source('files/a.pdf', [], 0, 'local::/var/www/html/data/__groupfolders/7/', [['group_id' => '']])->load(5);
+		$this->assertSame([], $f->groupfolderGroupIds);
+		$this->assertTrue($f->unmodelledAccess);
+		$this->assertSame(['x:recheck'], PrincipalWriter::principalsFor($f));
+	}
+
+	public function testAGroupAndATeamGrantGiveTheGroupAndTheCatchAll(): void {
+		$f = $this->source('files/a.pdf', [], 0, 'local::/var/www/html/data/__groupfolders/7/', [['group_id' => 'med'], ['group_id' => '']])->load(5);
+		$this->assertSame(['med'], $f->groupfolderGroupIds);
+		$this->assertSame(['g:med', 'x:recheck'], PrincipalWriter::principalsFor($f));
 	}
 
 	public function testAGroupfolderWithAdvancedAclOnItsOwnStorageIsUnmodelled(): void {

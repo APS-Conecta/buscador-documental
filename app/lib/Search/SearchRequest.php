@@ -6,6 +6,9 @@ declare(strict_types=1);
 
 namespace OCA\BuscadorDocumental\Search;
 
+use DateTimeImmutable;
+use DateTimeZone;
+
 /** A validated search request (S4 design section 3). Built only through fromArray(); everything else is typed. */
 final class SearchRequest {
 	public const MAX_QUERY_CHARS = 500;
@@ -13,6 +16,8 @@ final class SearchRequest {
 	public const SORTS = ['relevance', 'modified_desc', 'modified_asc', 'name_asc', 'name_desc'];
 	public const PAGE_SIZES = [25, 50, 100];
 	private const FILTER_KEYS = ['types', 'modified_from', 'modified_to', 'folder_id', 'owner', 'uncertain'];
+	// The zone the client shows result dates in (app/src/lib/format.js); a constant, not IDateTimeZone, because the instalador leaves Nextcloud's default zone at UTC (totem#7).
+	private const TIME_ZONE = 'America/Santiago';
 
 	private function __construct(
 		public readonly string $query,
@@ -106,6 +111,7 @@ final class SearchRequest {
 		if (!is_string($v) || preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $v, $m) !== 1 || !checkdate((int)$m[2], (int)$m[3], (int)$m[1])) {
 			throw new InvalidSearch('La fecha debe tener el formato AAAA-MM-DD.');
 		}
-		return $endOfDay ? gmmktime(23, 59, 59, (int)$m[2], (int)$m[3], (int)$m[1]) : gmmktime(0, 0, 0, (int)$m[2], (int)$m[3], (int)$m[1]);
+		$start = new DateTimeImmutable($v, new DateTimeZone(self::TIME_ZONE));
+		return $endOfDay ? $start->modify('tomorrow')->getTimestamp() - 1 : $start->getTimestamp();
 	}
 }

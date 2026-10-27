@@ -53,7 +53,10 @@ class VecBackfill {
 
 	/** @return int files put back in the queue: those the worker gave up on (see `occ buscador:profile refresh --retry-failed`) */
 	public function retryFailed(): int {
-		return $this->db->execute("UPDATE aps_search.file_state SET vec_state = 'pending', updated_at = now() WHERE vec_state = 'failed'");
+		// Every generation's failure records go, so the next tick queues those files again; a SELECT, hence rows() and not execute().
+		return (int)$this->db->rows("WITH d AS (DELETE FROM aps_search.vec_failure RETURNING file_id),
+			u AS (UPDATE aps_search.file_state SET vec_state = 'pending', updated_at = now() WHERE vec_state = 'failed' RETURNING file_id)
+			SELECT count(*) AS n FROM (SELECT file_id FROM d UNION SELECT file_id FROM u) x")[0]['n'];
 	}
 
 	private function minCoverage(): float {

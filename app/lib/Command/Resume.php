@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace OCA\BuscadorDocumental\Command;
 
+use OCA\BuscadorDocumental\Audit\Actor;
 use OCA\BuscadorDocumental\Audit\AuditLog;
 use OCA\BuscadorDocumental\Scope\Settings;
 use Symfony\Component\Console\Command\Command;
@@ -23,7 +24,7 @@ class Resume extends Command {
 
 	protected function execute(InputInterface $input, OutputInterface $output): int {
 		$this->settings->setPaused(false);
-		$this->audit->record('occ', 'resume', null, ['paused' => false]);
+		$this->audit->record(Actor::Occ, 'resume', null, ['paused' => false]);
 		$output->writeln('resumed');
 		return 0;
 	}
