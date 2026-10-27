@@ -9,13 +9,17 @@ namespace OCA\BuscadorDocumental\Acl;
 use OCP\IDBConnection;
 use OCP\SystemTag\ISystemTagManager;
 use OCP\SystemTag\ISystemTagObjectMapper;
+use OCP\SystemTag\TagAlreadyExistsException;
 use Throwable;
 
 /**
  * Is a file excluded from indexing by a `rag-excluded` system tag on itself or any ancestor?
  * - Every system tag named `rag-excluded` in any letter case counts, whatever its visibility flags (M5).
  * - Ancestors come from oc_filecache parent ids, to the storage root, for tag lookup only; never `permissions` (D1).
- * - Any failure (no such tag, tag service error, broken or too deep walk) throws ExclusionUnavailable: fail closed.
+ * - No tag named rag-excluded (any case) means no file carries it, because Nextcloud deletes the assignments with the tag,
+ *   so nothing is excluded.
+ * - Any failure (tag service error, broken or too-deep walk) throws ExclusionUnavailable: fail closed.
+ * - The decision path never writes.
  */
 class ExclusionChecker {
 	public const TAG_NAME = 'rag-excluded';
@@ -46,9 +50,6 @@ class ExclusionChecker {
 		}
 		try {
 			$tagIds = $this->excludedTagIds();
-			if ($tagIds === []) {
-				throw new ExclusionUnavailable('No system tag named ' . self::TAG_NAME . ' exists; refusing to decide exclusion');
-			}
 			$chains = [];
 			$out = [];
 			$all = [];
@@ -67,7 +68,7 @@ class ExclusionChecker {
 					$all[$c] = true;
 				}
 			}
-			$tagged = $all === [] ? [] : $this->mapper->getTagIdsForObjects(array_map('strval', array_keys($all)), 'files');
+			$tagged = $all === [] || $tagIds === [] ? [] : $this->mapper->getTagIdsForObjects(array_map('strval', array_keys($all)), 'files');
 			foreach ($chains as $id => $chain) {
 				$out[$id] = false;
 				foreach ($chain as $c) {
@@ -89,8 +90,8 @@ class ExclusionChecker {
 		return $this->excludedAmong([$fileId])[$fileId];
 	}
 
-	/** @return list<string> */
-	protected function excludedTagIds(): array {
+	/** @return list<string> ids of the tags named rag-excluded, compared the way Nextcloud compares tag names (any case) */
+	public function excludedTagIds(): array {
 		$ids = [];
 		foreach ($this->tags->getAllTags(null, self::TAG_NAME) as $tag) {
 			if (self::isExclusionTagName($tag->getName())) {
@@ -98,6 +99,24 @@ class ExclusionChecker {
 			}
 		}
 		return $ids;
+	}
+
+	/**
+	 * Creates the exclusion tag, public and user-assignable (ADR-0013), when none exists. An existing tag, whoever made it and
+	 * in whatever case, is left alone, and so is one created meanwhile by someone else.
+	 *
+	 * @return bool true when this call created the tag
+	 */
+	public function ensureTag(): bool {
+		if ($this->excludedTagIds() !== []) {
+			return false;
+		}
+		try {
+			$this->tags->createTag(self::TAG_NAME, true, true);
+			return true;
+		} catch (TagAlreadyExistsException) {
+			return false;
+		}
 	}
 
 	/** @return list<int> the file id and its ancestors up to the storage root */

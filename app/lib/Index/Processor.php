@@ -55,8 +55,15 @@ class Processor {
 
 	public function process(int $fileId, string $kind): string {
 		if ($kind === 'rule') {
-			// The exclusion tag was deleted: whatever it had excluded must be looked at again.
+			// The exclusion tag was deleted: whatever it had excluded must be looked at again, and the tag comes back empty so
+			// folder owners can opt out again. Creating it is a best effort (refused under webcron): the row never retries for
+			// it, the doctor's exclusion_tag check reports the missing tag.
 			$this->db->execute("INSERT INTO aps_search.outbox (file_id, kind) SELECT file_id, 'file' FROM aps_search.file_state WHERE skip_reason = 'excluded' ON CONFLICT DO NOTHING");
+			try {
+				$this->exclusion->ensureTag();
+			} catch (\Throwable $e) {
+				$this->logger->warning('buscador_documental: could not create the exclusion tag (' . get_class($e) . ')');
+			}
 			return 'rule';
 		}
 		$node = $this->tree->node($fileId);

@@ -20,6 +20,9 @@ use OCA\BuscadorDocumental\Scope\ScopePredicate;
 use OCA\BuscadorDocumental\Scope\ScopeRules;
 use OCA\BuscadorDocumental\Scope\Settings;
 use OCA\BuscadorDocumental\Tests\unit\Search\Doubles\TreeChecker;
+use OCP\SystemTag\ISystemTag;
+use OCP\SystemTag\ISystemTagManager;
+use OCP\SystemTag\TagCreationForbiddenException;
 use Psr\Log\LoggerInterface;
 
 /** S3 phase 4: the processor re-evaluates a file from the truth (file cache, tags, rules); events are only hints. */
@@ -49,7 +52,7 @@ class OutboxProcessorTest extends DbTestCase {
 		$admin->exec('GRANT SELECT ON oc_filecache, oc_storages, oc_group_folders, oc_mimetypes TO nextcloud');
 	}
 
-	private function build(array $tagged = [], ?\Throwable $exclusionFails = null, array $tree = self::TREE, ?callable $aclWrite = null, ?LoggerInterface $logger = null): array {
+	private function build(array $tagged = [], ?\Throwable $exclusionFails = null, array $tree = self::TREE, ?callable $aclWrite = null, ?LoggerInterface $logger = null, ?ISystemTagManager $tags = null): array {
 		$this->fixture();
 		$conn = $this->connection($this->app());
 		$db = new IndexDb($conn);
@@ -71,7 +74,9 @@ class OutboxProcessorTest extends DbTestCase {
 			$this->aclWritten[] = $id;
 			return true;
 		});
-		$exclusion = TreeChecker::make($tree, [[3, ExclusionChecker::TAG_NAME]], $tagged, $exclusionFails);
+		$exclusion = $tags === null
+			? TreeChecker::make($tree, [[3, ExclusionChecker::TAG_NAME]], $tagged, $exclusionFails)
+			: TreeChecker::over($tree, $tags, $tagged, $exclusionFails);
 		$tree = new FileTree($conn);
 		$processor = new Processor($db, $tree, $rules, new ScopePredicate($tree), $exclusion, $indexer, $acl, $settings, $logger ?? $this->createMock(LoggerInterface::class));
 		return [$db, $rules, $settings, $processor, new Outbox($db), $audit];
@@ -286,6 +291,68 @@ class OutboxProcessorTest extends DbTestCase {
 		$this->assertSame('rule', $p->process(0, 'rule'));
 		$ids = array_map('intval', array_column($db->rows("SELECT file_id FROM aps_search.outbox ORDER BY 1"), 'file_id'));
 		$this->assertSame([13], $ids);
+	}
+
+	/**
+	 * A tag manager with no exclusion tag yet: getAllTags reads the list, createTag adds to it (or fails with $createFails).
+	 *
+	 * @param list<ISystemTag> $list
+	 */
+	private function tagStore(array &$list, ?\Throwable $createFails = null): ISystemTagManager {
+		$m = $this->createMock(ISystemTagManager::class);
+		$m->method('getAllTags')->willReturnCallback(static function () use (&$list): array {
+			return $list;
+		});
+		$m->expects($this->once())->method('createTag')->with(ExclusionChecker::TAG_NAME, true, true)
+			->willReturnCallback(function (string $name) use (&$list, $createFails): ISystemTag {
+				if ($createFails !== null) {
+					throw $createFails;
+				}
+				$t = $this->createMock(ISystemTag::class);
+				$t->method('getId')->willReturn('7');
+				$t->method('getName')->willReturn($name);
+				return $list[] = $t;
+			});
+		return $m;
+	}
+
+	private function unsettledRows(IndexDb $db): int {
+		return (int)$db->rows('SELECT count(*) AS n FROM aps_search.outbox WHERE processed_at IS NULL OR attempts >= 5')[0]['n'];
+	}
+
+	public function testDeletingTheExclusionTagReindexesWhatItExcludedAndBringsTheTagBack(): void {
+		$list = [];
+		[$db, $rules, , $p, $outbox] = $this->build(tags: $this->tagStore($list));
+		$rules->addFolder(10, 'occ');
+		$db->execute("INSERT INTO aps_search.file_state (file_id, text_state, skip_reason) VALUES (13, 'skipped', 'excluded')");
+		$outbox->touch(0, 'rule');
+		$runner = new OutboxRunner($db, $outbox, $p, $this->createMock(LoggerInterface::class));
+		$runner->runBatch(50);
+		$runner->runBatch(50);
+		$this->assertSame([13], $this->enqueued, 'the file the deleted tag excluded is indexed again');
+		$this->assertCount(1, $list, 'the tag exists again, once');
+		$this->assertSame(0, $this->unsettledRows($db), 'nothing waits and nothing is parked');
+	}
+
+	public function testTheRuleRowReQueuesAndFinishesWhenTheTagCannotBeCreated(): void {
+		$list = [];
+		$warnings = [];
+		$log = $this->createMock(LoggerInterface::class);
+		$log->method('warning')->willReturnCallback(function (string $m) use (&$warnings): void {
+			$warnings[] = $m;
+		});
+		[$db, $rules, , $p, $outbox] = $this->build(logger: $log, tags: $this->tagStore($list, new TagCreationForbiddenException('no session')));
+		$rules->addFolder(10, 'occ');
+		$db->execute("INSERT INTO aps_search.file_state (file_id, text_state, skip_reason) VALUES (13, 'skipped', 'excluded')");
+		$outbox->touch(0, 'rule');
+		$runner = new OutboxRunner($db, $outbox, $p, $this->createMock(LoggerInterface::class));
+		$this->assertSame(['rule' => 1], $runner->runBatch(50), 'finished, not retried');
+		$this->assertSame(['enqueued' => 1], $runner->runBatch(50));
+		$this->assertSame([13], $this->enqueued);
+		$this->assertSame(0, $this->unsettledRows($db), 'no row is left to retry or parked');
+		$this->assertCount(1, $warnings);
+		$this->assertStringContainsString('TagCreationForbiddenException', $warnings[0]);
+		$this->assertStringNotContainsString('a.pdf', $warnings[0]);
 	}
 
 	// ---- the runner ----
