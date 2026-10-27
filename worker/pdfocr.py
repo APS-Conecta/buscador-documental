@@ -21,7 +21,7 @@ from functools import lru_cache
 import ocr
 from ocr import LANGS, OcrFailed, OcrTimeout
 
-POLICY = "perpage-2"
+POLICY = "perpage-3"
 ROTATE_THRESHOLD = "2.0"       # ocrmypdf default 14 ignores sparse pages (OSD confidence ~4.5 on a four-line page)
 PAGE_TIMEOUT = int(os.environ.get("BD_PAGE_TIMEOUT", "300"))
 MIN_CHARS = 5
