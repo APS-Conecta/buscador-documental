@@ -253,7 +253,7 @@ class Reconciler {
 		$n = 0;
 		foreach ($this->db->rows('SELECT uid FROM aps_search.pseudonym') as $r) {
 			$uid = (string)$r['uid'];
-			if (!in_array($uid, Pseudonyms::NON_PEOPLE, true) && !$this->users->userExists($uid)) {
+			if (!$this->users->userExists($uid)) {
 				(new Pseudonyms($this->db))->forget($uid);
 				$n++;
 			}

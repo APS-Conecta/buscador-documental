@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace OCA\BuscadorDocumental\Command;
 
+use OCA\BuscadorDocumental\Audit\Actor;
 use OCA\BuscadorDocumental\Audit\AuditLog;
 use OCA\BuscadorDocumental\Scope\Settings;
 use Symfony\Component\Console\Command\Command;
@@ -24,7 +25,7 @@ class Pause extends Command {
 
 	protected function execute(InputInterface $input, OutputInterface $output): int {
 		$this->settings->setPaused(true);
-		$this->audit->record('occ', 'pause', null, ['paused' => true]);
+		$this->audit->record(Actor::Occ, 'pause', null, ['paused' => true]);
 		$output->writeln('paused');
 		return 0;
 	}
