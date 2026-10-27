@@ -13,6 +13,7 @@ use OCA\BuscadorDocumental\Scope\Settings;
  * Housekeeping for the vector lane, run by a background job: queue indexed files that still lack vectors in every live
  * generation (a batch per tick, nothing while paused), measure coverage, and mark a building generation ready once enough of
  * the corpus is embedded. It never activates a generation: that is an administrator's command (ADR-0004, ADR-0014).
+ * It never builds the vector index either: that needs the owner role, and `occ buscador:profile refresh` does it.
  */
 class VecBackfill {
 	public function __construct(private IndexDb $db, private Settings $settings) {
@@ -42,10 +43,6 @@ class VecBackfill {
 				if ($g['state'] === 'building' && $ratio >= $min) {
 					$this->db->rows('SELECT aps_search.mark_generation_ready(?)', [$gen]);
 					$ready[] = $gen;
-				}
-				// A ready or active generation without its index would be searched by full scan: (re)build it, whatever stopped it before.
-				if ($g['state'] !== 'building' || in_array($gen, $ready, true)) {
-					$this->db->execute('SELECT aps_search.build_vec_index(?)', [$gen]);
 				}
 			} catch (\Throwable) {
 				continue;                                          // one generation's trouble must not stop the others; the next tick tries again

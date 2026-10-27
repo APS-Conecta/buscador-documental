@@ -7,6 +7,8 @@ declare(strict_types=1);
 namespace OCA\BuscadorDocumental\Tests\integration\db;
 
 use OCA\BuscadorDocumental\Migration\SqlScript;
+use OCA\BuscadorDocumental\Migration\Version000006Date20261027000000;
+use OCP\Migration\IOutput;
 
 /** S4 phase 1: schema 3 (generations, vectors, snapshots, filter data) and its upgrade from schema 2. */
 class S4SchemaTest extends DbTestCase {
@@ -77,12 +79,32 @@ class S4SchemaTest extends DbTestCase {
 		$this->assertSame(1, (int)$app->query('SELECT count(*) FROM aps_search.embedding_profile')->fetchColumn());
 	}
 
-	public function testBuildIndexCreatesAnHnswIndexOnce(): void {
-		$this->newGeneration(1, 3);
-		$app = $this->app();
-		$app->exec('SELECT aps_search.build_vec_index(1)');
-		$app->exec('SELECT aps_search.build_vec_index(1)');
-		$this->assertSame(1, (int)$app->query("SELECT count(*) FROM pg_indexes WHERE schemaname = 'aps_search' AND tablename = 'chunk_vec_1' AND indexdef ILIKE '%hnsw%halfvec_cosine_ops%'")->fetchColumn());
+	public function testTheIndexBuildFunctionIsGoneBecauseOnlyAnAdministratorCommandBuildsTheIndex(): void {
+		$this->assertTrue((bool)$this->app()->query("SELECT to_regprocedure('aps_search.build_vec_index(int)') IS NULL")->fetchColumn());
+	}
+
+	public function testUpgradeOfASchemaFiveInstanceDropsTheIndexBuildFunctionOnceAndKeepsTheVersion(): void {
+		$name = 'bd_t_up6_' . bin2hex(random_bytes(3));
+		self::admin('nextcloud')->exec("CREATE DATABASE $name OWNER nextcloud");
+		try {
+			self::connect('postgres', 'dev', $name)->exec('CREATE EXTENSION unaccent');
+			$app = self::connect('nextcloud', 'dev', $name);
+			foreach (['000_preflight.sql', '001_schema.sql', '002_functions.sql', '003_roles.sql', '004_s3.sql', '005_s4.sql', '006_s5.sql', '007_s6.sql'] as $f) {
+				foreach (SqlScript::load($f) as $st) {
+					$app->exec($st);
+				}
+			}
+			$fn = static fn (): bool => (bool)$app->query("SELECT to_regprocedure('aps_search.build_vec_index(int)') IS NOT NULL")->fetchColumn();
+			$this->assertTrue($fn(), 'an instance installed before the change');
+			$step = new Version000006Date20261027000000($this->connection($app));
+			foreach ([1, 2] as $_) {
+				$step->changeSchema($this->createMock(IOutput::class), static fn () => null, []);
+				$this->assertFalse($fn());
+				$this->assertSame(5, (int)$app->query('SELECT schema_ver FROM aps_search.schema_meta')->fetchColumn(), 'the worker accepts exactly schema 5');
+			}
+		} finally {
+			self::admin('nextcloud')->exec("DROP DATABASE IF EXISTS $name WITH (FORCE)");
+		}
 	}
 
 	public function testEraseFilesEmptiesEveryGeneration(): void {
