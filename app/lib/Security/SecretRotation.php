@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace OCA\BuscadorDocumental\Security;
 
+use OCA\BuscadorDocumental\Audit\Actor;
 use OCA\BuscadorDocumental\Audit\AuditLog;
 use OCA\BuscadorDocumental\Ops\OpsException;
 use OCP\AppFramework\Utility\ITimeFactory;
@@ -44,7 +45,7 @@ class SecretRotation {
 			$this->clearGrace();
 		}
 		$this->config->setValueString(self::APP, 'worker_secret', $new, false, true);
-		$this->audit->record('occ', 'secret.rotate', null, ['grace_hours' => $graceHours]);
+		$this->audit->record(Actor::Occ, 'secret.rotate', null, ['grace_hours' => $graceHours]);
 		return $new;
 	}
 
@@ -64,7 +65,7 @@ class SecretRotation {
 		// environment's secret, so adoption ends any rotation grace instead of keeping a second valid secret around.
 		$this->clearGrace();
 		$this->config->setValueString(self::APP, 'worker_secret', $secret, false, true);
-		$this->audit->record('occ', 'secret.adopt', null);
+		$this->audit->record(Actor::Occ, 'secret.adopt', null);
 		return true;
 	}
 

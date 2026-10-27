@@ -4,6 +4,7 @@
 # Done per role, because a read-only database also stops Nextcloud itself: the worker's role is made read-only, and the search
 # can no longer store its result snapshot. Search must say "unavailable" without crashing, the worker must stop with a short
 # note that carries no text, and both must recover when writes come back, with nothing lost.
+# Then the exclusion tag is deleted: every exclusion is lifted and the tag comes back empty.
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
 C="docker compose -f compose.yaml"
@@ -69,10 +70,25 @@ work
 [ "$(hits)" = "ok 2" ] || die "the waiting document was not indexed after recovery ($(hits))"
 ok "after writes return, search works again and the document that waited is indexed (nothing lost)"
 
-# the exclusion state unavailable fails closed: no tag, no results
-for id in $($PSQL -c "select id from oc_systemtag where name = 'rag-excluded'"); do $OCC tag:delete "$id" >/dev/null; done
-OUT=$(hits 2>&1 || true)
-case "$OUT" in "unavailable 0") ok "without the exclusion tag the search fails closed (unavailable, nothing shown)";; *) die "search without the exclusion tag: $OUT";; esac
-$OCC tag:add rag-excluded public >/dev/null
-[ "$(hits)" = "ok 2" ] || die "search did not recover after the tag came back"
+# deleting the exclusion tag lifts every exclusion: Nextcloud removes it from every file, the excluded document is indexed
+# again and the tag comes back empty. two.txt itself is tagged, because both documents live in Docs.
+DAV=http://127.0.0.1:8191/remote.php/dav
+dav() { curl -s -o /dev/null -w '%{http_code}' -u "fm_a:fm-pass-12345" "$@"; }
+TAG=$($PSQL -c "select id from oc_systemtag where name = 'rag-excluded'")
+TWO=$($PSQL -c "select f.fileid from oc_filecache f join oc_storages s on s.numeric_id=f.storage where s.id='home::fm_a' and f.path = 'files/Docs/two.txt'")
+[ "$(dav -X PUT "$DAV/systemtags-relations/files/$TWO/$TAG")" = 201 ] || die "tagging two.txt"
+tick
+[ "$(hits)" = "ok 1" ] || die "the tagged document is still found ($(hits))"
+ok "a document tagged rag-excluded is no longer found"
+$OCC tag:delete "$TAG" >/dev/null
+[ "$(hits)" = "ok 1" ] || die "search after the tag was deleted: $(hits)"
+ok "without the exclusion tag the search still answers (nothing is excluded, nothing invented)"
+OUT=$($OCC buscador:doctor || true); grep -q "FAIL exclusion_tag" <<<"$OUT" || die "doctor does not name the missing tag: $OUT"
+ok "doctor fails exclusion_tag while the tag is missing"
+tick; tick; work
+[ "$(hits)" = "ok 2" ] || die "the document the deleted tag excluded was not indexed again ($(hits))"
+ok "the document the deleted tag excluded is indexed again"
+[ "$($PSQL -c "select count(*) || ':' || count(*) filter (where visibility = 1 and editable = 1) from oc_systemtag where name = 'rag-excluded'")" = "1:1" ] || die "the tag did not come back once, public and assignable"
+OUT=$($OCC buscador:doctor || true); grep -qE "^ok +exclusion_tag: " <<<"$OUT" || die "doctor still fails exclusion_tag: $OUT"
+ok "the tag comes back once, public and assignable, and the doctor is satisfied"
 echo "failures OK ($PASS checks)"

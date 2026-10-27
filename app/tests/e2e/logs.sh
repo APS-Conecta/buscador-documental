@@ -86,7 +86,7 @@ for s in "$S_DOC" "$S_NAME" "$S_QUERY" "$S_BAD" "$S_ERR"; do
 done
 ok "none of the five sentinels (document text, file name, query, hostile name, corrupt content) appears in any log"
 # the history too: the audit log and the status output hold no names
-if $PSQL -c "select actor || coalesce(subject_token,'') || detail::text from aps_search.audit_log" | grep -q "SENT"; then die "the audit log holds a sentinel"; fi
-if $OCC buscador:status | grep -q "SENT"; then die "status prints a sentinel"; fi
+if $PSQL -c "select actor || coalesce(subject_token,'') || detail::text from aps_search.audit_log" | grep "SENT" >/dev/null; then die "the audit log holds a sentinel"; fi
+if $OCC buscador:status | grep "SENT" >/dev/null; then die "status prints a sentinel"; fi
 ok "the audit log and the status output are clean too"
 echo "logs OK ($PASS checks)"

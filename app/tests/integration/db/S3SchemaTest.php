@@ -90,6 +90,19 @@ class S3SchemaTest extends DbTestCase {
 		$this->assertSame(0, $this->rowCount('chunk', 10));
 	}
 
+	public function testEraseAndPurgeForgetTheFilesVectorFailures(): void {
+		foreach ([10, 11, 99] as $id) {
+			$this->indexed($id);
+		}
+		$app = $this->app();
+		$app->exec('INSERT INTO aps_search.vec_failure (file_id, gen) VALUES (10, 1), (10, 2), (11, 1), (99, 1)');
+		$app->exec("SELECT aps_search.erase_files(ARRAY[10]::bigint[], 'excluded')");
+		$this->assertSame(0, $this->rowCount('vec_failure', 10), 'erasure leaves no trace');
+		$app->exec('SELECT aps_search.purge_files(ARRAY[11]::bigint[])');
+		$this->assertSame(0, $this->rowCount('vec_failure', 11), 'nor does a purge');
+		$this->assertSame(1, $this->rowCount('vec_failure', 99), 'another file keeps its record');
+	}
+
 	public function testEraseFileStaysAsAWrapperForOneFile(): void {
 		$this->indexed(10);
 		$this->app()->exec("SELECT aps_search.erase_file(10, 'excluded')");
@@ -97,7 +110,7 @@ class S3SchemaTest extends DbTestCase {
 	}
 
 	public function testSchemaVersionIsReadableByTheWorker(): void {
-		$this->assertSame(5, (int)$this->worker()->query('SELECT aps_search.schema_version()')->fetchColumn());
+		$this->assertSame(7, (int)$this->worker()->query('SELECT aps_search.schema_version()')->fetchColumn());
 	}
 
 	public function testNextcloudUserCanUseTheNewTables(): void {
@@ -145,7 +158,7 @@ class S3SchemaTest extends DbTestCase {
 			$this->assertSame(0, (int)$app->query("SELECT count(*) FROM pg_namespace WHERE nspname = 'aps_search'")->fetchColumn(), 'no half-built schema');
 			$this->assertSame('nextcloud', $app->query('SELECT current_user')->fetchColumn());
 			SqlScript::runAtomically($this->connection($app), SqlScript::up());           // and a retry now works
-			$this->assertSame(5, (int)$app->query('SELECT schema_ver FROM aps_search.schema_meta')->fetchColumn());
+			$this->assertSame(7, (int)$app->query('SELECT schema_ver FROM aps_search.schema_meta')->fetchColumn());
 		} finally {
 			self::admin('nextcloud')->exec("DROP DATABASE IF EXISTS $name WITH (FORCE)");
 		}

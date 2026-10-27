@@ -13,6 +13,7 @@ use OCA\BuscadorDocumental\Scope\Settings;
  * Housekeeping for the vector lane, run by a background job: queue indexed files that still lack vectors in every live
  * generation (a batch per tick, nothing while paused), measure coverage, and mark a building generation ready once enough of
  * the corpus is embedded. It never activates a generation: that is an administrator's command (ADR-0004, ADR-0014).
+ * It never builds the vector index either: that needs the owner role, and `occ buscador:profile refresh` does it.
  */
 class VecBackfill {
 	public function __construct(private IndexDb $db, private Settings $settings) {
@@ -43,10 +44,6 @@ class VecBackfill {
 					$this->db->rows('SELECT aps_search.mark_generation_ready(?)', [$gen]);
 					$ready[] = $gen;
 				}
-				// A ready or active generation without its index would be searched by full scan: (re)build it, whatever stopped it before.
-				if ($g['state'] !== 'building' || in_array($gen, $ready, true)) {
-					$this->db->rows('SELECT aps_search.build_vec_index(?)', [$gen]);
-				}
 			} catch (\Throwable) {
 				continue;                                          // one generation's trouble must not stop the others; the next tick tries again
 			}
@@ -56,7 +53,10 @@ class VecBackfill {
 
 	/** @return int files put back in the queue: those the worker gave up on (see `occ buscador:profile refresh --retry-failed`) */
 	public function retryFailed(): int {
-		return $this->db->execute("UPDATE aps_search.file_state SET vec_state = 'pending', updated_at = now() WHERE vec_state = 'failed'");
+		// Every generation's failure records go, so the next tick queues those files again; a SELECT, hence rows() and not execute().
+		return (int)$this->db->rows("WITH d AS (DELETE FROM aps_search.vec_failure RETURNING file_id),
+			u AS (UPDATE aps_search.file_state SET vec_state = 'pending', updated_at = now() WHERE vec_state = 'failed' RETURNING file_id)
+			SELECT count(*) AS n FROM (SELECT file_id FROM d UNION SELECT file_id FROM u) x")[0]['n'];
 	}
 
 	private function minCoverage(): float {

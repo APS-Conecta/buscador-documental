@@ -8,6 +8,7 @@ namespace OCA\BuscadorDocumental\Ops;
 
 use DateTimeImmutable;
 use DateTimeZone;
+use OCA\BuscadorDocumental\Audit\Actor;
 use OCA\BuscadorDocumental\Audit\AuditLog;
 use OCA\BuscadorDocumental\Db\IndexDb;
 use OCA\BuscadorDocumental\Reconcile\ReconcileWindow;
@@ -73,13 +74,13 @@ class WorkWindow {
 		$this->settings->set('work_window', $window);
 		$this->settings->set('work_window_lanes', $lanes);
 		$this->settings->set('work_tz', $tz);
-		$this->audit->record('occ', 'window.set', null, ['window' => $window, 'lanes' => $lanes]);
+		$this->audit->record(Actor::Occ, 'window.set', null, ['window' => $window, 'lanes' => $lanes]);
 	}
 
 	public function off(): void {
 		$this->settings->delete('work_window');
 		$this->settings->delete('work_window_lanes');
 		$this->settings->delete('work_tz');
-		$this->audit->record('occ', 'window.set', null, ['window' => 'off']);
+		$this->audit->record(Actor::Occ, 'window.set', null, ['window' => 'off']);
 	}
 }
