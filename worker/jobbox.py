@@ -2,9 +2,10 @@
 """Supervisor <-> parser protocol over a shared directory (ADR-0011).
 
 The supervisor copies the input to <work>/in/<id>.bin and writes <work>/in/<id>.req.json; the parser container runs
-`serve_once` in a loop, starts one child per request in its own session, and writes <work>/out/<id>.json. The parser has
-no network and no secrets; the files are the whole interface. The child gets (request path, result path) as argv, and
-may write <result>.extra: the extra seconds it needs beyond the request's base budget (`announce`, `granted`).
+`serve_once` in a loop, starts one child per request in its own session with a private TMPDIR, and writes
+<work>/out/<id>.json. The parser has no network and no secrets; the files are the whole interface. The child gets
+(request path, result path) as argv, and may write <result>.extra: the extra seconds it needs beyond the request's base
+budget (`announce`, `granted`).
 
 Both sides treat the other as untrusted: the parser survives any malformed request (it answers with an error and removes
 the file), and the supervisor reads an answer only through a non-following, regular-file-only, size-capped open."""
@@ -17,6 +18,7 @@ import signal
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 
 ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
@@ -154,31 +156,34 @@ def _limits():
 
 
 def run_child(cmd: list, req: str, res: str, timeout: int) -> dict:
-    """Runs one child in its own session; when its budget runs out the whole group is killed. `timeout` is the base
-    budget; the child may extend it through the sidecar (`announce`), and the extension is read every second."""
+    """Runs one child in its own session with a private TMPDIR, removed when it ends; when its budget runs out the whole
+    group is killed. `timeout` is the base budget; the child may extend it through the sidecar (`announce`), and the
+    extension is read every second."""
     errp = res + ".err"
-    with _create(errp, "wb") as errf:
-        p = subprocess.Popen(cmd + [req, res], start_new_session=True, stdin=subprocess.DEVNULL,
-                             stdout=subprocess.DEVNULL, stderr=errf, preexec_fn=_limits)
-    start, budget = time.monotonic(), timeout
-    try:
-        while True:
-            budget = max(budget, granted(timeout, res))
-            left = start + budget - time.monotonic()
-            if left <= 0:
-                os.killpg(p.pid, signal.SIGKILL)
-                p.wait()
-                return {"status": "error", "reason": "timeout"}
-            try:
-                p.wait(timeout=min(left, 1))
-                break
-            except subprocess.TimeoutExpired:
-                pass
-    finally:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as scratch:   # a cleanup error never blocks the answer
+        with _create(errp, "wb") as errf:
+            p = subprocess.Popen(cmd + [req, res], start_new_session=True, stdin=subprocess.DEVNULL,
+                                 stdout=subprocess.DEVNULL, stderr=errf, preexec_fn=_limits,
+                                 env={**os.environ, "TMPDIR": scratch})
+        start, budget = time.monotonic(), timeout
         try:
-            os.killpg(p.pid, signal.SIGKILL)   # stray grandchildren of a child that exited
-        except ProcessLookupError:
-            pass
+            while True:
+                budget = max(budget, granted(timeout, res))
+                left = start + budget - time.monotonic()
+                if left <= 0:
+                    os.killpg(p.pid, signal.SIGKILL)
+                    p.wait()
+                    return {"status": "error", "reason": "timeout"}
+                try:
+                    p.wait(timeout=min(left, 1))
+                    break
+                except subprocess.TimeoutExpired:
+                    pass
+        finally:
+            try:
+                os.killpg(p.pid, signal.SIGKILL)   # stray grandchildren of a child that exited
+            except ProcessLookupError:
+                pass
     try:
         with _open_regular(res) as fh:
             return json.load(fh)
