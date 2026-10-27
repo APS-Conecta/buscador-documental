@@ -139,7 +139,7 @@ class RetrieveTest extends TestCase {
 	}
 
 	public function testExclusionFailureRefusesAllHitsAndWarnsTheAdmin(): void {
-		$checker = TreeChecker::make([10 => 1, 1 => -1], [], []); // no rag-excluded tag
+		$checker = TreeChecker::make([10 => 1, 1 => -1], [[3, 'rag-excluded']], [], new \RuntimeException('down')); // the tag service fails
 		$recheck = ScriptedRecheck::make([10 => [$this->node('a.pdf')]], $checker);
 		$log = $this->createMock(LoggerInterface::class);
 		$log->expects($this->once())->method('warning');

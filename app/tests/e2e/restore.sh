@@ -37,7 +37,7 @@ $ENQ ensure-tag >/dev/null
 READ_START=$(date +%s)
 for f in n1 n2 n3; do
 	FID=$($PSQL -c "select f.fileid from oc_filecache f join oc_storages s on s.numeric_id=f.storage where s.id='home::rs_a' and f.path='files/$f.txt'")
-	$ENQ enqueue "$FID" | grep -q enqueued || die "enqueue refused"
+	$ENQ enqueue "$FID" | grep enqueued >/dev/null || die "enqueue refused"
 done
 for _ in 1 2 3 4; do $C --profile worker run --rm --no-deps -T worker python3 main.py --once >/dev/null; done
 READ_SECONDS=$(( $(date +%s) - READ_START ))
@@ -54,7 +54,7 @@ ok "the backup is an AES-256 file (Salted__ header), $BACKUP_MS ms"
 [ "$(DBX sh -c "pg_dump --schema=aps_search --format=plain | grep -c $SENT")" -ge 1 ] || die "control: the plain dump should contain the sentinel"
 [ "$(DBX sh -c "grep -c $SENT /tmp/x.bak || true")" = 0 ] || die "the sentinel is visible in the encrypted backup"
 ok "the page text is in the dump (control: plain dump has it) and not visible in the encrypted file"
-DBX cat /tmp/x.bak.meta | grep -q "^chunks $N$" || die "meta does not record the chunk count"
+DBX cat /tmp/x.bak.meta | grep "^chunks $N$" >/dev/null || die "meta does not record the chunk count"
 ok "the meta file records the counts: $(DBX cat /tmp/x.bak.meta | tr '\n' ' ')"
 BAD=$(DBX bash /tmp/backup.sh /tmp/x.bak 2>&1 || true); grep -q "already exists" <<<"$BAD" || die "an existing backup was overwritten: $BAD"
 DBX sh -c 'echo short > /tmp/short.key; chmod 600 /tmp/short.key'
@@ -75,7 +75,7 @@ BAD=$($C exec -T -e PGUSER=postgres -e BD_BACKUP_KEY_FILE=/tmp/other.key db bash
 ok "a wrong key is refused and nothing is restored"
 # 3. the real restore
 T0=$(date +%s%N); OUT=$(DBX bash /tmp/restore.sh /tmp/x.bak bd_restore_test); RESTORE_MS=$(( ($(date +%s%N) - T0) / 1000000 ))
-echo "$OUT" | grep -q "^chunks $N$" || die "restored chunk count differs: $OUT"
+echo "$OUT" | grep "^chunks $N$" >/dev/null || die "restored chunk count differs: $OUT"
 ok "restored in $RESTORE_MS ms; counts: $(echo "$OUT" | tail -5 | tr '\n' ' ')"
 RESTORED=$(DBX psql -qAt -d bd_restore_test -c "select count(*) from aps_search.chunk where tsv @@ websearch_to_tsquery('aps_search.spanish_unaccent', 'hemoglobina glicosilada')")
 [ "$RESTORED" = "$N" ] || die "the restored index answers $RESTORED of $N"
@@ -94,6 +94,28 @@ if DBX psql -q -d bd_restore_test -c "set role bd_owner; alter role nextcloud su
 ok "bd_owner cannot run server programs or change roles (what a dump made with your own key may do is limited to the search schema)"
 BAD=$(DBX bash /tmp/restore.sh /tmp/x.bak bd_restore_test 2>&1 || true); grep -q "already has an aps_search schema" <<<"$BAD" || die "a second restore over the first was not refused: $BAD"
 ok "restoring over an existing schema is refused"
+# no key material in a process's arguments: every external command the scripts run is wrapped to log its argument list
+ARGV_KEY=bd-argv-toy-key-0123456789abcdef0123456789abcdef
+DBX sh -c "rm -rf /tmp/argv-bin /tmp/argv*.log /tmp/w.bak*; printf %s '$ARGV_KEY' > /tmp/argv.key; chmod 600 /tmp/argv.key"
+MAC=$(DBX sh -c '{ printf mac:; cat /tmp/argv.key; } | openssl dgst -sha256 -r | cut -d" " -f1')
+PASSPH=$(DBX sh -c 'openssl dgst -sha256 -r < /tmp/argv.key | cut -d" " -f1')
+case "$MAC" in *6*) ;; *) die "control: the toy key's MAC key must contain a 6 (a NUL byte in the inner pad)";; esac
+DBX sh -c 'mkdir /tmp/argv-bin && for c in openssl cat cut sha256sum wc stat psql pg_dump pg_restore mv rm rmdir chmod mktemp df awk sed sort grep date; do
+	p=$(command -v "$c") || { echo "missing $c" >&2; exit 1; }
+	printf "#!/bin/sh\nprintf \"%%s\\\\n\" \"\${0##*/} \$*\" >> /tmp/argv.log\nexec %s \"\$@\"\n" "$p" > "/tmp/argv-bin/$c" && chmod 755 "/tmp/argv-bin/$c" || exit 1
+done' || die "could not wrap the commands the scripts run"
+ARGV() { $C exec -T -e PGUSER=postgres -e PGDATABASE=nextcloud -e BD_BACKUP_KEY_FILE=/tmp/argv.key db sh -c 'PATH=/tmp/argv-bin:$PATH; export PATH; exec bash "$@"' sh "$@"; }
+ARGV /tmp/backup.sh /tmp/w.bak >/dev/null || die "the backup with wrapped commands failed"
+LOG=$(DBX cat /tmp/argv.log); grep -q '^openssl enc ' <<<"$LOG" && grep -q '^openssl dgst ' <<<"$LOG" || die "control: the wrapped backup logged no openssl call"
+DBX mv /tmp/argv.log /tmp/argv.backup.log
+BAD=$(ARGV /tmp/restore.sh /tmp/w.bak bd_restore_test 2>&1 || true); grep -q "already has an aps_search schema" <<<"$BAD" || die "the restore with wrapped commands did not reach the target check: $BAD"
+LOG=$(DBX cat /tmp/argv.log); grep -q '^openssl enc -d ' <<<"$LOG" && grep -q '^openssl dgst ' <<<"$LOG" || die "control: the wrapped restore logged no openssl call"
+DBX mv /tmp/argv.log /tmp/argv.restore.log
+LOG=$(DBX cat /tmp/argv.backup.log /tmp/argv.restore.log)
+if grep -qF -e "$MAC" -e "$PASSPH" -e "$ARGV_KEY" <<<"$LOG"; then die "a process's argument list holds key material"; fi
+ok "the backup and restore scripts pass no key material in process arguments"
+[ "$(DBX cat /tmp/w.bak.hmac)" = "$(DBX sh -c 'openssl dgst -sha256 -hmac "$1" -r < /tmp/w.bak | cut -d" " -f1' sh "$MAC")" ] || die "the keyed checksum is not HMAC-SHA256 under the derived key"
+ok "the keyed checksum is HMAC-SHA256 under the derived key, in the same format as before"
 DBX cp /tmp/x.bak.sha256 /tmp/x.sha.keep; DBX rm -f /tmp/x.bak.sha256
 BAD=$(DBX bash /tmp/restore.sh /tmp/x.bak bd_restore_test 2>&1 || true); grep -q "checksum file" <<<"$BAD" || die "a backup without its checksum was accepted: $BAD"
 DBX mv /tmp/x.sha.keep /tmp/x.bak.sha256
@@ -101,8 +123,8 @@ ok "a backup without its checksum file is refused"
 # a backup of another schema version is refused (the live schema here is the version the script supports)
 DBX sh -c 'rm -f /tmp/newer.bak*'
 $PSQL -c "UPDATE aps_search.schema_meta SET schema_ver = 99" >/dev/null
-DBX bash /tmp/backup.sh /tmp/newer.bak >/dev/null || { $PSQL -c "UPDATE aps_search.schema_meta SET schema_ver = 5" >/dev/null; die "could not back up the newer-schema copy"; }
-$PSQL -c "UPDATE aps_search.schema_meta SET schema_ver = 5" >/dev/null     # never leave the stack on a schema the worker refuses
+DBX bash /tmp/backup.sh /tmp/newer.bak >/dev/null || { $PSQL -c "UPDATE aps_search.schema_meta SET schema_ver = 7" >/dev/null; die "could not back up the newer-schema copy"; }
+$PSQL -c "UPDATE aps_search.schema_meta SET schema_ver = 7" >/dev/null     # never leave the stack on a schema the worker refuses
 BAD=$(DBX bash /tmp/restore.sh /tmp/newer.bak bd_restore_test2 2>&1 || true); grep -q "holds schema version 99" <<<"$BAD" || die "a backup of a newer schema was not refused: $BAD"
 ok "a backup of a newer schema version is refused before anything is created"
 # a file altered by someone WITHOUT the key is refused even if they recompute the plain checksum

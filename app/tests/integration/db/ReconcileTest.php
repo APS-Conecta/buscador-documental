@@ -57,7 +57,8 @@ class ReconcileTest extends DbTestCase {
 			});
 		}
 		$db = new IndexDb($counting);
-		$rules = new ScopeRules($db, new AuditLog($db, new Pseudonyms($db)));
+		$pseudonyms = new Pseudonyms($db);
+		$rules = new ScopeRules($db, new AuditLog($db, $pseudonyms), $pseudonyms);
 		foreach ($folderRules as $f) {
 			$rules->addFolder($f, 'occ');
 		}
@@ -139,6 +140,18 @@ class ReconcileTest extends DbTestCase {
 		}
 		$this->finish($r);
 		$this->assertSame([17], $this->queued($db), 'the tag event was lost: the processor will erase it');
+	}
+
+	public function testAnIndexedFileUnderACaseVariantOfTheTagIsFoundToo(): void {
+		[$r, $db] = $this->reconciler();
+		$admin = self::connect('postgres', 'dev', self::$dbName);
+		$admin->exec("UPDATE oc_systemtag SET name = 'RAG-excluded' WHERE id = 5");             // Nextcloud allows a case-only rename
+		$admin->exec("INSERT INTO oc_systemtag_object_mapping VALUES ('12', 'files', 5)");
+		foreach ([13, 17, 18] as $id) {
+			$this->state($id, "e$id");
+		}
+		$this->finish($r);
+		$this->assertSame([13, 17], $this->queued($db), 'indexed content under the tagged folder is queued for erasure');
 	}
 
 	public function testOtherTagsDoNotExclude(): void {
@@ -354,14 +367,14 @@ class ReconcileTest extends DbTestCase {
 
 	public function testPseudonymsOfUsersWhoNoLongerExistAreForgotten(): void {
 		$users = $this->createMock(\OCP\IUserManager::class);
-		$users->method('userExists')->willReturnCallback(static fn (string $uid): bool => $uid === 'alice');
+		$users->method('userExists')->willReturnCallback(static fn (string $uid): bool => in_array($uid, ['alice', 'system'], true));
 		[$r, $db] = $this->reconciler(users: $users);
 		foreach (['alice', 'ghost', 'system', 'occ'] as $uid) {
 			(new Pseudonyms($db))->tokenFor($uid);
 		}
 		$this->finish($r);
 		$left = array_column($db->rows('SELECT uid FROM aps_search.pseudonym ORDER BY uid'), 'uid');
-		$this->assertSame(['alice'], $left, 'ghost is gone; system and occ were never people');
+		$this->assertSame(['alice', 'system'], $left, 'the vanished ghost and occ are forgotten, also when the uid names a non-person actor');
 	}
 
 	public function testOlderFileMetaRowsGetTheirStorageIdBackfilled(): void {

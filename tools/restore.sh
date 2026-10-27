@@ -17,14 +17,25 @@ DB=${2:?usage: restore.sh IN.bak TARGET_DATABASE}
 KEY=${BD_BACKUP_KEY_FILE:?set BD_BACKUP_KEY_FILE to the file holding the encryption key}
 # The schema version this script (and the app that ships it) writes and reads. A backup of any other version is refused: restore
 # it with the app version that made it, then upgrade the app (a newer schema would be read by code that does not know it).
-SUPPORTED_SCHEMA=5
+SUPPORTED_SCHEMA=7
 fail() { echo "restore: $*" >&2; exit 2; }
+# HMAC-SHA256 (RFC 2104) of stdin as lowercase hex, built from plain digests so the key stays off every command line.
+# $1 is the 64-character hex MAC key: exactly one SHA-256 block, used as is (no pre-hashing).
+hmac_sha256() {
+	local i c ipad='' opad=''
+	for (( i = 0; i < 64; i++ )); do
+		printf -v c '%d' "'${1:i:1}"
+		printf -v ipad '%s\\x%02x' "$ipad" $(( c ^ 0x36 ))
+		printf -v opad '%s\\x%02x' "$opad" $(( c ^ 0x5c ))
+	done
+	{ printf '%b' "$opad"; { printf '%b' "$ipad"; cat; } | openssl dgst -sha256 -binary; } | openssl dgst -sha256 -r | cut -d' ' -f1
+}
 [ -f "$IN" ] || fail "the backup file does not exist"
 [ -f "$KEY" ] && [ ! -L "$KEY" ] || fail "the key file does not exist (or is a symbolic link)"
 case "$DB" in *[=' ']*) fail "TARGET_DATABASE must be a database name, not a connection string";; esac
 [ -f "$IN.hmac" ] || fail "the keyed checksum $IN.hmac is missing: a backup without it cannot be trusted"
 BD_BACKUP_MAC=$( { printf 'mac:'; cat "$KEY"; } | openssl dgst -sha256 -r | cut -d' ' -f1)
-[ "$(openssl dgst -sha256 -hmac "$BD_BACKUP_MAC" -r < "$IN" | cut -d' ' -f1)" = "$(cat "$IN.hmac")" ] || fail "the keyed checksum does not match: the backup was altered, or the key is not the one that made it"
+[ "$(hmac_sha256 "$BD_BACKUP_MAC" < "$IN")" = "$(cat "$IN.hmac")" ] || fail "the keyed checksum does not match: the backup was altered, or the key is not the one that made it"
 [ -f "$IN.sha256" ] || fail "the checksum file $IN.sha256 is missing: a backup without it cannot be checked for damage"
 [ "$(sha256sum "$IN" | cut -d' ' -f1)" = "$(cat "$IN.sha256")" ] || fail "the checksum does not match: the backup is damaged"
 
