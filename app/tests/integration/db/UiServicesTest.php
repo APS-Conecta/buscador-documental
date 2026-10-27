@@ -228,4 +228,11 @@ class UiServicesTest extends DbTestCase {
 		$this->app()->exec("INSERT INTO aps_search.file_state (file_id, etag, text_state, skip_reason) VALUES (1, 'e', 'skipped', 'encrypted'), (2, 'e', 'skipped', 'excluded')");
 		$this->assertSame(['encrypted' => 1], $this->actions()->skippedCounts());
 	}
+
+	public function testAServerEncryptedSkipIsShownAndCountedAsAProblem(): void {
+		$this->app()->exec("INSERT INTO aps_search.file_state (file_id, etag, text_state, skip_reason) VALUES (1, 'e1', 'skipped', 'server_encrypted')");
+		$this->nodes = [1 => [$this->node()]];
+		$this->assertSame(['status' => 'skipped', 'reason' => 'server_encrypted'], $this->fileText()->text('bob', 1));
+		$this->assertSame(['server_encrypted' => 1], $this->actions()->skippedCounts());
+	}
 }

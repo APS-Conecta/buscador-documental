@@ -11,6 +11,7 @@ use OCA\BuscadorDocumental\Scope\Settings;
 use OCA\BuscadorDocumental\Search\CandidateQuery;
 use OCA\BuscadorDocumental\Search\EmbedClient;
 use OCA\BuscadorDocumental\Search\ProbeFailed;
+use OCP\Encryption\IManager;
 use OCP\IAppConfig;
 use OCP\IConfig;
 
@@ -20,7 +21,7 @@ use OCP\IConfig;
  */
 class Doctor {
 	private const APP = 'buscador_documental';
-	public const SCHEMA = 5;
+	public const SCHEMA = 6;
 
 	public function __construct(
 		private IndexDb $db,
@@ -29,6 +30,7 @@ class Doctor {
 		private IConfig $config,
 		private EmbedClient $embed,
 		private CandidateQuery $candidates,
+		private IManager $encryption,
 	) {
 	}
 
@@ -59,6 +61,8 @@ class Doctor {
 
 		$secretLen = strlen($this->appConfig->getValueString(self::APP, 'worker_secret', ''));
 		$c[] = $this->check('worker_secret', $secretLen >= 32 ? 'ok' : 'fail', $secretLen >= 32 ? 'configured' : 'not configured or shorter than 32 characters');
+		$sse = $this->encryption->isEnabled();
+		$c[] = $this->check('server_encryption', $sse ? 'warn' : 'ok', $sse ? 'server-side encryption is on: the files it encrypts are skipped, so their content is not searchable' : 'off');
 
 		$paused = $this->settings->isPaused();
 		$c[] = $this->check('paused', $paused ? 'warn' : 'ok', $paused ? 'reading is paused: occ buscador:resume' : 'running');

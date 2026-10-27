@@ -14,7 +14,7 @@ use OCP\Migration\SimpleMigrationStep;
 
 /**
  * Schema 5 (S6) for instances created at schema 1 to 4. A fresh install runs the first migration, whose SQL already includes
- * the S4 step, so this one finds schema_ver 5 and does nothing. Works in changeSchema like the others.
+ * the S4 step, so this one finds a schema_ver of 5 or more and does nothing. Works in changeSchema like the others.
  */
 class Version000005Date20261019100000 extends SimpleMigrationStep {
 	public function __construct(private IDBConnection $db) {

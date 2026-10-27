@@ -102,6 +102,20 @@ describe('AdminApp', () => {
 		w.unmount()
 	})
 
+	it('names a server-encrypted skip and the server encryption check in plain words, never as a password', async () => {
+		api.overview.mockResolvedValue(overview({ checks: [{ id: 'server_encryption', status: 'warn', detail: 'on' }], skipped: { server_encrypted: 1 } }))
+		api.skipped.mockResolvedValue({ counts: {}, items: [{ file_id: 8, reason: 'server_encrypted', name: 'Acta.pdf' }] })
+		const w = mount(AdminApp, { attachTo: document.body })
+		await flushPromises()
+		expect(w.find('.bd-checks').text()).toContain('Cifrado en el servidor')
+		expect(w.find('select').text()).toContain('Cifrado en el servidor (1)')
+		expect(w.findAll('tr').find((r) => r.text().includes('Acta.pdf')).text()).toContain('Cifrado en el servidor')
+		expect(w.text()).not.toContain('Protegido con contraseña')
+		expect(w.text()).not.toContain('server_encrypted')
+		expect(w.text()).not.toContain('server_encryption')
+		w.unmount()
+	})
+
 	it('does not say an action worked when the server refused it', async () => {
 		api.pause.mockResolvedValue({ httpStatus: 412, message: 'CSRF check failed' })
 		const w = await open()

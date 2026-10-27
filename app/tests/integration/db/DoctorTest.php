@@ -12,6 +12,7 @@ use OCA\BuscadorDocumental\Scope\Settings;
 use OCA\BuscadorDocumental\Search\CandidateQuery;
 use OCA\BuscadorDocumental\Search\EmbedClient;
 use OCA\BuscadorDocumental\Search\ProbeFailed;
+use OCP\Encryption\IManager;
 use OCP\IAppConfig;
 use OCP\IConfig;
 
@@ -20,6 +21,7 @@ class DoctorTest extends DbTestCase {
 	private array $app = ['worker_secret' => 'a-long-enough-worker-secret-0123456789ab', 'embed_url' => 'http://x'];
 	private string $cron = 'cron';
 	private string|ProbeFailed $digest = 'sha256:abc';
+	private bool $serverEncryption = false;
 
 	private function doctor(): Doctor {
 		$db = new IndexDb($this->connection($this->app()));
@@ -34,7 +36,9 @@ class DoctorTest extends DbTestCase {
 			}
 			return $this->digest;
 		});
-		return new Doctor($db, new Settings($db), $cfg, $sys, $embed, new CandidateQuery($db));
+		$encryption = $this->createMock(IManager::class);
+		$encryption->method('isEnabled')->willReturnCallback(fn (): bool => $this->serverEncryption);
+		return new Doctor($db, new Settings($db), $cfg, $sys, $embed, new CandidateQuery($db), $encryption);
 	}
 
 	/** @return array<string, array{status: string, detail: string}> */
@@ -166,6 +170,15 @@ class DoctorTest extends DbTestCase {
 		$this->app['worker_secret'] = '';
 		$this->assertSame(1, Doctor::exitCode($this->doctor()->run()));
 		$this->assertSame(0, Doctor::exitCode([['id' => 'x', 'status' => 'warn', 'detail' => 'd']]), 'warnings do not fail a monitoring probe');
+	}
+
+	public function testServerSideEncryptionIsAWarningBecauseTheFilesItEncryptsAreSkipped(): void {
+		$this->assertSame(['status' => 'ok', 'detail' => 'off'], $this->checks()['server_encryption']);
+		$this->serverEncryption = true;
+		$r = $this->checks();
+		$this->assertSame('warn', $r['server_encryption']['status']);
+		$this->assertStringContainsString('not searchable', $r['server_encryption']['detail']);
+		$this->assertSame(0, Doctor::exitCode($this->doctor()->run()), 'a warning, never a failed probe');
 	}
 
 	public function testAWindowTheDatabaseCannotInterpretIsFlaggedBecauseItWouldBeIgnored(): void {

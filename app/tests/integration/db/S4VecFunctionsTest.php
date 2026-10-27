@@ -208,6 +208,16 @@ class S4VecFunctionsTest extends DbTestCase {
 		}));
 	}
 
+	public function testATextLaneReasonIsRefusedOnTheVecLane(): void {
+		$this->generation(1);
+		$this->indexed(10, 1);
+		$w = $this->worker();
+		$c = $this->claimVec($w);
+		$this->assertStringContainsString('invalid reason', $this->failure(function () use ($w, $c) {
+			$w->prepare('SELECT aps_search.fail_job(?, ?, ?, ?::boolean)')->execute([$c['job_id'], $c['lease_epoch'], 'server_encrypted', 'false']);
+		}));
+	}
+
 	public function testBackfillQueuesIndexedFilesWithoutVectorsOnceAndHonoursTheLimit(): void {
 		foreach ([10, 11, 12] as $id) {
 			$this->indexed($id, 1);

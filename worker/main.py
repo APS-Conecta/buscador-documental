@@ -39,7 +39,7 @@ SUPPORTED_MIMES = {
 SILENT_DB_ERRORS = ("stale_lease", "etag_mismatch", "hash_mismatch", "file_skipped")
 
 
-SUPPORTED_SCHEMA = 5           # aps_search.schema_meta.schema_ver this worker was written for (S4 migration)
+SUPPORTED_SCHEMA = 6           # aps_search.schema_meta.schema_ver this worker was written for (008 migration: server_encrypted)
 
 
 def check_schema(conn):
@@ -133,8 +133,8 @@ def process(conn, api, dsn, job_id, epoch, file_id):
     hb.start()
     try:
         meta = api.meta(file_id, job_id, epoch)
-        if meta.get("encrypted"):
-            return fail(conn, job_id, epoch, "encrypted", False)
+        if meta.get("encrypted"):          # server-side encryption, skipped per ADR-0007; the parser's "encrypted" is a document password
+            return fail(conn, job_id, epoch, "server_encrypted", False)
         if meta.get("mime") not in SUPPORTED_MIMES:
             return fail(conn, job_id, epoch, "unsupported", False)
         if meta.get("size", 0) > MAX_BYTES:

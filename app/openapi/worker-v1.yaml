@@ -98,4 +98,4 @@ components:
         mime: {type: string}
         name: {type: string}
         mtime: {type: integer}
-        encrypted: {type: boolean}
+        encrypted: {type: boolean, description: 'Nextcloud server-side encryption of the stored file, not a document password'}
