@@ -180,12 +180,11 @@ def run(path: str, layer: list = None, announce=None) -> dict:
                     conf.append(None)
                     source.append("layer")
                     continue
-                work = os.path.join(tmp, f"p{i}")
-                os.makedirs(work)
-                one = os.path.join(work, "in.pdf")
-                _single_page(pdf, i, one)
-                ocr_text, out = ocr_page(one, force=(kind == "untrusted"), workdir=work)
-                pages.append(ocr_text)
-                conf.append(page_confidence(out, work))
-                source.append("ocr")
+                with tempfile.TemporaryDirectory(dir=tmp) as work:  # scratch holds one page at a time
+                    one = os.path.join(work, "in.pdf")
+                    _single_page(pdf, i, one)
+                    ocr_text, out = ocr_page(one, force=(kind == "untrusted"), workdir=work)
+                    pages.append(ocr_text)
+                    conf.append(page_confidence(out, work))
+                    source.append("ocr")
     return {"pages": pages, "conf": conf, "source": source}
