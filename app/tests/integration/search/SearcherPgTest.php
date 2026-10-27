@@ -115,6 +115,10 @@ class SearcherPgTest extends DbTestCase {
 			$out = $s->search('b', $this->req(['mode' => $mode]));
 			$this->assertSame('ok', $out['status'], $mode);
 			$this->assertSame([1], $this->ids($out), $mode);
+			$this->assertSame(1, $out['page']['total'], "$mode: the stale file is not counted");
+			$this->assertSame(1, $out['page']['to'], "$mode: and does not move the page position");
+			$this->assertNull($out['cursors']['next'], $mode);
+			$this->assertNull($out['cursors']['last'], $mode);
 			$this->assertGreaterThanOrEqual(1, $this->recheck->dropped(), "$mode: the stale id reached the live recheck and was dropped");
 			$this->assertNull($out['notice'], $mode);
 		}
