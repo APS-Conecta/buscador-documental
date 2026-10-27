@@ -7,13 +7,13 @@ declare(strict_types=1);
 namespace OCA\BuscadorDocumental\Tests\unit\Migration;
 
 use OCA\BuscadorDocumental\Migration\SqlScript;
-use OCA\BuscadorDocumental\Migration\Version000007Date20261027120000;
+use OCA\BuscadorDocumental\Migration\Version000010Date20261027220000;
 use OCP\DB\ISchemaWrapper;
 use OCP\IDBConnection;
 use OCP\Migration\IOutput;
 use PHPUnit\Framework\TestCase;
 
-class Version000007Test extends TestCase {
+class Version000010Test extends TestCase {
 	private function migrate(?int $schemaVer): array {
 		$ran = [];
 		$db = $this->createMock(IDBConnection::class);
@@ -24,20 +24,20 @@ class Version000007Test extends TestCase {
 			$ran[] = $sql;
 			return 0;
 		});
-		(new Version000007Date20261027120000($db))->changeSchema($this->createMock(IOutput::class), fn () => $this->createMock(ISchemaWrapper::class), []);
+		(new Version000010Date20261027220000($db))->changeSchema($this->createMock(IOutput::class), fn () => $this->createMock(ISchemaWrapper::class), []);
 		return $ran;
 	}
 
-	public function testAnInstanceAtSchemaFiveGetsTheServerEncryptedStepAlone(): void {
-		$this->assertSame(SqlScript::upgradeToV6(), $this->migrate(5));
+	public function testAnInstanceAtSchemaEightGetsTheServerEncryptedStepAlone(): void {
+		$this->assertSame(SqlScript::upgradeToV9(), $this->migrate(8));
 	}
 
-	public function testAnInstanceAtSchemaFourGetsTheS6StepFirst(): void {
-		$this->assertSame([...SqlScript::upgradeToV5(), ...SqlScript::upgradeToV6()], $this->migrate(4));
+	public function testAnInstanceAtSchemaSevenGetsTheSnapshotCappedStepFirst(): void {
+		$this->assertSame([...SqlScript::upgradeToV8(), ...SqlScript::upgradeToV9()], $this->migrate(7));
 	}
 
-	public function testAFreshInstallAlreadyAtSchemaSixDoesNothing(): void {
-		$this->assertSame([], $this->migrate(6));
+	public function testAFreshInstallAlreadyAtSchemaNineDoesNothing(): void {
+		$this->assertSame([], $this->migrate(9));
 	}
 
 	public function testMissingSchemaMetaMeansNothingToUpgrade(): void {

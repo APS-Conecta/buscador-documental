@@ -1,6 +1,6 @@
--- schema_ver 6: the skip reason server_encrypted, for a file Nextcloud stores with server-side encryption (ADR-0007 skips it);
--- encrypted stays the reason for a document that needs its own password. Idempotent: it runs after 008 on a fresh install and
--- alone on a schema_ver 5 instance (SqlScript::upgradeToV6). bd_owner owns every object.
+-- schema_ver 9: the skip reason server_encrypted, for a file Nextcloud stores with server-side encryption (ADR-0007 skips it);
+-- encrypted stays the reason for a document that needs its own password. Idempotent: it runs after 011 on a fresh install and
+-- alone on a schema_ver 8 instance (SqlScript::upgradeToV9). bd_owner owns every object.
 SET ROLE bd_owner;
 -- @@
 SET search_path = aps_search, pg_catalog;
@@ -12,7 +12,7 @@ ALTER TABLE file_state ADD CONSTRAINT file_state_skip_reason_chk CHECK (skip_rea
 	('encrypted', 'server_encrypted', 'too_large', 'corrupt', 'unsupported', 'ocr_failed', 'timeout', 'internal', 'unsafe',
 	 'excluded', 'out_of_scope', 'trashed', 'user_deleted')) NOT VALID;
 -- @@
--- fail_job as in 005, with server_encrypted in the text-lane vocabulary; grants and owner are kept by REPLACE.
+-- fail_job: as in 010, with server_encrypted in the text-lane vocabulary; grants and owner are kept by REPLACE.
 CREATE OR REPLACE FUNCTION aps_search.fail_job(p_job_id bigint, p_lease_epoch bigint, p_reason text, p_retryable boolean)
 RETURNS void
 LANGUAGE plpgsql SECURITY DEFINER
@@ -37,20 +37,28 @@ BEGIN
 		UPDATE job SET lease_until = NULL, claimed_by = NULL,
 			not_before = clock_timestamp() + make_interval(mins => power(2, j.attempts)::int)
 			WHERE id = p_job_id;
-	ELSIF j.lane = 'vec' THEN
-		UPDATE file_state SET vec_state = 'failed', updated_at = now() WHERE file_id = j.file_id
-			AND (j.gen = (SELECT e.gen FROM embedding_profile e WHERE e.state = 'active')
-				OR NOT EXISTS (SELECT 1 FROM embedding_profile e WHERE e.state = 'active'));
-		DELETE FROM job WHERE id = p_job_id;
-	ELSE
-		UPDATE file_state SET text_state = 'skipped', skip_reason = p_reason, updated_at = now()
-			WHERE file_id = j.file_id;
-		DELETE FROM job WHERE id = p_job_id;
+		RETURN;
 	END IF;
+	-- Job row first, then file_state, as write_result takes them. The lock holds the etag until the bookkeeping below is done.
+	PERFORM 1 FROM file_state WHERE file_id = j.file_id AND etag IS NOT DISTINCT FROM j.claimed_etag FOR UPDATE;
+	IF FOUND THEN
+		IF j.lane = 'vec' THEN
+			INSERT INTO vec_failure (file_id, gen)
+				SELECT j.file_id, j.gen WHERE EXISTS (SELECT 1 FROM embedding_profile e WHERE e.gen = j.gen AND e.state <> 'retired')
+				ON CONFLICT DO NOTHING;
+			UPDATE file_state SET vec_state = 'failed', updated_at = now() WHERE file_id = j.file_id
+				AND (j.gen = (SELECT e.gen FROM embedding_profile e WHERE e.state = 'active')
+					OR NOT EXISTS (SELECT 1 FROM embedding_profile e WHERE e.state = 'active'));
+		ELSE
+			UPDATE file_state SET text_state = 'skipped', skip_reason = p_reason, updated_at = now()
+				WHERE file_id = j.file_id;
+		END IF;
+	END IF;
+	DELETE FROM job WHERE id = p_job_id;
 END
 $$;
 -- @@
-UPDATE schema_meta SET schema_ver = 6 WHERE schema_ver < 6;
+UPDATE schema_meta SET schema_ver = 9 WHERE schema_ver < 9;
 -- @@
 RESET search_path;      -- Nextcloud keeps using this connection: leave the session as it was found
 -- @@

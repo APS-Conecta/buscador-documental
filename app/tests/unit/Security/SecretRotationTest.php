@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace OCA\BuscadorDocumental\Tests\unit\Security;
 
+use OCA\BuscadorDocumental\Audit\Actor;
 use OCA\BuscadorDocumental\Audit\AuditLog;
 use OCA\BuscadorDocumental\Ops\OpsException;
 use OCA\BuscadorDocumental\Security\SecretRotation;
@@ -34,7 +35,7 @@ class SecretRotationTest extends TestCase {
 		$time = $this->createMock(ITimeFactory::class);
 		$time->method('getTime')->willReturn(self::NOW);
 		$audit = $this->createMock(AuditLog::class);
-		$audit->method('record')->willReturnCallback(function (string $actor, string $action, ?string $subject, array $detail): void { $this->audited[] = [$action, $detail]; });
+		$audit->method('record')->willReturnCallback(function (Actor|string $actor, string $action, ?string $subject, array $detail): void { $this->audited[] = [$action, $detail]; });
 		return new SecretRotation($cfg, $time, $audit);
 	}
 

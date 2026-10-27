@@ -88,10 +88,10 @@ class Searcher {
 				if ($request->filters->folderId !== null && $this->recheck->filter($uid, [$request->filters->folderId]) === []) {
 					return $this->empty('ok', '');
 				}
-				[$files, $chunks, $notice] = $this->db->withTimeout(self::TIMEOUT_MS, fn (): array => $this->rank($uid, $request));
+				[$files, $chunks, $notice, $capped] = $this->db->withTimeout(self::TIMEOUT_MS, fn (): array => $this->rank($uid, $request));
 				[$files, $chunks, $accepted] = $this->readableOnly($uid, $files, $chunks, $request->pageSize);
-				$snap = ['file_ids' => $files, 'chunk_ids' => $chunks];
-				$qid = $this->snapshots->save($uid, $files, $chunks);
+				$snap = ['file_ids' => $files, 'chunk_ids' => $chunks, 'capped' => $capped];
+				$qid = $this->snapshots->save($uid, $files, $chunks, $capped);
 				$start = 0;
 				$back = null;
 			}
@@ -100,7 +100,7 @@ class Searcher {
 			$this->logger->warning('buscador_documental: exclusion state unavailable, search refused (' . get_class($e) . ')');
 			return $this->empty('unavailable', 'La búsqueda no está disponible en este momento.');
 		} catch (Throwable $e) {
-			if (str_contains($e->getMessage(), 'statement timeout')) {
+			if (IndexDb::timedOut($e)) {
 				return $this->empty('too_many', 'Demasiados resultados: acote la búsqueda con más términos.');
 			}
 			$this->logger->error('buscador_documental: search failed (' . get_class($e) . ')');
@@ -108,7 +108,7 @@ class Searcher {
 		}
 	}
 
-	/** @return array{0: list<int>, 1: list<int>, 2: ?array{code: string, message: string}} */
+	/** @return array{0: list<int>, 1: list<int>, 2: ?array{code: string, message: string}, 3: bool} files, chunks, notice, capped */
 	private function rank(string $uid, SearchRequest $r): array {
 		$set = IndexDb::textArray($this->principals->forUser($uid));
 		$filters = $r->filters->forUser($uid, $this->vectors->uncertainBelow());
@@ -130,7 +130,7 @@ class Searcher {
 		}
 		// Mixta keeps the keyword leg strict: the OR relaxation of plain keyword search only adds common-word noise that dilutes the
 		// fusion, while the vector leg already covers the fuzzy matches (S4 evaluation: recall@10 0.67 with it, 0.79 without).
-		$keyword = $mode === 'significado' ? [] : $this->candidates->exacta($r->query, $this->glossary->alternatives($r->query), $set, $filters, self::CAP, $mode === 'mixta' ? false : null);
+		[$keyword, $windowFull] = $mode === 'significado' ? [[], false] : $this->candidates->exacta($r->query, $this->glossary->pairs($r->query), $set, $filters, self::CAP, $mode === 'mixta' ? false : null);
 		$semantic = [];
 		if ($mode !== 'exacta') {
 			$exact = !$this->candidates->hasAnnIndex($profile['gen'])
@@ -143,10 +143,12 @@ class Searcher {
 			default => Rrf::fuse([$keyword, $semantic], self::CAP),
 		};
 		$ranked = array_slice($ranked, 0, self::CAP);
+		// Taken before the pre-store recheck on purpose: the list is incomplete either way; it only says a keyword window or the cap was reached.
+		$capped = ($mode === 'exacta' && $windowFull) || count($ranked) >= self::CAP;
 		if ($r->sort !== 'relevance') {
 			$ranked = $this->sorted($ranked, $r->sort);
 		}
-		return [array_map(static fn (array $x): int => (int)$x['file_id'], $ranked), array_map(static fn (array $x): int => (int)$x['chunk_id'], $ranked), $notice];
+		return [array_map(static fn (array $x): int => (int)$x['file_id'], $ranked), array_map(static fn (array $x): int => (int)$x['chunk_id'], $ranked), $notice, $capped];
 	}
 
 	/**
@@ -196,7 +198,7 @@ class Searcher {
 	}
 
 	/**
-	 * @param array{file_ids: list<int>, chunk_ids: list<int>} $snap
+	 * @param array{file_ids: list<int>, chunk_ids: list<int>, capped: bool} $snap
 	 * @param ?array{code: string, message: string} $notice
 	 * @param ?array<int, RecheckResult> $accepted page 1's recheck results for the stored files; null on a cursor page
 	 * @return array<string, mixed>
@@ -234,7 +236,7 @@ class Searcher {
 			'message' => '',
 			'notice' => $notice,
 			'hits' => $hits,
-			'page' => ['from' => $hits === [] ? 0 : $start + 1, 'to' => $pos, 'total' => $total, 'capped' => $total >= self::LISTED, 'size' => $size],
+			'page' => ['from' => $hits === [] ? 0 : $start + 1, 'to' => $pos, 'total' => $total, 'capped' => $snap['capped'] || $total >= self::LISTED, 'size' => $size],
 			'cursors' => [
 				'first' => $start > 0 ? $this->cursor->make($qid, 0, $uid) : null,
 				'prev' => $start > 0 ? $this->cursor->make($qid, $back ?? max(0, $start - $size), $uid) : null,

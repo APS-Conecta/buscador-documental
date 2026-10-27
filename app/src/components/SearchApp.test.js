@@ -43,14 +43,6 @@ describe('SearchApp states', () => {
 		w.unmount()
 	})
 
-	it('names the stored bound when the list is capped', async () => {
-		api.search.mockResolvedValue(ok([hit(1)], { page: { from: 1, to: 25, total: 100, capped: true, size: 25 } }))
-		const w = await open('?q=vacunacion')
-		expect(w.find('.bd-cap').text()).toContain('Se muestran los primeros 100')
-		expect(w.text()).not.toMatch(/1\s000/)
-		w.unmount()
-	})
-
 	it('shows the no-results state and offers to clear filters only when some are on', async () => {
 		api.search.mockResolvedValue(ok([]))
 		let w = await open('?q=zzz')
@@ -95,6 +87,18 @@ describe('SearchApp states', () => {
 		const w = await open('?q=x')
 		expect(w.text()).toContain('Espere 12 s')
 		expect(w.find('[role="alert"]').exists()).toBe(true)
+		w.unmount()
+	})
+
+	it('capped hint never states a number', async () => {
+		// 40 stored files from a full keyword window: "the first 40" would read as all there is.
+		api.search.mockResolvedValue(ok([hit(1)], { page: { from: 1, to: 25, total: 40, capped: true, size: 25 } }))
+		const w = await open('?q=x')
+		const cap = w.find('.bd-cap')
+		expect(cap.exists()).toBe(true)
+		expect(cap.text()).toContain('Puede haber más documentos')
+		expect(cap.text()).not.toMatch(/\d/)
+		expect(w.find('.bd-summary').text()).toContain('más de')
 		w.unmount()
 	})
 

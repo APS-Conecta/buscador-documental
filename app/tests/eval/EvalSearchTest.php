@@ -57,9 +57,9 @@ class EvalSearchTest extends DbTestCase {
 
 		$run = function (string $mode, array $g, int $i, bool $glossaryOn = true, int $limit = self::LIMIT, ?string $set = null, bool $exact = true) use ($q, $glossary, $vec, $admin): array {
 			$set ??= $admin;
-			$alt = $glossaryOn ? $glossary->alternatives($g['query']) : [];
+			$pairs = $glossaryOn ? $glossary->pairs($g['query']) : [];
 			// 'mixta' is what the product does (strict keyword leg); 'mixta_relajada' keeps the OR relaxation, for comparison.
-			$kw = $mode === 'significado' ? [] : $q->exacta($g['query'], $alt, $set, new Filters(), max($limit, 1000), $mode === 'mixta' ? false : null);
+			[$kw] = $mode === 'significado' ? [[], false] : $q->exacta($g['query'], $pairs, $set, new Filters(), max($limit, 1000), $mode === 'mixta' ? false : null);
 			$sem = $mode === 'exacta' ? [] : $q->significado($vec['queries'][$i], 1, $set, new Filters(), max($limit, 1000), $exact);
 			$rows = match ($mode) {
 				'exacta' => $kw,

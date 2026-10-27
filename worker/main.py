@@ -39,7 +39,7 @@ SUPPORTED_MIMES = {
 SILENT_DB_ERRORS = ("stale_lease", "etag_mismatch", "hash_mismatch", "file_skipped")
 
 
-SUPPORTED_SCHEMA = 6           # aps_search.schema_meta.schema_ver this worker was written for (008 migration: server_encrypted)
+SUPPORTED_SCHEMA = 9           # aps_search.schema_meta.schema_ver this worker was written for (012_server_encrypted.sql)
 
 
 def check_schema(conn):

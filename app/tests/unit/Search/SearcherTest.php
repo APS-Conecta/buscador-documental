@@ -28,12 +28,14 @@ use Psr\Log\LoggerInterface;
 
 class SearcherTest extends TestCase {
 	private const SECRET = 'instance-secret-0123456789';
-	/** @var array<string, array{file_ids: list<int>, chunk_ids: list<int>}> */
+	/** @var array<string, array{file_ids: list<int>, chunk_ids: list<int>, capped: bool}> */
 	private array $snapshots = [];
 	/** @var array<int, array{name: string, mtime: int}> */
 	private array $meta = [];
 	/** @var list<array<string, mixed>> */
 	private array $keywordRows = [];
+	/** whether the keyword leg reports a full candidate window (older matches were not ranked) */
+	private bool $windowFull = false;
 	/** @var list<array<string, mixed>> */
 	private array $vectorRows = [];
 	/** @var list<array{string, mixed}> */
@@ -94,9 +96,9 @@ class SearcherTest extends TestCase {
 
 		/** @var CandidateQuery&MockObject $cand */
 		$cand = $this->createMock(CandidateQuery::class);
-		$cand->method('exacta')->willReturnCallback(function (string $q, array $alt, string $set, Filters $f, int $limit, ?bool $relax = null) {
-			$this->seen[] = ['exacta', [$q, $alt, $f, $limit, $relax]];
-			return array_slice($this->keywordRows, 0, $limit);
+		$cand->method('exacta')->willReturnCallback(function (string $q, array $pairs, string $set, Filters $f, int $limit, ?bool $relax = null) {
+			$this->seen[] = ['exacta', [$q, $pairs, $f, $limit, $relax]];
+			return [array_slice($this->keywordRows, 0, $limit), $this->windowFull];
 		});
 		$cand->method('significado')->willReturnCallback(function (array $v, int $gen, string $set, Filters $f, int $limit, bool $exact) {
 			$this->seen[] = ['significado', [$gen, $f, $limit, $exact]];
@@ -123,9 +125,9 @@ class SearcherTest extends TestCase {
 		});
 
 		$store = $this->createMock(SnapshotStore::class);
-		$store->method('save')->willReturnCallback(function (string $uid, array $files, array $chunks): string {
+		$store->method('save')->willReturnCallback(function (string $uid, array $files, array $chunks, bool $capped): string {
 			$qid = sprintf('00000000-0000-4000-8000-%012d', count($this->snapshots) + 1);
-			$this->snapshots[$qid] = ['file_ids' => $files, 'chunk_ids' => $chunks, 'uid' => $uid];
+			$this->snapshots[$qid] = ['file_ids' => $files, 'chunk_ids' => $chunks, 'capped' => $capped, 'uid' => $uid];
 			return $qid;
 		});
 		$store->method('load')->willReturnCallback(fn (string $qid, string $uid) => (($this->snapshots[$qid]['uid'] ?? null) === $uid) ? $this->snapshots[$qid] : null);
@@ -299,6 +301,40 @@ class SearcherTest extends TestCase {
 		$this->assertSame([...range(77, 100), 102], $this->ids($last), 'file 101 is not stored');
 	}
 
+	public function testAListThatReachedTheCapStaysCappedWhenTheRecheckRemovesFiles(): void {
+		$this->rankedList(range(1, 1200), range(51, 1000));                      // B can read only 50 of the first 1 000
+		$out = $this->searcher()->search('b', $this->req());
+		$this->assertSame([50, true], [$out['page']['total'], $out['page']['capped']], 'files past the cap were never ranked: the list is incomplete');
+	}
+
+	public function testCursorPagesKeepTheCappedFlagOfPageOne(): void {
+		$this->corpus(60);
+		foreach ([true, false] as $full) {
+			$this->windowFull = $full;
+			$s = $this->searcher();
+			$p1 = $s->search('b', $this->req(['page_size' => 25]));
+			$next = $s->search('b', $this->req(['cursor' => $p1['cursors']['next']]));
+			$last = $s->search('b', $this->req(['cursor' => $p1['cursors']['last']]));
+			$prev = $s->search('b', $this->req(['cursor' => $last['cursors']['prev']]));
+			$first = $s->search('b', $this->req(['cursor' => $last['cursors']['first']]));
+			foreach (['page 1' => $p1, 'next' => $next, 'last' => $last, 'prev' => $prev, 'first' => $first] as $name => $page) {
+				$this->assertSame(['ok', 60, $full], [$page['status'], $page['page']['total'], $page['page']['capped']], "$name, window full: " . json_encode($full));
+			}
+		}
+	}
+
+	public function testAFullKeywordWindowCapsOnlyTheKeywordMode(): void {
+		$this->corpus(3);
+		$this->vectorRows = [['file_id' => 1, 'chunk_id' => 10]];
+		$this->windowFull = true;
+		$capped = fn (string $mode): bool => $this->searcher()->search('b', $this->req(['mode' => $mode]))['page']['capped'];
+		$this->assertTrue($capped('exacta'));
+		$this->assertFalse($capped('mixta'), 'the window flag says nothing about a fused list');
+		$this->assertFalse($capped('significado'));
+		$this->semantic = false;
+		$this->assertTrue($capped('mixta'), 'mixta that fell back to keyword search is keyword search');
+	}
+
 	public function testMixtaFusesBothLegsAndRunsThemUnderTheSameFilters(): void {
 		$this->corpus(6);
 		$this->nodes[7] = [$this->node('Informes')];                              // folder 7 is readable by this person (see the folder filter)
@@ -338,7 +374,7 @@ class SearcherTest extends TestCase {
 	public function testGlossaryAlternativesReachTheKeywordLegButNotTheVectorOne(): void {
 		$this->corpus(2);
 		$this->searcher()->search('b', $this->req(['query' => 'REM junio']));
-		$this->assertSame([['resumen estadistico mensual']], [$this->seen[0][1][1]]);
+		$this->assertSame([['rem', 'resumen estadistico mensual']], $this->seen[0][1][1]);
 	}
 
 	public function testSemanticModesFallBackToKeywordWithANoticeWhenNotAvailable(): void {
@@ -412,20 +448,27 @@ class SearcherTest extends TestCase {
 	}
 
 	public function testStatementTimeoutAndExclusionOutageHaveTheirOwnAnswers(): void {
-		$db = $this->createMock(IndexDb::class);
-		$db->method('withTimeout')->willThrowException(new \RuntimeException('canceling statement due to statement timeout'));
 		$principals = $this->createMock(PrincipalResolver::class);
 		$principals->method('forUser')->willReturn(['u:b']);
 		$mk = fn (IndexDb $d, $recheck) => new Searcher($d, $principals, $this->createMock(CandidateQuery::class), $recheck, $this->createMock(HitBuilder::class), new Glossary([]),
 			$this->createMock(EmbedClient::class), $this->createMock(VectorState::class), $this->createMock(SnapshotStore::class), new Cursor(self::SECRET), $this->createMock(LoggerInterface::class));
-		$this->assertSame('too_many', $mk($db, ScriptedRecheck::make([], TreeChecker::make([1 => 1], [], [])))->search('b', $this->req())['status']);
+		foreach ([
+			// what Nextcloud wraps when the server's lc_messages is Spanish
+			'An exception occurred while executing a query: SQLSTATE[57014]: Query canceled: 7 ERROR:  cancelando la sentencia debido a que se agotó el tiempo de espera de sentencias' => 'too_many',
+			'SQLSTATE[57014]: Query canceled: 7 ERROR:  canceling statement due to statement timeout' => 'too_many',
+			'SQLSTATE[55P03]: Lock not available: 7 ERROR:  canceling statement due to lock timeout' => 'unavailable',
+		] as $message => $status) {
+			$db = $this->createMock(IndexDb::class);
+			$db->method('withTimeout')->willThrowException(new \RuntimeException($message));
+			$this->assertSame($status, $mk($db, ScriptedRecheck::make([], TreeChecker::make([1 => 1], [], [])))->search('b', $this->req())['status'], $message);
+		}
 
 		$this->corpus(3);
 		$ok = $this->createMock(IndexDb::class);
 		$ok->method('withTimeout')->willReturnCallback(static fn (int $ms, callable $w) => $w());
 		$ok->method('rows')->willReturn([]);
 		$cand = $this->createMock(CandidateQuery::class);
-		$cand->method('exacta')->willReturn([['file_id' => 1, 'chunk_id' => 10]]);
+		$cand->method('exacta')->willReturn([[['file_id' => 1, 'chunk_id' => 10]], false]);
 		$recheck = ScriptedRecheck::make([1 => new ExclusionUnavailable('down')], TreeChecker::make([1 => 1], [], []));
 		$s = new Searcher($ok, $principals, $cand, $recheck, $this->createMock(HitBuilder::class), new Glossary([]),
 			$this->createMock(EmbedClient::class), $this->createMock(VectorState::class), $this->createMock(SnapshotStore::class), new Cursor(self::SECRET), $this->createMock(LoggerInterface::class));

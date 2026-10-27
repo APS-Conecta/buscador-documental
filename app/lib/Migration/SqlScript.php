@@ -42,7 +42,7 @@ final class SqlScript {
 	/** @return list<string> the up steps in order */
 	public static function up(): array {
 		$all = [];
-		foreach (['000_preflight.sql', '001_schema.sql', '002_functions.sql', '003_roles.sql', '004_s3.sql', '005_s4.sql', '006_s5.sql', '007_s6.sql', '008_vec_index.sql', '009_server_encrypted.sql'] as $f) {
+		foreach (['000_preflight.sql', '001_schema.sql', '002_functions.sql', '003_roles.sql', '004_s3.sql', '005_s4.sql', '006_s5.sql', '007_s6.sql', '008_vec_index.sql', '009_give_up_guard.sql', '010_vec_failure.sql', '011_snapshot_capped.sql', '012_server_encrypted.sql'] as $f) {
 			array_push($all, ...self::load($f));
 		}
 		return $all;
@@ -68,9 +68,24 @@ final class SqlScript {
 		return self::load('007_s6.sql');
 	}
 
-	/** @return list<string> what an instance at schema_ver 5 needs: the server_encrypted step alone (it is idempotent) */
+	/** @return list<string> what an instance at schema_ver 5 needs: the give-up guard step alone (it is idempotent) */
 	public static function upgradeToV6(): array {
-		return self::load('009_server_encrypted.sql');
+		return self::load('009_give_up_guard.sql');
+	}
+
+	/** @return list<string> what an instance at schema_ver 6 needs: the vector failure step alone (it is idempotent) */
+	public static function upgradeToV7(): array {
+		return self::load('010_vec_failure.sql');
+	}
+
+	/** @return list<string> what an instance at schema_ver 7 needs: the snapshot capped flag step alone (it is idempotent) */
+	public static function upgradeToV8(): array {
+		return self::load('011_snapshot_capped.sql');
+	}
+
+	/** @return list<string> what an instance at schema_ver 8 needs: the server_encrypted step alone (it is idempotent) */
+	public static function upgradeToV9(): array {
+		return self::load('012_server_encrypted.sql');
 	}
 
 	/**

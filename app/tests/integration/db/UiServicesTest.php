@@ -153,7 +153,9 @@ class UiServicesTest extends DbTestCase {
 	private function actions(): AdminActions {
 		$db = $this->db();
 		$groups = $this->createMock(IGroupManager::class);
-		return new AdminActions($db, new Settings($db), new ScopeRules($db, new AuditLog($db, new Pseudonyms($db))), new AuditLog($db, new Pseudonyms($db)), new Reindexer($db), $this->recheck());
+		$pseudonyms = new Pseudonyms($db);
+		$audit = new AuditLog($db, $pseudonyms);
+		return new AdminActions($db, new Settings($db), new ScopeRules($db, $audit, $pseudonyms), $audit, new Reindexer($db), $this->recheck());
 	}
 
 	public function testPauseResumeAndTheNoticeAreAuditedAndTakeEffect(): void {
@@ -166,6 +168,19 @@ class UiServicesTest extends DbTestCase {
 		$this->assertNotNull((new Settings($this->db()))->get('notice_ack_at'));
 		$actions = $this->app()->query('SELECT action FROM aps_search.audit_log ORDER BY id')->fetchAll(\PDO::FETCH_COLUMN);
 		$this->assertSame(['pause', 'resume', 'notice.ack'], $actions);
+	}
+
+	public function testAnAdminWhoseUidIsANonPersonNameIsAuditedUnderARandomToken(): void {
+		$this->app()->exec("INSERT INTO aps_search.scope_rule (kind, file_id) VALUES ('folder', 5)");
+		$id = (int)$this->app()->query('SELECT id FROM aps_search.scope_rule')->fetchColumn();
+		$a = $this->actions();
+		$a->pause('system');
+		$this->assertTrue($a->excludeRule($id, 'occ'));
+		$actors = $this->app()->query('SELECT action, actor FROM aps_search.audit_log ORDER BY id')->fetchAll(\PDO::FETCH_KEY_PAIR);
+		$this->assertSame(['pause', 'scope.remove'], array_keys($actors));
+		foreach ($actors as $action => $actor) {
+			$this->assertMatchesRegularExpression('/^[0-9a-f]{32}$/', $actor, "$action: an administrator is never audited as the system or the command line");
+		}
 	}
 
 	public function testExcludingAFolderRemovesItsRuleOnlyIfItExists(): void {
@@ -197,7 +212,8 @@ class UiServicesTest extends DbTestCase {
 		$this->app()->exec("INSERT INTO aps_search.scope_rule (kind, file_id) VALUES ('folder', 11), ('folder', 12), ('all_groupfolders', NULL)");
 		$this->nodes = [11 => [$this->node('Informes')]];                                     // 12 is not readable by this person
 		$db = $this->db();
-		$list = (new \OCA\BuscadorDocumental\Ui\FolderList(new ScopeRules($db, new AuditLog($db, new Pseudonyms($db))), $this->recheck()))->forUser('alice');
+		$pseudonyms = new Pseudonyms($db);
+		$list = (new \OCA\BuscadorDocumental\Ui\FolderList(new ScopeRules($db, new AuditLog($db, $pseudonyms), $pseudonyms), $this->recheck()))->forUser('alice');
 		$this->assertSame([['id' => 11, 'path' => '/Informes/Informes']], $list);
 	}
 

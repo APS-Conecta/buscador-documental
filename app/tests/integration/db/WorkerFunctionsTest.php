@@ -264,6 +264,62 @@ class WorkerFunctionsTest extends DbTestCase {
 		$this->assertSame(10, $this->claim($w)['file_id']);
 	}
 
+	// ---- a give-up for an old version of the file (#57) ----
+
+	/** The file is overwritten while its job is leased, as FileIndexer::enqueue records it: new etag, pending, a job for it. */
+	private function overwrite(int $fileId, string $etag): void {
+		$a = $this->app();
+		$a->prepare("UPDATE aps_search.file_state SET etag = ?, text_state = 'pending', skip_reason = NULL WHERE file_id = ?")->execute([$etag, $fileId]);
+		$a->prepare("INSERT INTO aps_search.job (lane, file_id, idem_key) VALUES ('text', ?, ?)")->execute([$fileId, "$fileId:$etag"]);
+	}
+
+	/** @return array{etag:string, text_state:string, skip_reason:?string} */
+	private function textState(int $fileId): array {
+		return self::connect('nextcloud', 'dev', self::$dbName)->query("SELECT etag, text_state, skip_reason FROM aps_search.file_state WHERE file_id = $fileId")->fetch(\PDO::FETCH_ASSOC);
+	}
+
+	private function jobExists(int $jobId): bool {
+		return (bool)self::connect('nextcloud', 'dev', self::$dbName)->query("SELECT count(*) FROM aps_search.job WHERE id = $jobId")->fetchColumn();
+	}
+
+	public function testAGiveUpForAnOverwrittenVersionLeavesTheNewVersionQueued(): void {
+		$this->seedFile(10, 'e1');
+		$w = $this->worker();
+		$old = $this->claim($w);
+		$this->overwrite(10, 'e2');
+		$w->prepare('SELECT aps_search.fail_job(?, ?, ?, false)')->execute([$old['job_id'], $old['lease_epoch'], 'too_large']);
+		$this->assertSame(['etag' => 'e2', 'text_state' => 'pending', 'skip_reason' => null], $this->textState(10), 'a verdict on the old version is not the new one\'s');
+		$this->assertFalse($this->jobExists($old['job_id']));
+		$next = $this->claim($w);
+		$this->assertNotSame($old['job_id'], $next['job_id']);
+		$this->assertSame('e2', $next['etag'], 'the new version is still queued');
+	}
+
+	public function testAGiveUpForAnOverwrittenVersionKeepsAnIndexedNewVersionIndexed(): void {
+		$this->seedFile(10, 'e1');
+		$w1 = $this->worker();
+		$w2 = $this->worker();
+		$old = $this->claim($w1, 'w1');
+		$this->overwrite(10, 'e2');
+		$this->write($w2, $this->claim($w2, 'w2'));
+		$w1->prepare('SELECT aps_search.fail_job(?, ?, ?, false)')->execute([$old['job_id'], $old['lease_epoch'], 'too_large']);
+		$this->assertSame(['etag' => 'e2', 'text_state' => 'indexed', 'skip_reason' => null], $this->textState(10));
+		$this->assertSame(1, $this->rowCount('page', 10), 'the new version stays searchable');
+	}
+
+	public function testACappedJobForAnOverwrittenVersionIsDroppedWithoutSkippingTheFile(): void {
+		$this->seedFile(10, 'e1');
+		$w = $this->worker();
+		$old = $this->claim($w);
+		$this->overwrite(10, 'e2');
+		$this->app()->exec("UPDATE aps_search.job SET attempts = 5, lease_until = now() - interval '1 minute' WHERE id = {$old['job_id']}");
+		$next = $this->claim($w);
+		$this->assertFalse($this->jobExists($old['job_id']));
+		$this->assertSame(['etag' => 'e2', 'text_state' => 'pending', 'skip_reason' => null], $this->textState(10));
+		$this->assertNotNull($next, 'the new version is claimed, not dropped with the file');
+		$this->assertSame('e2', $next['etag']);
+	}
+
 	// ---- H1: erase vs. an in-flight worker ----
 
 	public function testClaimEraseThenWriteResultLeavesNoRows(): void {

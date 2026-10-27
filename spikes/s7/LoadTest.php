@@ -73,7 +73,7 @@ class LoadTest extends DbTestCase {
 					continue;
 				}
 				$t = microtime(true);
-				$keyword = $cq->exacta($q['q'], [], $set, $filters, $cap, $mode === 'mixta' ? false : null);
+				[$keyword] = $cq->exacta($q['q'], [], $set, $filters, $cap, $mode === 'mixta' ? false : null);
 				$ranked = $keyword;
 				if ($mode === 'mixta') {
 					$exact = !$cq->hasAnnIndex(1) || $cq->accessibleFiles($set, $filters, $exactFiles) < $exactFiles;

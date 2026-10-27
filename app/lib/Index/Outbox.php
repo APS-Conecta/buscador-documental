@@ -62,19 +62,12 @@ class Outbox {
 
 	/** Gives the attempt back: the row was only held (paused), not tried. @param list<int> $ids */
 	public function release(array $ids): void {
-		if ($ids !== []) {
-			$this->db->execute('UPDATE aps_search.outbox SET attempts = greatest(attempts - 1, 0), claimed_at = NULL WHERE id = ANY(?::bigint[])', ['{' . implode(',', $ids) . '}']);
-		}
+		$this->handBack($ids, 'attempts = greatest(attempts - 1, 0)');
 	}
 
 	/** The evaluation failed: try again later, waiting longer each time (2, 4, 8, 16 minutes), so a short outage cannot use up every attempt at once. @param list<int> $ids */
 	public function retryLater(array $ids): void {
-		if ($ids !== []) {
-			$this->db->execute(
-				'UPDATE aps_search.outbox SET claimed_at = NULL, not_before = now() + make_interval(mins => power(2, attempts)::int) WHERE id = ANY(?::bigint[])',
-				['{' . implode(',', $ids) . '}'],
-			);
-		}
+		$this->handBack($ids, 'not_before = now() + make_interval(mins => power(2, attempts)::int)');
 	}
 
 	/** Queues every file (not folder) below a folder. Set-based over the parent index. */
@@ -96,6 +89,44 @@ class Outbox {
 
 	public function prune(int $days = 7): int {
 		return $this->db->execute('DELETE FROM aps_search.outbox WHERE processed_at < now() - make_interval(days => ?)', [$days]);
+	}
+
+	/** Hands claimed rows back; a row whose (file, kind) already has another live row is settled as done and that row carries the work (ADR-0013); a unique violation from a concurrent touch() is retried once. @param list<int> $ids */
+	private function handBack(array $ids, string $set): void {
+		if ($ids === []) {
+			return;
+		}
+		$ids = '{' . implode(',', $ids) . '}';
+		$work = function () use ($ids, $set): void {
+			$this->db->execute(
+				'UPDATE aps_search.outbox o SET processed_at = now() WHERE o.id = ANY(?::bigint[])
+				 AND (EXISTS (SELECT 1 FROM aps_search.outbox n WHERE n.file_id = o.file_id AND n.kind = o.kind AND n.id <> o.id
+				              AND n.processed_at IS NULL AND n.claimed_at IS NULL AND n.attempts < ' . self::MAX_ATTEMPTS . ')
+				   OR EXISTS (SELECT 1 FROM aps_search.outbox n WHERE n.id = ANY(?::bigint[]) AND n.id > o.id
+				              AND n.file_id = o.file_id AND n.kind = o.kind))',
+				[$ids, $ids],
+			);
+			$this->db->execute("UPDATE aps_search.outbox SET {$set}, claimed_at = NULL WHERE id = ANY(?::bigint[]) AND processed_at IS NULL", [$ids]);
+		};
+		try {
+			$this->db->guarded($work);
+			return;
+		} catch (\Throwable $e) {
+			if (!self::isUniqueViolation($e)) {
+				throw $e;
+			}
+		}
+		$this->db->guarded($work);
+	}
+
+	/** Nextcloud wraps the driver's error (OCP\DB\Exception, then Doctrine, then \PDOException), so the SQLSTATE is looked up along the chain. */
+	private static function isUniqueViolation(\Throwable $e): bool {
+		for (; $e !== null; $e = $e->getPrevious()) {
+			if ($e instanceof \PDOException && $e->getCode() === '23505') {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private static function descendantFiles(): string {

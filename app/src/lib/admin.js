@@ -29,6 +29,7 @@ export const CHECKS = {
 	database_roles: 'Permisos de la base de datos',
 	extension_unaccent: 'Búsqueda sin tildes',
 	worker_secret: 'Clave del servicio de lectura',
+	exclusion_tag: 'Etiqueta de exclusión',
 	server_encryption: 'Cifrado en el servidor',
 	paused: 'Lectura de documentos',
 	worker_alive: 'Servicio de lectura',

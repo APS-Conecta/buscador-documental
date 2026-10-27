@@ -184,6 +184,79 @@ class ProfileManagerTest extends DbTestCase {
 		$this->assertNull((new Settings(new IndexDb($this->connection($this->app()))))->get('vec_coverage_2'));
 	}
 
+	/** A generation of three-dimensional vectors, as `set` creates it once the probe passed. */
+	private function generation(int $gen, string $state = 'building'): void {
+		$a = $this->app();
+		$a->exec("SELECT aps_search.create_generation($gen, 'bge-m3', 'bge-m3:567m', 'sha256:g$gen', 3, 'f16', '', '', 8192)");
+		if ($state !== 'building') {
+			$a->exec("SELECT aps_search.mark_generation_ready($gen)");
+		}
+		if ($state === 'active') {
+			$a->exec("SELECT aps_search.activate_generation($gen)");
+		}
+	}
+
+	/** An indexed file with one chunk, embedded in the given generations. */
+	private function indexedFile(int $id, int ...$gens): void {
+		$a = $this->app();
+		$a->exec("INSERT INTO aps_search.file_state (file_id, etag, text_state) VALUES ($id, 'e1', 'indexed')");
+		$a->exec("INSERT INTO aps_search.chunk (file_id, page_no, ord, text) VALUES ($id, 1, 0, 't')");
+		foreach ($gens as $g) {
+			$this->embedIn($g, $id);
+		}
+	}
+
+	private function embedIn(int $gen, int $id): void {
+		$this->app()->exec("INSERT INTO aps_search.chunk_vec_$gen (chunk_id, file_id, vec) SELECT chunk_id, file_id, '[1,0,0]' FROM aps_search.chunk WHERE file_id = $id");
+	}
+
+	private function vecState(int $id): string {
+		return (string)$this->app()->query("SELECT vec_state FROM aps_search.file_state WHERE file_id = $id")->fetchColumn();
+	}
+
+	public function testActivationBringsVecStateInLineWithTheNewGenerationsFailures(): void {
+		[$a, $b, $c, $d] = [1, 2, 3, 4];
+		$this->generation(1, 'active');
+		$this->indexedFile($a, 1);
+		$this->app()->exec("UPDATE aps_search.file_state SET vec_state = 'embedded' WHERE file_id = $a");
+		foreach ([$b, $c, $d] as $id) {
+			$this->indexedFile($id);
+		}
+		$this->app()->exec('SELECT aps_search.enqueue_vec_backfill(1, 10)');
+		foreach ([$b, $c, $d] as $_) {
+			$this->giveUpVecJob($this->claim($this->worker(), 'vec-w', lane: 'vec'));     // generation 1 gives up on B, C and D
+		}
+		$this->app()->exec("SELECT aps_search.erase_files(ARRAY[$d]::bigint[], 'excluded')");     // D: no chunks left, vec_state stays failed
+		$this->generation(2);
+		$this->embedIn(2, $b);
+		$this->app()->exec('SELECT aps_search.enqueue_vec_backfill(2, 1)');
+		$claim = $this->claim($this->worker(), 'vec-w', lane: 'vec');
+		$this->assertSame($a, $claim['file_id']);
+		$this->giveUpVecJob($claim);                                        // generation 2 gives up on A
+		$this->app()->exec('SELECT aps_search.mark_generation_ready(2)');
+		$this->candidates()->buildIndex(2);
+		$this->manager()->activate(2);
+		$this->assertSame(['failed', 'embedded', 'pending', 'failed'], array_map($this->vecState(...), [$a, $b, $c, $d]),
+			'A failed in generation 2; B and C failed only in generation 1 (B has its vectors, C not yet); D is excluded');
+	}
+
+	public function testDroppingAGenerationForgetsItsFailures(): void {
+		[$f, $g] = [1, 2];
+		$this->generation(1, 'active');
+		$this->indexedFile($f, 1);
+		$this->indexedFile($g);
+		$this->app()->exec('SELECT aps_search.enqueue_vec_backfill(1, 10)');
+		$this->giveUpVecJob($this->claim($this->worker(), 'vec-w', lane: 'vec'));     // generation 1 gives up on G
+		$this->generation(2);
+		$this->app()->exec('SELECT aps_search.enqueue_vec_backfill(2, 1)');
+		$this->giveUpVecJob($this->claim($this->worker(), 'vec-w', lane: 'vec'));     // generation 2 gives up on F
+		$m = $this->manager();
+		$m->drop(2);
+		$this->assertSame(2, $m->set('bge-m3', 'http://ollama:11434', null)['gen'], 'the number is free again');
+		$this->assertSame(2, (int)$this->app()->query('SELECT aps_search.enqueue_vec_backfill(2, 10)')->fetchColumn(), 'the new generation 2 tries F and G');
+		$this->assertSame(0, (int)$this->app()->query('SELECT aps_search.enqueue_vec_backfill(1, 10)')->fetchColumn(), 'generation 1 still remembers G');
+	}
+
 	public function testSemanticSwitchNeedsAnActiveProfile(): void {
 		$m = $this->manager();
 		$this->refuses(fn () => $m->semantic(true), 'active profile');

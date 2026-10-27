@@ -15,7 +15,8 @@ final class FileFacts {
 	 * @param list<int> $ancestors ids of the parent folders from the closest up to the storage root (ids only: the folder filter)
 	 * @param int $storageId numeric id of the storage holding the file (erasure on user deletion finds files by it)
 	 * @param bool $unmodelledAccess the file is reachable through something the prefilter cannot list: a circle, Talk, Deck, mail
-	 *                               or federated share on it or an ancestor, or a groupfolder with advanced ACL
+	 *                               or federated share on it or an ancestor, or a groupfolder with advanced ACL, or a team
+	 *                               folder granted to a Team
 	 */
 	public function __construct(
 		public readonly int $fileId,

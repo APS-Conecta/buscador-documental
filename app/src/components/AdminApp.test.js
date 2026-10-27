@@ -43,6 +43,13 @@ describe('AdminApp', () => {
 		w.unmount()
 	})
 
+	it('names a failing exclusion tag check in Spanish', async () => {
+		const w = await open({ checks: [{ id: 'exclusion_tag', status: 'fail', detail: 'missing' }] })
+		expect(w.text()).toContain('Etiqueta de exclusión')
+		expect(w.text()).not.toContain('exclusion_tag')
+		w.unmount()
+	})
+
 	it('shows the first-run notice until it is acknowledged, then not', async () => {
 		let w = await open({ status: { notice_ack_at: null } })
 		expect(w.text()).toContain('Solo se leen las carpetas que usted incluya')

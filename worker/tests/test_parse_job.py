@@ -95,3 +95,28 @@ def test_the_ocr_time_is_announced_before_ocr_starts(tmp_path, monkeypatch):
     out = run(tmp_path, pdf)
     assert out["source"] == ["layer", "ocr", "ocr"]
     assert seen == [str(2 * pdfocr.OCR_PAGE_SECONDS)]
+
+
+SCANS = pytest.mark.parametrize("scan", [
+    lambda p, lines=fx.LINES: fx.scan_pdf(p / "s.pdf", lines=lines),
+    lambda p, lines=fx.LINES: fx.scan_image(lines).save(p / "s.png") or str(p / "s.png"),
+], ids=["pdf", "png"])
+
+
+@SCANS
+def test_a_page_past_the_page_timeout_fails_the_file_as_timeout(tmp_path, monkeypatch, scan):
+    """Issue 48: a page whose OCR outlasts PAGE_TIMEOUT fails the file with the retryable `timeout`, read at most once."""
+    import os
+    path = scan(tmp_path)
+    bin_dir, log = fx.slow_tesseract(tmp_path, 8)
+    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
+    monkeypatch.setattr(pdfocr, "PAGE_TIMEOUT", 4)
+    assert run(tmp_path, path) == {"status": "error", "reason": "timeout"}
+    assert len(log.read_text().splitlines()) <= 1      # 0 when ocrmypdf's start-up alone outlasts the limit
+
+
+@SCANS
+def test_a_blank_scan_is_an_empty_page_and_still_indexes(tmp_path, scan):
+    """Issue 48: a page tesseract finds blank is empty text, not a failure."""
+    out = run(tmp_path, scan(tmp_path, lines=[]))
+    assert out["status"] == "ok" and out["pages"] == [""]

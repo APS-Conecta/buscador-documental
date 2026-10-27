@@ -21,7 +21,7 @@ class UserPurgeTest extends DbTestCase {
 		$admin = self::connect('postgres', 'dev', self::$dbName);
 		$admin->exec('DROP TABLE IF EXISTS oc_storages');
 		$admin->exec('CREATE TABLE oc_storages (numeric_id bigint primary key, id text)');
-		$admin->exec("INSERT INTO oc_storages VALUES (7, 'home::alice'), (8, 'home::bob')");
+		$admin->exec("INSERT INTO oc_storages VALUES (7, 'home::alice'), (8, 'home::bob'), (9, 'home::occ'), (10, 'home::system')");
 		$admin->exec('DROP TABLE IF EXISTS oc_filecache');
 		$admin->exec('CREATE TABLE oc_filecache (fileid bigint primary key, storage bigint)');
 		$admin->exec('GRANT SELECT ON oc_storages, oc_filecache TO nextcloud');
@@ -59,22 +59,33 @@ class UserPurgeTest extends DbTestCase {
 		$this->assertSame(0, $this->rowCount('file_meta'));
 	}
 
-	public function testTheDeletionFlowErasesAuditsAndMakesTheAuditUnlinkable(): void {
+	/** @dataProvider deletedUsers */
+	public function testTheDeletionFlowErasesAuditsAndMakesTheAuditUnlinkable(string $uid, int $storage): void {
 		[$purger, $db, $p] = $this->purger();
-		$this->indexed(1, 7);
+		$this->indexed(1, $storage);
 		$this->indexed(2, 8);
-		$purger->recordPending('alice');
+		$purger->recordPending($uid);
 		$this->assertSame(1, (int)$db->rows('SELECT count(*) AS n FROM aps_search.purge_pending')[0]['n']);
-		$this->assertSame(1, $purger->purgePending('alice'));
+		$this->assertSame(1, $purger->purgePending($uid));
 		$this->assertSame(0, $this->rowCount('chunk', 1));
 		$this->assertSame(1, $this->rowCount('chunk', 2), 'bob is untouched');
 		$this->assertSame(0, (int)$db->rows('SELECT count(*) AS n FROM aps_search.purge_pending')[0]['n'], 'the bookkeeping row is gone');
-		$this->assertSame(0, (int)$db->rows("SELECT count(*) AS n FROM aps_search.pseudonym WHERE uid = 'alice'")[0]['n'], 'the mapping is gone: the audit is unlinkable');
-		$audit = $db->rows("SELECT action, detail FROM aps_search.audit_log WHERE action = 'purge_user'");
+		$this->assertSame(0, (int)$db->rows('SELECT count(*) AS n FROM aps_search.pseudonym WHERE uid = ?', [$uid])[0]['n'], 'the mapping is gone: the audit is unlinkable');
+		$audit = $db->rows("SELECT actor, subject_token, detail FROM aps_search.audit_log WHERE action = 'purge_user'");
 		$this->assertCount(1, $audit);
 		$this->assertSame(['count' => 1, 'reason' => 'user_deleted'], json_decode($audit[0]['detail'], true));
-		$this->assertStringNotContainsString('alice', json_encode($db->rows('SELECT * FROM aps_search.audit_log')));
-		$this->assertNotSame($p->tokenFor('alice'), $db->rows('SELECT subject_token FROM aps_search.audit_log')[0]['subject_token'], 'a user who returns under the same name is a stranger to the old audit rows');
+		$this->assertSame('system', $audit[0]['actor'], 'the purge after a deletion is done by the system');
+		$this->assertMatchesRegularExpression('/^[0-9a-f]{32}$/', $audit[0]['subject_token'], 'the user is named only by a random token');
+		$this->assertNotSame($p->tokenFor($uid), $audit[0]['subject_token'], 'a user who returns under the same name is a stranger to the old audit rows');
+	}
+
+	/** A uid that is also the name of a non-person actor is erased like any other. */
+	public static function deletedUsers(): array {
+		return [
+			'alice' => ['alice', 7],
+			'occ' => ['occ', 9],
+			'system' => ['system', 10],
+		];
 	}
 
 	public function testPurgingTwiceOrWithNothingPendingIsHarmless(): void {

@@ -212,6 +212,35 @@ def test_a_page_that_times_out_fails_the_job_as_a_timeout(tmp_path, monkeypatch)
         pdfocr.run(fx.scan_pdf(tmp_path / "s.pdf"))
 
 
+@pytest.mark.parametrize("make", [
+    lambda p: fx.scan_pdf(p / "s.pdf"),
+    lambda p: fx.scan_image().save(p / "s.png") or str(p / "s.png"),
+], ids=["pdf", "png"])
+def test_a_slow_page_is_read_once_and_never_given_a_shorter_tesseract_limit(tmp_path, monkeypatch, make):
+    """Issue 48: when tesseract's own limit fired first, ocrmypdf exited 0 with a blank page, which was OCR'd again
+    and then stored as empty text with a normal confidence."""
+    import os
+    import subprocess
+    path = make(tmp_path)
+    bin_dir, log = fx.slow_tesseract(tmp_path, 8)
+    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
+    real, calls = subprocess.run, []
+
+    def spy(cmd, *a, **k):
+        if cmd[0] == "ocrmypdf":
+            calls.append((cmd, k["timeout"]))
+        return real(cmd, *a, **k)
+
+    monkeypatch.setattr(pdfocr.subprocess, "run", spy)
+    out = pdfocr.run(path)
+    assert has(out["pages"][0]), out["pages"][0][:200]
+    assert log.read_text().splitlines() == ["ocr"]
+    assert calls
+    for cmd, timeout in calls:
+        assert "--tesseract-timeout" in cmd
+        assert int(cmd[cmd.index("--tesseract-timeout") + 1]) >= timeout
+
+
 def test_ocr_version_changes_with_the_policy(monkeypatch):
     a = pdfocr.version()
     monkeypatch.setattr(pdfocr, "POLICY", "perpage-test-policy")

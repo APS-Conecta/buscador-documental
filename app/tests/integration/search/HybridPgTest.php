@@ -9,6 +9,7 @@ namespace OCA\BuscadorDocumental\Tests\integration\search;
 use OCA\BuscadorDocumental\Db\IndexDb;
 use OCA\BuscadorDocumental\Search\CandidateQuery;
 use OCA\BuscadorDocumental\Search\Filters;
+use OCA\BuscadorDocumental\Search\Glossary;
 use OCA\BuscadorDocumental\Tests\integration\db\DbTestCase;
 use PDO;
 
@@ -97,6 +98,14 @@ class HybridPgTest extends DbTestCase {
 		return array_map(static fn (array $r): int => (int)$r['file_id'], $rows);
 	}
 
+	/** @return list<int> the files of the strict keyword pass for $q with the shipped glossary, sorted */
+	private function strictWithGlossary(string $q): array {
+		$glossary = Glossary::fromFile(__DIR__ . '/../../../lib/Search/glossary.json');
+		$files = $this->files($this->query()->exacta($q, $glossary->pairs($q), $this->scopeArray(), new Filters(), 10, relax: false)[0]);
+		sort($files);
+		return $files;
+	}
+
 	public function testSignificadoRanksByCosineDistanceAndKeepsOneChunkPerFile(): void {
 		$this->generation();
 		$this->doc(1, ['u:b'], 'cercano', [1, 0, 0]);
@@ -115,17 +124,45 @@ class HybridPgTest extends DbTestCase {
 		$this->doc(3, ['x:recheck'], 'sin modelar', [1, 0, 0]);
 		$q = $this->query();
 		$this->assertSame([2, 3], $this->files($q->significado([1, 0, 0], 1, $this->scopeArray(), new Filters(), 10, true)));
-		$this->assertSame([], $this->files($q->exacta('ajeno', [], $this->scopeArray(), new Filters(), 10)), 'keyword leg too');
+		$this->assertSame([], $this->files($q->exacta('ajeno', [], $this->scopeArray(), new Filters(), 10)[0]), 'keyword leg too');
 	}
 
 	public function testExactaUsesAlternativesAndRelaxesToOrWhenTheStrictPassIsThin(): void {
 		$this->doc(1, ['u:b'], 'informe del Resumen Estadístico Mensual de junio');
 		$this->doc(2, ['u:b'], 'hemoglobina glicosilada del paciente');
 		$q = $this->query();
-		$this->assertSame([], $this->files($q->exacta('REM', [], $this->scopeArray(), new Filters(), 10)));
-		$this->assertSame([1], $this->files($q->exacta('REM', ['resumen estadistico mensual'], $this->scopeArray(), new Filters(), 10)));
-		$this->assertSame([], $this->files($q->exacta('hemoglobina inexistente', [], $this->scopeArray(), new Filters(), 10, relax: false)), 'strict AND finds nothing');
-		$this->assertSame([2], $this->files($q->exacta('hemoglobina inexistente', [], $this->scopeArray(), new Filters(), 10, relax: true)), 'OR relaxation finds it');
+		$this->assertSame([], $this->files($q->exacta('REM', [], $this->scopeArray(), new Filters(), 10)[0]));
+		$this->assertSame([1], $this->files($q->exacta('REM', [['rem', 'resumen estadistico mensual']], $this->scopeArray(), new Filters(), 10)[0]));
+		$this->assertSame([], $this->files($q->exacta('hemoglobina inexistente', [], $this->scopeArray(), new Filters(), 10, relax: false)[0]), 'strict AND finds nothing');
+		$this->assertSame([2], $this->files($q->exacta('hemoglobina inexistente', [], $this->scopeArray(), new Filters(), 10, relax: true)[0]), 'OR relaxation finds it');
+	}
+
+	public function testAGlossaryAlternativeReplacesOnlyTheWordsItStandsFor(): void {
+		$this->doc(1, ['u:b'], 'protocolo PSCV vigente');
+		$this->doc(2, ['u:b'], 'programa de salud cardiovascular');
+		$this->doc(3, ['u:b'], 'protocolo del programa de salud cardiovascular');
+		$this->doc(4, ['u:b'], 'informe PSCV trimestral');
+		$this->doc(5, ['u:b'], 'informe del resumen estadístico mensual de junio');
+		$this->doc(6, ['u:b'], 'resumen estadístico mensual de mayo');
+		$this->doc(7, ['u:b'], 'informe CESFAM de junio');
+		$this->doc(8, ['u:b'], 'CESFAM de mayo');
+		$this->assertSame([1, 3], $this->strictWithGlossary('protocolo pscv'), 'the expansion stands for pscv, protocolo is still required');
+		$this->assertSame([2, 4], $this->strictWithGlossary('pscv -protocolo'), 'the exclusion applies to the expansion too');
+		$this->assertSame([1], $this->strictWithGlossary('"protocolo pscv"'), 'the phrase holds for every form');
+		$this->assertSame([5], $this->strictWithGlossary('REM de junio'));
+		$this->assertSame([7], $this->strictWithGlossary('informe del centro de salud familiar de junio'), 'a multi-word expansion inside a longer query');
+	}
+
+	public function testNestedAndHyphenatedGlossarySpansKeepTheirExpansion(): void {
+		$this->doc(1, ['u:b'], 'control EMPAM del adulto mayor');
+		$this->doc(2, ['u:b'], 'codigo clasificacion internacional de enfermedades 10 version asignado');
+		$this->assertSame([1], $this->strictWithGlossary('control del examen de medicina preventiva del adulto mayor'), 'the longest of the nested expansions (emp, empa, empam)');
+		$this->assertSame([2], $this->strictWithGlossary('codigo CIE-10 asignado'), 'a typed CIE-10 is a phrase, and cie alone is a shorter key');
+	}
+
+	public function testAnAlternativeForTheWholeQueryStillStandsForIt(): void {
+		$this->doc(1, ['u:b'], 'paciente con lupus eritematoso sistémico');
+		$this->assertSame([1], $this->strictWithGlossary('LES'), 'les is a stopword: its own tsquery is empty');
 	}
 
 	public function testFiltersNarrowEveryLeg(): void {
@@ -144,7 +181,7 @@ class HybridPgTest extends DbTestCase {
 			'folder and type' => [new Filters(mimes: ['text/plain'], folderId: 5), [3]],
 		];
 		foreach ($cases as $name => [$f, $want]) {
-			$kw = $this->files($q->exacta('glucosa', [], $this->scopeArray(), $f, 10));
+			$kw = $this->files($q->exacta('glucosa', [], $this->scopeArray(), $f, 10)[0]);
 			$vec = $this->files($q->significado([1, 0, 0], 1, $this->scopeArray(), $f, 10, true));
 			sort($kw);
 			sort($vec);
@@ -160,8 +197,15 @@ class HybridPgTest extends DbTestCase {
 		$a->exec("INSERT INTO aps_search.file_meta (file_id, name, mime, mtime, ancestors) SELECT g, 'n', 'image/png', 1, ARRAY[1]::bigint[] FROM generate_series(100, 10150) g");
 		$a->exec("INSERT INTO aps_search.chunk (file_id, page_no, ord, text) SELECT g, 1, 0, 'hemoglobina reciente' FROM generate_series(100, 10150) g");
 		$q = $this->query();
-		$this->assertNotContains(1, $this->files($q->exacta('hemoglobina', [], $this->scopeArray(), new Filters(), 20000)), 'unfiltered: only the newest 10 000 chunks are ranked');
-		$this->assertSame([1], $this->files($q->exacta('hemoglobina', [], $this->scopeArray(), new Filters(mimes: ['application/pdf']), 10)), 'the filter runs before the pre-limit');
+		[$unfiltered, $full] = $q->exacta('hemoglobina', [], $this->scopeArray(), new Filters(), 20000);
+		$this->assertNotContains(1, $this->files($unfiltered), 'unfiltered: only the newest 10 000 chunks are ranked');
+		$this->assertTrue($full, 'and the caller learns that older matches were left out (either window: 2 000 or 10 000)');
+		[$pdf, $full] = $q->exacta('hemoglobina', [], $this->scopeArray(), new Filters(mimes: ['application/pdf']), 10);
+		$this->assertSame([1], $this->files($pdf), 'the filter runs before the pre-limit');
+		$this->assertFalse($full, 'one match does not fill the window');
+		$a->exec('ANALYZE aps_search.chunk');                                    // both words of the next query are now known to be common
+		$this->assertTrue($q->exacta('hemoglobina reciente', [], $this->scopeArray(), new Filters(), 100, relax: true)[1], 'relaxed pass, every word common: the 2 000 window is full');
+		$this->assertFalse($q->exacta('antigua inexistente', [], $this->scopeArray(), new Filters(), 100, relax: true)[1], 'relaxed pass led by a rare word: one match in the 10 000 window');
 	}
 
 	public function testTheAnnPathAgreesWithTheExactPathOnASmallCorpus(): void {
@@ -249,7 +293,7 @@ class HybridPgTest extends DbTestCase {
 		$q = $this->query();
 		foreach ([['mine', [1]], ['shared', [2, 3]]] as [$which, $want]) {
 			$f = (new Filters(owner: $which))->forUser('b', 60.0);
-			$kw = $this->files($q->exacta('glucosa', [], $this->scopeArray(), $f, 10));
+			$kw = $this->files($q->exacta('glucosa', [], $this->scopeArray(), $f, 10)[0]);
 			$vec = $this->files($q->significado([1, 0, 0], 1, $this->scopeArray(), $f, 10, true));
 			sort($kw);
 			sort($vec);
@@ -265,10 +309,10 @@ class HybridPgTest extends DbTestCase {
 		$this->doc(3, ['u:b'], 'glucosa con capa de texto', [1, 0, 0]);
 		$q = $this->query();
 		$f = (new Filters(uncertain: true))->forUser('b', 60.0);
-		$this->assertSame([2], $this->files($q->exacta('glucosa', [], $this->scopeArray(), $f, 10)));
+		$this->assertSame([2], $this->files($q->exacta('glucosa', [], $this->scopeArray(), $f, 10)[0]));
 		$this->assertSame([2], $this->files($q->significado([1, 0, 0], 1, $this->scopeArray(), $f, 10, true)));
 		$strict = (new Filters(uncertain: true))->forUser('b', 30.0);
-		$this->assertSame([], $this->files($q->exacta('glucosa', [], $this->scopeArray(), $strict, 10)), 'the threshold is the caller\'s setting');
+		$this->assertSame([], $this->files($q->exacta('glucosa', [], $this->scopeArray(), $strict, 10)[0]), 'the threshold is the caller\'s setting');
 	}
 
 	public function testTheExactScanCountIgnoresTheChunkLevelFilter(): void {
@@ -285,11 +329,11 @@ class HybridPgTest extends DbTestCase {
 		}
 		$a->exec('ANALYZE aps_search.chunk');
 		$q = $this->query();
-		$onlyRare = $this->files($q->exacta('comunisimo rarisimo', [], $this->scopeArray(), new Filters(), 100, relax: true));
+		$onlyRare = $this->files($q->exacta('comunisimo rarisimo', [], $this->scopeArray(), new Filters(), 100, relax: true)[0]);
 		$this->assertSame([7], $onlyRare, 'the very common word is left out of the OR, so only the rare one decides');
 		$broad = $this->query();
 		$broad->narrowFiles = 0;                                               // the plan for readers of many files
-		$this->assertSame($onlyRare, $this->files($broad->exacta('comunisimo rarisimo', [], $this->scopeArray(), new Filters(), 100, relax: true)));
-		$this->assertSame($this->files($q->exacta('comunisimo', [], $this->scopeArray(), new Filters(), 100, relax: false)), $this->files($broad->exacta('comunisimo', [], $this->scopeArray(), new Filters(), 100, relax: false)));
+		$this->assertSame($onlyRare, $this->files($broad->exacta('comunisimo rarisimo', [], $this->scopeArray(), new Filters(), 100, relax: true)[0]));
+		$this->assertSame($this->files($q->exacta('comunisimo', [], $this->scopeArray(), new Filters(), 100, relax: false)[0]), $this->files($broad->exacta('comunisimo', [], $this->scopeArray(), new Filters(), 100, relax: false)[0]));
 	}
 }
