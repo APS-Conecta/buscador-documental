@@ -142,6 +142,18 @@ class ReconcileTest extends DbTestCase {
 		$this->assertSame([17], $this->queued($db), 'the tag event was lost: the processor will erase it');
 	}
 
+	public function testAnIndexedFileUnderACaseVariantOfTheTagIsFoundToo(): void {
+		[$r, $db] = $this->reconciler();
+		$admin = self::connect('postgres', 'dev', self::$dbName);
+		$admin->exec("UPDATE oc_systemtag SET name = 'RAG-excluded' WHERE id = 5");             // Nextcloud allows a case-only rename
+		$admin->exec("INSERT INTO oc_systemtag_object_mapping VALUES ('12', 'files', 5)");
+		foreach ([13, 17, 18] as $id) {
+			$this->state($id, "e$id");
+		}
+		$this->finish($r);
+		$this->assertSame([13, 17], $this->queued($db), 'indexed content under the tagged folder is queued for erasure');
+	}
+
 	public function testOtherTagsDoNotExclude(): void {
 		[$r, $db] = $this->reconciler();
 		$admin = self::connect('postgres', 'dev', self::$dbName);

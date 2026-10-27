@@ -36,7 +36,7 @@ for i in 1 2 3 4 5 6; do printf 'Informe %s sobre hemoglobina glicosilada\n' "$i
 $OCC files:scan op_a >/dev/null
 $ENQ ensure-tag >/dev/null
 fid() { $PSQL -c "select f.fileid from oc_filecache f join oc_storages s on s.numeric_id=f.storage where s.id='home::op_a' and f.path='files/f$1.txt'"; }
-enq() { $ENQ enqueue "$(fid "$1")" | grep -q enqueued || die "enqueue refused for $1"; }
+enq() { $ENQ enqueue "$(fid "$1")" | grep enqueued >/dev/null || die "enqueue refused for $1"; }
 
 echo "== pause survives a restart of every service"
 $OCC buscador:pause >/dev/null
@@ -46,7 +46,7 @@ work; work; work
 ok "paused: three jobs wait and the worker is handed none"
 $C --profile worker restart db nextcloud parser >/dev/null 2>&1
 $C --profile worker up -d --wait parser >/dev/null
-$OCC buscador:status | grep -q "paused: yes" || die "the pause was lost in the restart"
+$OCC buscador:status | grep "paused: yes" >/dev/null || die "the pause was lost in the restart"
 [ "$(queued)" = 3 ] || die "queued jobs lost in the restart: $(queued)"
 ok "after restarting the database, Nextcloud and the parser: still paused, the three jobs are still queued"
 $OCC buscador:resume >/dev/null
@@ -57,11 +57,11 @@ ok "resume: the three files are read"
 echo "== night window"
 H=$(date -u +%H); CLOSED=$(printf '%02d:00-%02d:00' $(( (10#$H + 5) % 24 )) $(( (10#$H + 7) % 24 ))); OPEN=$(printf '%02d:00-%02d:00' $(( (10#$H + 23) % 24 )) $(( (10#$H + 2) % 24 )))
 $OCC buscador:window set "$CLOSED" --lanes=all --tz=UTC >/dev/null
-$OCC buscador:window show | grep -q "closed" || die "show does not say closed"
+$OCC buscador:window show | grep "closed" >/dev/null || die "show does not say closed"
 for i in 4 5; do enq $i; done
 work; work
 [ "$(indexed)" = 3 ] || die "the worker was handed work outside the window"
-$OCC buscador:status | grep -q "night window closed, opens in" || die "status does not explain the closed window"
+$OCC buscador:status | grep "night window closed, opens in" >/dev/null || die "status does not explain the closed window"
 ok "outside the window the real worker is handed nothing and status says when it opens"
 $OCC buscador:window set "$OPEN" --lanes=all --tz=UTC >/dev/null
 work; work; work
@@ -72,15 +72,15 @@ BAD=$($OCC buscador:window set tonight 2>&1 || true); grep -q "HH:MM-HH:MM" <<<"
 ok "a nonsense window is refused"
 
 echo "== caps"
-$OCC buscador:throttle set --text=1 --vec=1 | grep -q "text lane: 1" || die "throttle set"
+$OCC buscador:throttle set --text=1 --vec=1 | grep "text lane: 1" >/dev/null || die "throttle set"
 enq 6
-$OCC buscador:throttle reset | grep -q "text lane: 4" || die "throttle reset"
+$OCC buscador:throttle reset | grep "text lane: 4" >/dev/null || die "throttle reset"
 work
 [ "$(indexed)" = 6 ] || die "work did not run after the caps were reset"
 ok "caps are set, shown and reset"
 
 echo "== rotating the worker secret"
-$C exec -T --user www-data nextcloud sh -c 'umask 077; php occ buscador:rotate-secret --to-file=/tmp/bd-new.secret --grace=24' | grep -q "written" || die "rotate did not write the file"
+$C exec -T --user www-data nextcloud sh -c 'umask 077; php occ buscador:rotate-secret --to-file=/tmp/bd-new.secret --grace=24' | grep "written" >/dev/null || die "rotate did not write the file"
 sleep 5      # see the note below: the web process may use the previous app config for up to 3 s
 NEW=$($C exec -T nextcloud cat /tmp/bd-new.secret)
 [ "${#NEW}" = 48 ] || die "the new secret is not 48 characters"
@@ -125,7 +125,7 @@ if $OCC buscador:doctor >/dev/null; then die "doctor exits 0 with a broken secre
 OUT=$($OCC buscador:doctor || true); grep -q "FAIL worker_secret" <<<"$OUT" || die "doctor does not name the secret: $OUT"
 ok "a broken secret makes doctor exit non-zero and name it"
 $OCC config:app:set buscador_documental worker_secret --value="$NEW2" --sensitive >/dev/null
-$OCC buscador:status | grep -qE "^text lane: " || die "status has no ETA line"
+$OCC buscador:status | grep -E "^text lane: " >/dev/null || die "status has no ETA line"
 $OCC buscador:status --prometheus > "$TMP/prom.txt"
 python3 - "$TMP/prom.txt" <<'PY' || die "prometheus output"
 import re, sys

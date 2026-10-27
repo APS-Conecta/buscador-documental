@@ -46,7 +46,7 @@ Max file size, max pages, max pixels, zip expansion ratio, per-file timeout, xls
 | Max pages per file | 300 | worst measured page 9.6 s (deskew+rotate): 300 pages = 48 min on one core |
 | Max pixels per page | 50 MP | A4 at 300 dpi is 8.7 MP; 50 MP covers A2 at 300 dpi and sits below Pillow's decompression-bomb limit (89 MP) |
 | Per-page OCR timeout | 180 s | `--tesseract-timeout 180`; no sample came close (max 9.6 s) |
-| Per-file timeout | min(3600 s, 12 s x pages + 60 s) | 1.25x the worst measured page time per page |
+| Per-file timeout | min(3600 s, 120 s + 20 s per whole MiB + 13 s x OCR'd pages) | the size term is the base allowance (extraction, and the whole budget until the parser has counted its OCR'd pages); 13 s is the perpage-2 cost per OCR'd page (capacity sheet, S2 additions) |
 | Lease length | per-file timeout + 60 s, renewed after each page | checkpoint per page |
 | Zip expansion ratio | 100:1 and 1 GB total uncompressed | policy default, **not measured in S0** (no archive corpus); S2 proves it with the zip-bomb tests |
 | xlsx rows/cells | 1 000 000 cells | policy default, **not measured in S0**; S2 measures extraction time |

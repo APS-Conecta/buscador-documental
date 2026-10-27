@@ -5,7 +5,9 @@ import pytest
 import requests
 
 import client as bdclient
+import jobbox
 import main
+import pdfocr
 
 
 class FakeConn:
@@ -104,6 +106,16 @@ def test_parser_errors_become_the_matching_failure(monkeypatch, reason, expected
     assert retry is (reason in ("timeout", "ocr_failed"))
 
 
+def test_an_answer_over_the_cap_is_too_large_and_not_retried(monkeypatch, tmp_path):
+    monkeypatch.setattr(main.jobbox, "RESULT_MAX", 100)
+    answer = tmp_path / "out.json"
+    answer.write_text('{"status": "ok", "pages": ["%s"]}' % ("x" * 1000))
+    monkeypatch.setattr(main, "parse", lambda *a: main.jobbox._read_answer(str(answer)))
+    conn = FakeConn()
+    assert run(conn, FakeApi()) == "failed:too_large"
+    assert [c for c in conn.calls if "fail_job" in c[0]][0][1][3] is False
+
+
 def test_unknown_parser_reason_is_failed_as_ocr_failed(monkeypatch):
     monkeypatch.setattr(main, "parse", lambda *a: {"status": "error", "reason": "weird"})
     assert run(FakeConn(), FakeApi()) == "failed:ocr_failed"
@@ -192,10 +204,20 @@ def test_text_beyond_the_payload_cap_is_too_large_before_chunking(monkeypatch):
     assert run(FakeConn(), FakeApi()) == "failed:too_large"
 
 
-def test_the_parser_timeout_scales_with_the_file_size():
-    assert main.timeout_for(1000) == 120
-    assert main.timeout_for(10 * 1024 * 1024) == 120 + 200
-    assert main.timeout_for(250 * 1024 * 1024) == 3600
+MIB = 1024 * 1024
+
+
+@pytest.mark.parametrize("size,ocr_pages,budget", [
+    (int(2.3 * MIB), 40, 680),             # issue 46: a compact B/W scan needs 40 x 13 s = 520 s; size alone gave 160 s
+    (1000, 1, 133),                        # a hung one-page scan under 1 MiB frees the parser well within 300 s
+    (1000, 0, 120),
+    (250 * MIB, 300, jobbox.MAX_TIMEOUT),
+    (1000, 300, jobbox.MAX_TIMEOUT),
+], ids=["compact-40-page-scan", "one-page-scan", "no-ocr", "250-mib", "300-page-scan"])
+def test_the_parse_budget_is_the_size_allowance_plus_the_ocr_pages(tmp_path, size, ocr_pages, budget):
+    res = str(tmp_path / "j.json.tmp")
+    jobbox.announce(res, ocr_pages * pdfocr.OCR_PAGE_SECONDS)
+    assert jobbox.granted(main.timeout_for(size), res) == budget
 
 
 def test_parser_detail_is_logged_without_control_characters(monkeypatch, caplog):
@@ -223,7 +245,7 @@ def test_the_supported_schema_passes():
     main.check_schema(VersionConn(main.SUPPORTED_SCHEMA))
 
 
-@pytest.mark.parametrize("version", [1, 2, 3, 4, 6, 99])
+@pytest.mark.parametrize("version", [1, 2, 3, 4, 5, 6, 8, 99])
 def test_an_unknown_schema_stops_the_worker_with_a_clear_message(version):
     with pytest.raises(SystemExit) as e:
         main.check_schema(VersionConn(version))

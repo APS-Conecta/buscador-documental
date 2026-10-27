@@ -37,7 +37,7 @@ $ENQ ensure-tag >/dev/null
 READ_START=$(date +%s)
 for f in n1 n2 n3; do
 	FID=$($PSQL -c "select f.fileid from oc_filecache f join oc_storages s on s.numeric_id=f.storage where s.id='home::rs_a' and f.path='files/$f.txt'")
-	$ENQ enqueue "$FID" | grep -q enqueued || die "enqueue refused"
+	$ENQ enqueue "$FID" | grep enqueued >/dev/null || die "enqueue refused"
 done
 for _ in 1 2 3 4; do $C --profile worker run --rm --no-deps -T worker python3 main.py --once >/dev/null; done
 READ_SECONDS=$(( $(date +%s) - READ_START ))
@@ -54,7 +54,7 @@ ok "the backup is an AES-256 file (Salted__ header), $BACKUP_MS ms"
 [ "$(DBX sh -c "pg_dump --schema=aps_search --format=plain | grep -c $SENT")" -ge 1 ] || die "control: the plain dump should contain the sentinel"
 [ "$(DBX sh -c "grep -c $SENT /tmp/x.bak || true")" = 0 ] || die "the sentinel is visible in the encrypted backup"
 ok "the page text is in the dump (control: plain dump has it) and not visible in the encrypted file"
-DBX cat /tmp/x.bak.meta | grep -q "^chunks $N$" || die "meta does not record the chunk count"
+DBX cat /tmp/x.bak.meta | grep "^chunks $N$" >/dev/null || die "meta does not record the chunk count"
 ok "the meta file records the counts: $(DBX cat /tmp/x.bak.meta | tr '\n' ' ')"
 BAD=$(DBX bash /tmp/backup.sh /tmp/x.bak 2>&1 || true); grep -q "already exists" <<<"$BAD" || die "an existing backup was overwritten: $BAD"
 DBX sh -c 'echo short > /tmp/short.key; chmod 600 /tmp/short.key'
@@ -75,7 +75,7 @@ BAD=$($C exec -T -e PGUSER=postgres -e BD_BACKUP_KEY_FILE=/tmp/other.key db bash
 ok "a wrong key is refused and nothing is restored"
 # 3. the real restore
 T0=$(date +%s%N); OUT=$(DBX bash /tmp/restore.sh /tmp/x.bak bd_restore_test); RESTORE_MS=$(( ($(date +%s%N) - T0) / 1000000 ))
-echo "$OUT" | grep -q "^chunks $N$" || die "restored chunk count differs: $OUT"
+echo "$OUT" | grep "^chunks $N$" >/dev/null || die "restored chunk count differs: $OUT"
 ok "restored in $RESTORE_MS ms; counts: $(echo "$OUT" | tail -5 | tr '\n' ' ')"
 RESTORED=$(DBX psql -qAt -d bd_restore_test -c "select count(*) from aps_search.chunk where tsv @@ websearch_to_tsquery('aps_search.spanish_unaccent', 'hemoglobina glicosilada')")
 [ "$RESTORED" = "$N" ] || die "the restored index answers $RESTORED of $N"
@@ -123,8 +123,8 @@ ok "a backup without its checksum file is refused"
 # a backup of another schema version is refused (the live schema here is the version the script supports)
 DBX sh -c 'rm -f /tmp/newer.bak*'
 $PSQL -c "UPDATE aps_search.schema_meta SET schema_ver = 99" >/dev/null
-DBX bash /tmp/backup.sh /tmp/newer.bak >/dev/null || { $PSQL -c "UPDATE aps_search.schema_meta SET schema_ver = 5" >/dev/null; die "could not back up the newer-schema copy"; }
-$PSQL -c "UPDATE aps_search.schema_meta SET schema_ver = 5" >/dev/null     # never leave the stack on a schema the worker refuses
+DBX bash /tmp/backup.sh /tmp/newer.bak >/dev/null || { $PSQL -c "UPDATE aps_search.schema_meta SET schema_ver = 7" >/dev/null; die "could not back up the newer-schema copy"; }
+$PSQL -c "UPDATE aps_search.schema_meta SET schema_ver = 7" >/dev/null     # never leave the stack on a schema the worker refuses
 BAD=$(DBX bash /tmp/restore.sh /tmp/newer.bak bd_restore_test2 2>&1 || true); grep -q "holds schema version 99" <<<"$BAD" || die "a backup of a newer schema was not refused: $BAD"
 ok "a backup of a newer schema version is refused before anything is created"
 # a file altered by someone WITHOUT the key is refused even if they recompute the plain checksum
