@@ -24,7 +24,7 @@ Neither the shipped design (377 ms) nor the best semantics-preserving variant (V
 4. V3 stays a candidate, not adopted: it is the cheapest variant and agreed with V0 on this fixture, but it replaces the per-id `getById` semantics with search semantics, and one fixture is not proof. S4 adopts it only if the canary and the unit matrix pass unchanged under it.
 
 ## Consequences
-A worst-case user (200 groups, many mounts) spends roughly 0.4 s in recheck for 50 hits, 0.15-0.2 s for a default cursor page and about 0.65 s for page 1 (up to `LISTED` rechecks, amendment below), on top of about 0.1-0.17 s of FS setup that any Nextcloud request pays. If this is not acceptable, the next levers are, in order: adopt V3 after S4 tests, page size 25 as the enforced default, and parallel batches (A-PERF-5 text). Revisit when real mount counts are known (open question #2).
+A worst-case user (200 groups, many mounts) spends roughly 0.4 s in recheck for 50 hits, 0.15-0.2 s for a default cursor page and about 0.65 s for page 1 (an extrapolation; up to `LISTED` rechecks, amendment below), on top of about 0.1-0.17 s of FS setup that any Nextcloud request pays. If this is not acceptable, the next levers are, in order: adopt V3 after S4 tests, page size 25 as the enforced default, and parallel batches (A-PERF-5 text). Revisit when real mount counts are known (open question #2).
 
 ## Amendment (2026-10-27): page 1 rechecks in list order before storing (decisions 2 and 3)
 
@@ -32,7 +32,7 @@ Page 1 of `Searcher` ranks at most `CAP` (1 000) files, then rechecks them in li
 files the caller can read, or the list ends, and stores only those. The first batch is `LISTED` files; a later batch is
 what is still missing, but at least a page. Page 1 reuses those recheck results for its own hits, so it does not recheck
 them twice. Cursor pages are unchanged: they recheck their own page and refill from later positions when short.
-`LISTED` is proposed at 100; the owner decides the value.
+`LISTED` is 100.
 
 Cost: up to `LISTED` rechecks on page 1, the same number as a page of 100 today, which A-PERF-5 budgets (keyword
 p95 < 1.5 s, hybrid p95 < 2.5 s at 100 per page). At about 6.5 ms per hit for the worst user (p50), that is about 0.65 s;
