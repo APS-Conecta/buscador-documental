@@ -11,6 +11,7 @@ use OCA\BuscadorDocumental\Ops\Doctor;
 use OCA\BuscadorDocumental\Scope\Settings;
 use OCA\BuscadorDocumental\Search\EmbedClient;
 use OCA\BuscadorDocumental\Search\ProbeFailed;
+use OCA\BuscadorDocumental\Search\VecBackfill;
 use OCP\IAppConfig;
 use OCP\IConfig;
 
@@ -143,6 +144,31 @@ class DoctorTest extends DbTestCase {
 		$this->assertSame('ok', $this->statusOf('vector_index'));
 		$this->app()->exec("INSERT INTO aps_search.file_state (file_id, etag, text_state, vec_state) VALUES (1, 'e', 'indexed', 'failed')");
 		$this->assertSame('warn', $this->statusOf('vector_failures'));
+	}
+
+	public function testAFailureInABuildingGenerationIsAWarningAndRetryFailedQueuesItAgain(): void {
+		[$f, $g] = [1, 2];
+		$this->profile();
+		$a = $this->app();
+		foreach ([$f, $g] as $id) {
+			$a->exec("INSERT INTO aps_search.file_state (file_id, etag, text_state) VALUES ($id, 'e1', 'indexed')");
+			$a->exec("INSERT INTO aps_search.chunk (file_id, page_no, ord, text) VALUES ($id, 1, 0, 't')");
+		}
+		$a->exec("INSERT INTO aps_search.chunk_vec_1 (chunk_id, file_id, vec) SELECT chunk_id, file_id, '[1,0,0]' FROM aps_search.chunk WHERE file_id = $f");
+		$a->exec('SELECT aps_search.enqueue_vec_backfill(1, 10)');
+		$this->giveUpVecJob($this->claimVecJob());                          // the active generation gives up on G
+		$a->exec("SELECT aps_search.create_generation(2, 'bge-m3', 'bge-m3:567m', 'sha256:new', 3, 'f16', '', '', 512)");
+		$a->exec('SELECT aps_search.enqueue_vec_backfill(2, 1)');
+		$this->giveUpVecJob($this->claimVecJob());                          // generation 2, still building, gives up on F
+		$r = $this->checks()['vector_failures'];
+		$this->assertSame('warn', $r['status']);
+		$this->assertStringStartsWith('2 file(s)', $r['detail'], "F's failure counts although searches do not use generation 2 yet");
+		$db = new IndexDb($this->connection($this->app()));
+		$backfill = new VecBackfill($db, new Settings($db));
+		$this->assertSame(2, $backfill->retryFailed());
+		$this->assertSame('ok', $this->statusOf('vector_failures'));
+		$backfill->tick(100);
+		$this->assertSame(1, (int)$a->query("SELECT count(*) FROM aps_search.job WHERE lane = 'vec' AND file_id = $f AND gen = 2")->fetchColumn(), 'generation 2 tries F again');
 	}
 
 	public function testNothingSecretOrTextCanAppearInTheReport(): void {

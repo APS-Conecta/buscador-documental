@@ -127,6 +127,82 @@ class VecBackfillTest extends DbTestCase {
 		$this->assertSame(1, $idx($this));
 	}
 
+	/** @return list<string> idem keys of the file's vec jobs, in generation order */
+	private function vecJobs(int $file): array {
+		return $this->app()->query("SELECT idem_key FROM aps_search.job WHERE lane = 'vec' AND file_id = $file ORDER BY gen")->fetchAll(\PDO::FETCH_COLUMN);
+	}
+
+	public function testABuildingGenerationStopsRequeuingAFileItGaveUpOn(): void {
+		$this->gen(1, 'active');
+		$this->embed(1, $this->indexed(7), 7);
+		$this->gen(2);
+		$this->backfill()->tick(100);
+		$c = $this->claimVecJob();
+		$this->assertSame(['7:e1:2'], [$this->vecJobs(7)[0]], 'only generation 2 lacks the vectors');
+		$this->giveUpVecJob($c);
+		$this->backfill()->tick(100);
+		$this->assertSame([], $this->vecJobs(7), 'the generation that gave up does not queue the file again');
+	}
+
+	public function testANewGenerationQueuesAFileThatFailedOnlyInTheActiveOne(): void {
+		$this->indexed(7);
+		$this->gen(1, 'active');
+		$this->backfill()->tick(100);
+		$this->giveUpVecJob($this->claimVecJob());
+		$this->gen(2);
+		$this->backfill()->tick(100);
+		$this->assertSame(['7:e1:2'], $this->vecJobs(7), 'generation 2 gets its own try; generation 1 does not try again');
+	}
+
+	public function testAFailureInTheActiveGenerationStillStopsItsRequeue(): void {
+		$this->indexed(7);
+		$this->gen(1, 'active');
+		$this->backfill()->tick(100);
+		$this->giveUpVecJob($this->claimVecJob());
+		$this->backfill()->tick(100);
+		$this->assertSame([], $this->vecJobs(7));
+		$this->assertSame('failed', $this->app()->query('SELECT vec_state FROM aps_search.file_state WHERE file_id = 7')->fetchColumn());
+	}
+
+	public function testTheAttemptsCapRecordsAFailureForTheJobsGeneration(): void {
+		$this->gen(1, 'active');
+		$this->embed(1, $this->indexed(7), 7);
+		$this->gen(2);
+		$this->backfill()->tick(100);
+		$this->claimVecJob();
+		$this->app()->exec("UPDATE aps_search.job SET attempts = 5, lease_until = now() - interval '1 second' WHERE lane = 'vec'");
+		$this->worker()->query("SELECT * FROM aps_search.claim_job('vec', 1, 'other', 900)")->fetchAll();     // runs the give-up step
+		$this->assertSame([], $this->vecJobs(7), 'given up after five claims');
+		$this->backfill()->tick(100);
+		$this->assertSame([], $this->vecJobs(7), 'and generation 2 does not queue it again');
+	}
+
+	public function testNewTextClearsFailureRecordsAndQueuesEveryLiveGeneration(): void {
+		$this->gen(1, 'active');
+		$this->embed(1, $this->indexed(7), 7);
+		$this->gen(2);
+		$this->backfill()->tick(100);
+		$this->giveUpVecJob($this->claimVecJob());                          // generation 2 gave up on file 7
+		$this->app()->exec("INSERT INTO aps_search.job (lane, file_id, idem_key) VALUES ('text', 7, '7:e1:again')");
+		$w = $this->worker();
+		$this->write($w, $this->claim($w));                                 // the file is read again
+		$this->app()->exec("DELETE FROM aps_search.job WHERE lane = 'vec'");     // leave the queueing to the backfill
+		$this->backfill()->tick(100);
+		$this->assertSame(['7:e1:1', '7:e1:2'], $this->vecJobs(7));
+	}
+
+	public function testAGiveUpForAnOlderVersionRecordsNothing(): void {
+		$this->indexed(7);
+		$this->gen(1, 'active');
+		$this->backfill()->tick(100);
+		$c = $this->claimVecJob();
+		$this->app()->exec("UPDATE aps_search.file_state SET etag = 'e2' WHERE file_id = 7");       // the file changed meanwhile
+		$this->giveUpVecJob($c);
+		$this->assertSame('pending', $this->app()->query('SELECT vec_state FROM aps_search.file_state WHERE file_id = 7')->fetchColumn());
+		$this->backfill()->tick(100);
+		$this->assertSame(['7:e2:1'], $this->vecJobs(7), 'the new version gets its own job');
+	}
+
 	public function testRetryFailedPutsFailedFilesBackInTheQueue(): void {
 		$this->indexed(1);
 		$this->indexed(2);

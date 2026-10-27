@@ -58,7 +58,7 @@ DO $$ DECLARE t text; BEGIN
 	END LOOP;
 END $$;
 SQL);
-		$app->exec('TRUNCATE aps_search.job, aps_search.page, aps_search.chunk, aps_search.file_state, aps_search.file_meta, aps_search.file_acl, aps_search.outbox, aps_search.tombstone, aps_search.audit_log, aps_search.scope_rule, aps_search.reconcile_run, aps_search.purge_pending, aps_search.pseudonym, aps_search.reconcile_node, aps_search.worker_seen RESTART IDENTITY; DROP TABLE IF EXISTS oc_filecache, oc_storages, oc_group_folders, oc_group_folders_groups, oc_group_folders_acl, oc_mimetypes, oc_systemtag, oc_systemtag_object_mapping; DELETE FROM aps_search.settings');
+		$app->exec('TRUNCATE aps_search.job, aps_search.page, aps_search.chunk, aps_search.file_state, aps_search.file_meta, aps_search.file_acl, aps_search.outbox, aps_search.tombstone, aps_search.audit_log, aps_search.scope_rule, aps_search.reconcile_run, aps_search.purge_pending, aps_search.pseudonym, aps_search.reconcile_node, aps_search.worker_seen, aps_search.vec_failure RESTART IDENTITY; DROP TABLE IF EXISTS oc_filecache, oc_storages, oc_group_folders, oc_group_folders_groups, oc_group_folders_acl, oc_mimetypes, oc_systemtag, oc_systemtag_object_mapping; DELETE FROM aps_search.settings');
 		$app->exec('DELETE FROM aps_search.embedding_profile; TRUNCATE aps_search.search_snapshot');
 	}
 
@@ -108,6 +108,20 @@ SQL);
 		$s->execute(['text', $who, $lease]);
 		$r = $s->fetch(PDO::FETCH_ASSOC);
 		return $r === false ? null : array_map(static fn ($v) => is_numeric($v) ? (int)$v : $v, $r);
+	}
+
+	/** @return array{job_id:int, lease_epoch:int, file_id:int, etag:string} the next vec job, claimed as the worker */
+	protected function claimVecJob(): array {
+		$s = $this->worker()->prepare("SELECT * FROM aps_search.claim_job('vec', 1, 'vec-w', 900)");
+		$s->execute();
+		$r = $s->fetch(PDO::FETCH_ASSOC);
+		$this->assertIsArray($r, 'a vec job to claim');
+		return array_map(static fn ($v) => is_numeric($v) ? (int)$v : $v, $r);
+	}
+
+	/** What the worker does when embedding a claimed vec job fails for good: fail_job with a reason that is not retryable. */
+	protected function giveUpVecJob(array $claim): void {
+		$this->worker()->prepare("SELECT aps_search.fail_job(?, ?, 'embed_failed', false)")->execute([$claim['job_id'], $claim['lease_epoch']]);
 	}
 
 	protected function write(PDO $pdo, array $claim, array $over = []): void {
