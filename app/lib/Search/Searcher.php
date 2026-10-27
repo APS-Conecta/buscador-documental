@@ -100,7 +100,7 @@ class Searcher {
 			$this->logger->warning('buscador_documental: exclusion state unavailable, search refused (' . get_class($e) . ')');
 			return $this->empty('unavailable', 'La búsqueda no está disponible en este momento.');
 		} catch (Throwable $e) {
-			if (str_contains($e->getMessage(), 'statement timeout')) {
+			if (IndexDb::timedOut($e)) {
 				return $this->empty('too_many', 'Demasiados resultados: acote la búsqueda con más términos.');
 			}
 			$this->logger->error('buscador_documental: search failed (' . get_class($e) . ')');
