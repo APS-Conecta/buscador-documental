@@ -18,8 +18,8 @@ class S4SchemaTest extends DbTestCase {
 	}
 
 	public function testSchemaVersionIsAtLeastThreeAndCurrent(): void {
-		$this->assertSame(7, (int)$this->app()->query('SELECT schema_ver FROM aps_search.schema_meta')->fetchColumn());
-		$this->assertSame(7, (int)$this->worker()->query('SELECT aps_search.schema_version()')->fetchColumn());
+		$this->assertSame(8, (int)$this->app()->query('SELECT schema_ver FROM aps_search.schema_meta')->fetchColumn());
+		$this->assertSame(8, (int)$this->worker()->query('SELECT aps_search.schema_version()')->fetchColumn());
 	}
 
 	public function testNewTablesAndColumnsExist(): void {

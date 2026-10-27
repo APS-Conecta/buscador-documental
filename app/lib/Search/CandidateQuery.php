@@ -35,28 +35,30 @@ class CandidateQuery {
 	 * the OR form, false = strict only.
 	 *
 	 * @param list<array{0: string, 1: string}> $pairs
-	 * @return list<array{file_id: int, chunk_id: int}>
+	 * @return array{0: list<array{file_id: int, chunk_id: int}>, 1: bool} the candidates, and whether a candidate window of a pass
+	 *         that shaped them was full (older matches were not ranked)
 	 */
 	public function exacta(string $query, array $pairs, string $principalSet, Filters $filters, int $limit, ?bool $relax = null): array {
 		$strict = [];
+		$strictFull = false;
 		$words = $this->words($query);
 		$common = $words === [] ? [] : $this->commonTerms($words);
 		if ($relax !== true) {
 			// A required word that is not common narrows the matches a lot: let the word index lead (see fts()).
-			$strict = $this->fts($this->strictTsquery($query, $pairs), $principalSet, $filters, $limit, array_diff($words, $common) !== []);
+			[$strict, $strictFull] = $this->fts($this->strictTsquery($query, $pairs), $principalSet, $filters, $limit, array_diff($words, $common) !== []);
 		}
 		if ($relax === false || ($relax === null && count($strict) >= self::THIN)) {
-			return $strict;
+			return [$strict, $strictFull];
 		}
 		$or = $this->relaxedTsquery($query, array_column($pairs, 1));
 		if ($or === null) {
-			return $strict;
+			return [$strict, $strictFull];
 		}
-		$relaxed = $this->fts($or, $principalSet, $filters, $limit, array_diff($words, $common) !== []);
+		[$relaxed, $relaxedFull] = $this->fts($or, $principalSet, $filters, $limit, array_diff($words, $common) !== []);
 		if ($strict === []) {
-			return $relaxed;
+			return [$relaxed, $relaxedFull];
 		}
-		return array_slice(Rrf::fuse([$strict, $relaxed], $limit), 0, $limit);        // strict matches keep their lead
+		return [array_slice(Rrf::fuse([$strict, $relaxed], $limit), 0, $limit), $strictFull || $relaxedFull];        // strict matches keep their lead
 	}
 
 	/**
@@ -227,7 +229,10 @@ class CandidateQuery {
 		return $this->narrowMemo[$key] ??= $this->accessibleFiles($principalSet, $filters, $this->narrowFiles) < $this->narrowFiles;
 	}
 
-	/** @param array{0: string, 1: list<string>} $tsquery @return list<array{file_id: int, chunk_id: int}> */
+	/**
+	 * @param array{0: string, 1: list<string>} $tsquery
+	 * @return array{0: list<array{file_id: int, chunk_id: int}>, 1: bool} the best chunk per file, and whether the candidate window was full
+	 */
 	private function fts(array $tsquery, string $principalSet, Filters $filters, int $limit, bool $wordsLead = false): array {
 		[$qsql, $qparams] = $tsquery;
 		[$fsql, $fparams] = $filters->sql('c');
@@ -254,7 +259,7 @@ class CandidateQuery {
 					SELECT DISTINCT ON (file_id) file_id, chunk_id, ts_rank(tsv, ($qsql)) AS rank FROM cand
 					ORDER BY file_id, rank DESC, chunk_id DESC
 				)
-				SELECT file_id, chunk_id FROM best ORDER BY rank DESC, file_id LIMIT ?";
+				SELECT file_id, chunk_id, (SELECT count(*) FROM cand) AS n FROM best ORDER BY rank DESC, file_id LIMIT ?";
 			$params = [$principalSet, ...$qparams, ...$fparams, ...$qparams, $limit];
 		} else {
 			// Common words and a reader of many files: walk the newest chunks and test each match's file as a row filter. As a join
@@ -273,11 +278,11 @@ class CandidateQuery {
 					SELECT DISTINCT ON (file_id) file_id, chunk_id, ts_rank(tsv, ($qsql)) AS rank FROM cand
 					ORDER BY file_id, rank DESC, chunk_id DESC
 				)
-				SELECT file_id, chunk_id FROM best ORDER BY rank DESC, file_id LIMIT ?";
+				SELECT file_id, chunk_id, (SELECT count(*) FROM cand) AS n FROM best ORDER BY rank DESC, file_id LIMIT ?";
 			$params = [...$qparams, $principalSet, ...$fparams, ...$qparams, $limit];
 		}
 		$rows = $this->db->rows($sql, $params);
-		return $this->shape($rows);
+		return [$this->shape($rows), $rows !== [] && (int)$rows[0]['n'] >= $cap];
 	}
 
 	/** @param list<array<string, mixed>> $rows @return list<array{file_id: int, chunk_id: int}> */

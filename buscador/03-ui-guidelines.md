@@ -43,7 +43,7 @@ Use `NcButton` variants only. **Primary:** "Buscar" (search form), "Abrir en la 
 - **Pager:** "Anterior", numbered pages (first, last, current ±1, ellipsis), "Siguiente". Summary line "Mostrando 26–50 de 87 documentos" (`aria-live="polite"`). Changing size, order or any filter returns to page 1.
 - **Order ("Ordenar por"):** Relevancia (default with a query), Más recientes, Más antiguos, Nombre (A-Z), Nombre (Z-A). Without a query the default is Más recientes.
 - **Filters:** Tipo (PDF, Documentos, Planillas, Imágenes), Carpeta / carpeta de equipo, Modificado (cualquier fecha, última semana, último mes, último año, rango), Propiedad (Todos, Mis archivos, Compartidos conmigo), "Solo con lectura incierta". The navigation scopes set Propiedad and the low-confidence filter; "Quitar filtros" resets everything.
-- **Depth cap:** at most the first 100 readable matches (`LISTED`, ADR-0010 amendment) are paged ("Se muestran los primeros 100; afine su búsqueda"); the total is shown exactly below the cap and as "más de 99" at it.
+- **Depth cap:** at most the first 100 readable matches (`LISTED`, ADR-0010 amendment) are paged. When the list is incomplete (the `LISTED` bound, or, counted before the recheck, the 1 000 `CAP` or a full keyword candidate window in Exacta) the page says "Puede haber más documentos de los que se muestran; afine su búsqueda" and the total is shown as a lower bound ("más de …"); otherwise it is exact.
 - **Selection:** clicking a card (or its title) selects it and opens the sidebar; "Abrir en la página N" opens the file.
 
 ## Principles

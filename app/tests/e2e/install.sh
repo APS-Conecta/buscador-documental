@@ -26,8 +26,8 @@ $C cp "$TARBALL" nextcloud:/tmp/app.tar.gz
 $C exec -T nextcloud sh -c 'tar xzf /tmp/app.tar.gz -C /var/www/html/custom_apps && chown -R www-data:www-data /var/www/html/custom_apps/buscador_documental'
 $OCC app:enable buscador_documental ${NC_FORCE:+--force} >/dev/null || die "the app did not enable"
 ok "the app enabled on a clean install ($($OCC app:list | grep -c buscador_documental) listing)"
-[ "$($PSQL -c 'select schema_ver from aps_search.schema_meta')" = 7 ] || die "schema was not created at version 7"
-ok "the index schema was created (version 7)"
+[ "$($PSQL -c 'select schema_ver from aps_search.schema_meta')" = 8 ] || die "schema was not created at version 8"
+ok "the index schema was created (version 8)"
 $OCC config:system:set trusted_domains 2 --value=nextcloud >/dev/null
 # The suite adopts its generated worker secret from the environment (issue 43); a repeated run is a no-op.
 $C exec -T --user www-data -e BD_WORKER_SECRET="$SECRET" nextcloud php occ buscador:adopt-secret >/dev/null || die "the worker secret was not adopted from the environment"
