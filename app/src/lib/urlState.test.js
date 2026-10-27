@@ -39,7 +39,7 @@ describe('urlState', () => {
 		expect(from('week', lateEvening)).toBe('2026-10-20')
 		expect(from('month', lateEvening)).toBe('2026-09-27')
 		expect(from('year', lateEvening)).toBe('2025-10-27')
-		// 2026-09-11 23:30 -04: a week back crosses the 23-hour 2026-09-06, so it is calendar days, not 7 x 24 h.
+		// 2026-09-12 00:30 -03: 7 x 24 h back lands on 2026-09-04 23:30 -04 across the 23-hour 2026-09-06, so it must count calendar days.
 		expect(from('week', new Date('2026-09-12T03:30:00Z'))).toBe('2026-09-05')
 	})
 
