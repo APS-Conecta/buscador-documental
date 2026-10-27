@@ -53,10 +53,10 @@ class OutboxListener implements IEventListener {
 				}
 			} elseif ($event instanceof TagAssignedEvent || $event instanceof TagUnassignedEvent) {
 				if ($event->getObjectType() === 'files' && $this->hasExclusionTag($event->getTags())) {
-					$this->outbox->touchMany(array_map('intval', $event->getObjectIds()), 'file');
+					$this->outbox->touchMany(array_map('intval', $event->getObjectIds()), 'subtree');
 				}
 			} elseif ($event instanceof ManagerEvent) {
-				if ($event->getEvent() === ManagerEvent::EVENT_DELETE && $event->getTag()->getName() === ExclusionChecker::TAG_NAME) {
+				if ($event->getEvent() === ManagerEvent::EVENT_DELETE && ExclusionChecker::isExclusionTagName($event->getTag()->getName())) {
 					$this->outbox->touch(0, 'rule');
 				}
 			}
@@ -74,7 +74,7 @@ class OutboxListener implements IEventListener {
 	private function hasExclusionTag(array $tagIds): bool {
 		try {
 			foreach ($this->tags->getTagsByIds(array_map('strval', $tagIds)) as $tag) {
-				if ($tag->getName() === ExclusionChecker::TAG_NAME) {
+				if (ExclusionChecker::isExclusionTagName($tag->getName())) {
 					return true;
 				}
 			}

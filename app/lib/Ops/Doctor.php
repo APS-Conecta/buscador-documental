@@ -6,8 +6,10 @@ declare(strict_types=1);
 
 namespace OCA\BuscadorDocumental\Ops;
 
+use OCA\BuscadorDocumental\Acl\ExclusionChecker;
 use OCA\BuscadorDocumental\Db\IndexDb;
 use OCA\BuscadorDocumental\Scope\Settings;
+use OCA\BuscadorDocumental\Search\CandidateQuery;
 use OCA\BuscadorDocumental\Search\EmbedClient;
 use OCA\BuscadorDocumental\Search\ProbeFailed;
 use OCP\IAppConfig;
@@ -19,7 +21,7 @@ use OCP\IConfig;
  */
 class Doctor {
 	private const APP = 'buscador_documental';
-	public const SCHEMA = 5;
+	public const SCHEMA = 6;
 
 	public function __construct(
 		private IndexDb $db,
@@ -27,6 +29,8 @@ class Doctor {
 		private IAppConfig $appConfig,
 		private IConfig $config,
 		private EmbedClient $embed,
+		private CandidateQuery $candidates,
+		private ExclusionChecker $exclusion,
 	) {
 	}
 
@@ -57,6 +61,8 @@ class Doctor {
 
 		$secretLen = strlen($this->appConfig->getValueString(self::APP, 'worker_secret', ''));
 		$c[] = $this->check('worker_secret', $secretLen >= 32 ? 'ok' : 'fail', $secretLen >= 32 ? 'configured' : 'not configured or shorter than 32 characters');
+		$tag = $this->exclusion->excludedTagIds() !== [];
+		$c[] = $this->check('exclusion_tag', $tag ? 'ok' : 'fail', $tag ? 'exists' : 'missing: no folder can be excluded until it exists; occ tag:add rag-excluded public creates it');
 
 		$paused = $this->settings->isPaused();
 		$c[] = $this->check('paused', $paused ? 'warn' : 'ok', $paused ? 'reading is paused: occ buscador:resume' : 'running');
@@ -140,7 +146,7 @@ class Doctor {
 		$missing = 0;
 		foreach ($gens as $row) {
 			if ($row['state'] !== 'building') {
-				$missing += $this->db->rows("SELECT 1 FROM pg_indexes WHERE schemaname = 'aps_search' AND tablename = ? AND indexdef ILIKE '%hnsw%'", ['chunk_vec_' . (int)$row['gen']]) === [] ? 1 : 0;
+				$missing += !$this->candidates->hasAnnIndex((int)$row['gen']) ? 1 : 0;
 			}
 		}
 		$out[] = $this->check('vector_index', $missing === 0 ? 'ok' : 'warn', $missing === 0 ? 'present' : "$missing generation(s) without the vector index: searches would scan everything; occ buscador:profile refresh builds it");
