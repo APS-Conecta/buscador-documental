@@ -36,8 +36,10 @@ class GiveUpGuardSchemaTest extends DbTestCase {
 				}
 			}
 			$this->assertSame(6, (int)$app->query('SELECT schema_ver FROM aps_search.schema_meta')->fetchColumn());
-			foreach (SqlScript::upgradeToV7() as $st) {                       // schema 7 redefines both functions on top of this guard
-				$app->exec($st);
+			foreach ([SqlScript::upgradeToV7(), SqlScript::upgradeToV8(), SqlScript::upgradeToV9()] as $step) {   // as a fresh install runs them: 7 redefines both functions, 9 fail_job
+				foreach ($step as $st) {
+					$app->exec($st);
+				}
 			}
 			$this->assertSame($this->definitions($this->app()), $this->definitions($app), 'an upgraded instance runs what a fresh install runs');
 		} finally {

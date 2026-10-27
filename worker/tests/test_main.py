@@ -67,6 +67,14 @@ def test_oversized_file_is_failed_before_download():
     assert not api.downloaded
 
 
+def test_a_server_encrypted_file_is_skipped_as_such_before_any_byte_is_fetched():
+    """The meta `encrypted` flag is Nextcloud server-side encryption, not a document password (issue 64)."""
+    conn, api = FakeConn(), FakeApi(meta={"mime": "application/pdf", "etag": "e", "size": 4, "encrypted": True})
+    assert run(conn, api) == "failed:server_encrypted"
+    assert [c[1] for c in conn.calls if "fail_job" in c[0]] == [(1, 1, "server_encrypted", False)]
+    assert not api.downloaded
+
+
 def test_too_many_pages_is_failed_not_crashed(monkeypatch):
     monkeypatch.setattr(main, "parse", lambda *a: {"status": "ok", "pages": ["x"] * (main.MAX_PAGES + 1)})
     conn = FakeConn()
@@ -245,7 +253,7 @@ def test_the_supported_schema_passes():
     main.check_schema(VersionConn(main.SUPPORTED_SCHEMA))
 
 
-@pytest.mark.parametrize("version", [1, 2, 3, 4, 5, 6, 7, 9, 99])
+@pytest.mark.parametrize("version", [1, 2, 3, 4, 5, 6, 7, 8, 10, 99])
 def test_an_unknown_schema_stops_the_worker_with_a_clear_message(version):
     with pytest.raises(SystemExit) as e:
         main.check_schema(VersionConn(version))

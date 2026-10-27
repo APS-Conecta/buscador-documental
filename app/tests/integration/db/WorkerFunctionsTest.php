@@ -235,6 +235,16 @@ class WorkerFunctionsTest extends DbTestCase {
 		$this->assertStringContainsString('invalid reason', $this->failure(fn () => $w->exec("SELECT aps_search.fail_job(1, 1, 'zip bomb', false)")));
 	}
 
+	public function testServerEncryptedIsAValidSkipReasonAndFreeTextStillIsNot(): void {
+		$this->seedFile(10);
+		$w = $this->worker();
+		$c = $this->claim($w);
+		$w->prepare('SELECT aps_search.fail_job(?, ?, ?, false)')->execute([$c['job_id'], $c['lease_epoch'], 'server_encrypted']);
+		$st = self::connect('nextcloud', 'dev', self::$dbName)->query('SELECT text_state, skip_reason FROM aps_search.file_state WHERE file_id = 10')->fetch(\PDO::FETCH_ASSOC);
+		$this->assertSame(['text_state' => 'skipped', 'skip_reason' => 'server_encrypted'], $st);
+		$this->assertStringContainsString('invalid reason', $this->failure(fn () => $w->exec("SELECT aps_search.fail_job(1, 1, 'server encrypted', false)")));
+	}
+
 	public function testAJobThatKeepsLosingItsLeaseIsSkippedInsteadOfReclaimedForever(): void {
 		$this->seedFile(10);
 		$w = $this->worker();

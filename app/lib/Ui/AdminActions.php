@@ -16,7 +16,7 @@ use OCA\BuscadorDocumental\Status\Reindexer;
 /** What the administration page can do. Every action is audited with the acting administrator (pseudonymised by the audit log). */
 class AdminActions {
 	/** Skip reasons that are a problem to look at; the policy ones (excluded, out of scope, trashed, user deleted) are not. */
-	public const PROBLEM_REASONS = ['encrypted', 'too_large', 'corrupt', 'unsupported', 'ocr_failed', 'timeout', 'internal', 'unsafe'];
+	public const PROBLEM_REASONS = ['encrypted', 'too_large', 'corrupt', 'unsupported', 'ocr_failed', 'timeout', 'internal', 'unsafe', 'server_encrypted'];
 
 	public function __construct(
 		private IndexDb $db,

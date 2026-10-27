@@ -12,6 +12,7 @@ use OCA\BuscadorDocumental\Scope\Settings;
 use OCA\BuscadorDocumental\Search\CandidateQuery;
 use OCA\BuscadorDocumental\Search\EmbedClient;
 use OCA\BuscadorDocumental\Search\ProbeFailed;
+use OCP\Encryption\IManager;
 use OCP\IAppConfig;
 use OCP\IConfig;
 
@@ -21,7 +22,7 @@ use OCP\IConfig;
  */
 class Doctor {
 	private const APP = 'buscador_documental';
-	public const SCHEMA = 8;
+	public const SCHEMA = 9;
 
 	public function __construct(
 		private IndexDb $db,
@@ -31,6 +32,7 @@ class Doctor {
 		private EmbedClient $embed,
 		private CandidateQuery $candidates,
 		private ExclusionChecker $exclusion,
+		private IManager $encryption,
 	) {
 	}
 
@@ -63,6 +65,8 @@ class Doctor {
 		$c[] = $this->check('worker_secret', $secretLen >= 32 ? 'ok' : 'fail', $secretLen >= 32 ? 'configured' : 'not configured or shorter than 32 characters');
 		$tag = $this->exclusion->excludedTagIds() !== [];
 		$c[] = $this->check('exclusion_tag', $tag ? 'ok' : 'fail', $tag ? 'exists' : 'missing: no folder can be excluded until it exists; occ tag:add rag-excluded public creates it');
+		$sse = $this->encryption->isEnabled();
+		$c[] = $this->check('server_encryption', $sse ? 'warn' : 'ok', $sse ? 'server-side encryption is on: the files it encrypts are skipped, so their content is not searchable' : 'off');
 
 		$paused = $this->settings->isPaused();
 		$c[] = $this->check('paused', $paused ? 'warn' : 'ok', $paused ? 'reading is paused: occ buscador:resume' : 'running');

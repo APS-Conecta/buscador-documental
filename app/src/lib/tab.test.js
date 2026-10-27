@@ -18,6 +18,12 @@ suite('describe (Files tab states)', () => {
 		expect(d.reread).toBe(true)
 	})
 
+	it('says a server-encrypted file is encrypted by the server, not protected by a password', () => {
+		const d = describe({ status: 'skipped', reason: 'server_encrypted' })
+		expect(d.text).toBe('No se pudo leer el documento: está cifrado en el servidor.')
+		expect(d.text).not.toContain('contraseña')
+	})
+
 	it('flags an uncertain reading from the average confidence', () => {
 		const d = describe({ status: 'indexed', truncated: false, pages: [{ page_no: 1, text: 'a', ocr_conf: 40, uncertain: true }, { page_no: 2, text: 'b', ocr_conf: 70, uncertain: false }] })
 		expect(d.confidence).toBe(55)

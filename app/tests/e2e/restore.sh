@@ -126,8 +126,8 @@ ok "a backup without its checksum file is refused"
 # a backup of another schema version is refused (the live schema here is the version the script supports)
 DBX sh -c 'rm -f /tmp/newer.bak*'
 $PSQL -c "UPDATE aps_search.schema_meta SET schema_ver = 99" >/dev/null
-DBX bash /tmp/backup.sh /tmp/newer.bak >/dev/null || { $PSQL -c "UPDATE aps_search.schema_meta SET schema_ver = 8" >/dev/null; die "could not back up the newer-schema copy"; }
-$PSQL -c "UPDATE aps_search.schema_meta SET schema_ver = 8" >/dev/null     # never leave the stack on a schema the worker refuses
+DBX bash /tmp/backup.sh /tmp/newer.bak >/dev/null || { $PSQL -c "UPDATE aps_search.schema_meta SET schema_ver = 9" >/dev/null; die "could not back up the newer-schema copy"; }
+$PSQL -c "UPDATE aps_search.schema_meta SET schema_ver = 9" >/dev/null     # never leave the stack on a schema the worker refuses
 BAD=$(DBX bash /tmp/restore.sh /tmp/newer.bak bd_restore_test 2>&1 || true); grep -q "holds schema version 99" <<<"$BAD" || die "a backup of a newer schema was not refused: $BAD"
 ok "a backup of a newer schema version is refused before anything is created"
 # a file altered by someone WITHOUT the key is refused even if they recompute the plain checksum

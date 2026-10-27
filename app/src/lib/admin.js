@@ -8,6 +8,7 @@ export const REASONS = {
 	timeout: 'Tardó demasiado',
 	internal: 'Error interno',
 	unsafe: 'Archivo no seguro',
+	server_encrypted: 'Cifrado en el servidor',
 }
 
 // For a sentence: "No se pudo leer el documento: <phrase>."
@@ -20,6 +21,7 @@ export const REASON_PHRASES = {
 	timeout: 'tardó demasiado en leerse',
 	internal: 'falló la lectura; puede pedir que se vuelva a leer',
 	unsafe: 'parece peligroso',
+	server_encrypted: 'está cifrado en el servidor',
 }
 
 export const CHECKS = {
@@ -28,6 +30,7 @@ export const CHECKS = {
 	extension_unaccent: 'Búsqueda sin tildes',
 	worker_secret: 'Clave del servicio de lectura',
 	exclusion_tag: 'Etiqueta de exclusión',
+	server_encryption: 'Cifrado en el servidor',
 	paused: 'Lectura de documentos',
 	worker_alive: 'Servicio de lectura',
 	background_jobs: 'Tareas en segundo plano',
