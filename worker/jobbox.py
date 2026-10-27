@@ -6,13 +6,14 @@ The supervisor copies the input to <work>/in/<id>.bin and writes <work>/in/<id>.
 no network and no secrets; the files are the whole interface. The child gets (request path, result path) as argv.
 
 Both sides treat the other as untrusted: the parser survives any malformed request (it answers with an error and removes
-the file), and the supervisor reads an answer only through a non-following, size-capped open."""
+the file), and the supervisor reads an answer only through a non-following, regular-file-only, size-capped open."""
 import json
 import os
 import re
 import resource
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import time
@@ -59,13 +60,29 @@ def _unlink(*paths: str) -> None:
             pass
 
 
+def _create(path: str, mode: str = "w"):
+    """Unlinks the name, then creates the file exclusively without following symlinks."""
+    _unlink(path)
+    return os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600), mode)
+
+
+def _open_regular(path: str):
+    """Opens path for reading only if it is a regular file: no symlink is followed, and the type is checked on the
+    descriptor, which is opened non-blocking. Errors from the open itself propagate unchanged."""
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+        os.close(fd)
+        raise OSError("not a regular file")
+    return os.fdopen(fd, "rb")
+
+
 def _read_answer(path: str) -> dict:
-    """Opens without following symlinks and refuses oversized files before loading them."""
+    """Opens only a regular file, without following symlinks, and refuses oversized files before loading them."""
     try:
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        fh = _open_regular(path)
     except OSError:
         return {"status": "error", "reason": "ocr_failed", "detail": "answer is not a regular file"}
-    with os.fdopen(fd, "rb") as fh:
+    with fh:
         if os.fstat(fh.fileno()).st_size > RESULT_MAX:
             return {"status": "error", "reason": "ocr_failed", "detail": "answer too large"}
         try:
@@ -84,10 +101,10 @@ def submit(work: str, job_id: str, src: str, request: dict, timeout: int, grace:
     res = os.path.join(work, "out", f"{job_id}.json")
     _unlink(res, res + ".final", res + ".err", binp, req, req + ".tmp")   # ids repeat after a database reset: start clean
     try:
-        with open(src, "rb") as fin, os.fdopen(os.open(binp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600), "wb") as fout:
+        with open(src, "rb") as fin, _create(binp, "wb") as fout:
             shutil.copyfileobj(fin, fout, 1024 * 1024)
         tmp = req + ".tmp"
-        with open(tmp, "w") as fh:
+        with _create(tmp) as fh:
             json.dump({**request, "input": binp, "timeout": timeout}, fh)
         os.replace(tmp, req)                       # the parser only sees complete requests
         deadline = time.monotonic() + timeout + grace
@@ -108,7 +125,7 @@ def _limits():
 def run_child(cmd: list, req: str, res: str, timeout: int) -> dict:
     """Runs one child in its own session; on timeout the whole group is killed."""
     errp = res + ".err"
-    with open(errp, "wb") as errf:
+    with _create(errp, "wb") as errf:
         p = subprocess.Popen(cmd + [req, res], start_new_session=True, stdin=subprocess.DEVNULL,
                              stdout=subprocess.DEVNULL, stderr=errf, preexec_fn=_limits)
     try:
@@ -122,16 +139,15 @@ def run_child(cmd: list, req: str, res: str, timeout: int) -> dict:
             os.killpg(p.pid, signal.SIGKILL)   # stray grandchildren of a child that exited
         except ProcessLookupError:
             pass
-    if os.path.lexists(res) and not os.path.islink(res):
-        try:
-            with open(res) as fh:
-                return json.load(fh)
-        except (ValueError, RecursionError):
-            pass
+    try:
+        with _open_regular(res) as fh:
+            return json.load(fh)
+    except (OSError, ValueError, RecursionError):
+        pass
     tail = ""
     if os.environ.get("BD_DEBUG_PARSER") == "1":
         try:
-            with open(errp, "rb") as fh:
+            with _open_regular(errp) as fh:
                 fh.seek(0, os.SEEK_END)
                 fh.seek(max(0, fh.tell() - ERR_TAIL))
                 tail = fh.read(ERR_TAIL).decode("utf-8", "replace")      # may hold document text: debugging only (A-SEC-5)
@@ -142,7 +158,7 @@ def run_child(cmd: list, req: str, res: str, timeout: int) -> dict:
 
 def _answer(work: str, job_id: str, answer: dict) -> None:
     final = os.path.join(work, "out", f"{job_id}.json")
-    with open(final + ".final", "w") as fh:
+    with _create(final + ".final") as fh:
         json.dump(answer, fh)
     os.replace(final + ".final", final)
 
@@ -163,7 +179,7 @@ def serve_once(work: str, child_cmd: list = None, wait: float = 1.0) -> bool:
                 _unlink(req, binp)
                 continue
             try:
-                with open(req) as fh:
+                with _open_regular(req) as fh:
                     body = json.load(fh)
                 timeout = body["timeout"]
                 if not isinstance(timeout, int) or isinstance(timeout, bool) or not 1 <= timeout <= MAX_TIMEOUT:
