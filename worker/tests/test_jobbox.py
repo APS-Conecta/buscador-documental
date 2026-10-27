@@ -3,6 +3,7 @@
 import json
 import os
 import sys
+import tempfile
 import threading
 import time
 
@@ -339,3 +340,59 @@ def test_a_fifo_in_the_request_directory_gets_an_error_answer(work):
     assert not os.listdir(os.path.join(work, "in"))
     ans = json.load(open(os.path.join(work, "out", "a0.json")))
     assert ans["status"] == "error" and ans["reason"] == "internal"
+
+
+# ---------- a child's temp files never outlive it ----------
+@pytest.fixture
+def temp_root(tmp_path, monkeypatch):
+    """Stands in for the parser's /tmp tmpfs: the daemon's and the children's default temp directory."""
+    root = tmp_path / "root"
+    root.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(root))
+    monkeypatch.setenv("TMPDIR", str(root))
+    return root
+
+
+def test_a_timed_out_child_leaves_no_temp_files(temp_root, tmp_path):
+    witness = tmp_path / "witness.json"
+    code = ("import json,os,subprocess,sys,tempfile,time;"
+            "d=tempfile.mkdtemp(); open(os.path.join(d,'page.png'),'w').write('x');"
+            "f=tempfile.mkstemp()[1];"
+            "g=subprocess.run([sys.executable,'-c','import tempfile; print(tempfile.mkdtemp())'],"
+            "capture_output=True,text=True).stdout.strip();"
+            f"open(r'{witness}','w').write(json.dumps([d,f,g]));"
+            "time.sleep(60)")
+    out = jobbox.run_child(child(code), str(tmp_path / "req.json"), str(tmp_path / "res.json"), timeout=2)
+    assert out == {"status": "error", "reason": "timeout"}
+    left = json.loads(witness.read_text())
+    assert len(left) == 3, "the child created its temp files before it was killed"
+    assert [p for p in left if os.path.lexists(p)] == []
+    assert list(temp_root.iterdir()) == []
+
+
+def test_a_child_that_exits_leaves_no_temp_files_and_its_answer_is_delivered(temp_root, tmp_path):
+    code = ("import json,os,sys,tempfile;"
+            "tempfile.mkstemp();"
+            "d=tempfile.mkdtemp(); open(os.path.join(d,'page.pdf'),'w').write('x');"
+            "os.chmod(d,0o500);"   # a read-only directory defeats a plain rmtree under the image's non-root uid 10001
+            "json.dump({'status':'ok','pages':['x']}, open(sys.argv[2],'w'))")
+    out = jobbox.run_child(child(code), str(tmp_path / "req.json"), str(tmp_path / "res.json"), timeout=10)
+    assert out == {"status": "ok", "pages": ["x"]}
+    assert list(temp_root.iterdir()) == []
+
+
+def test_cleanup_spares_other_requests_and_the_heartbeat(work, temp_root):
+    ready = temp_root / "ready"
+    ready.touch()
+    inbox = os.path.join(work, "in")
+    for job_id in ("a1", "b2"):                          # b2 sorts after a1: it stays pending
+        open(os.path.join(inbox, f"{job_id}.bin"), "wb").write(b"%PDF")
+        write_req(work, job_id, '{"timeout": 10}')
+    code = ("import json,os,sys,tempfile; t=tempfile.gettempdir();"
+            f"os.symlink(r'{ready}', os.path.join(t,'ready-link')); os.symlink(r'{inbox}', os.path.join(t,'in-link'));"
+            "json.dump({'status':'ok','pages':['x']}, open(sys.argv[2],'w'))")
+    assert jobbox.serve_once(work, child(code), wait=0) is True
+    assert ready.exists()
+    assert os.path.exists(os.path.join(inbox, "b2.bin")) and os.path.exists(os.path.join(inbox, "b2.req.json"))
+    assert json.load(open(os.path.join(work, "out", "a1.json"))) == {"status": "ok", "pages": ["x"]}
+    assert sorted(os.listdir(temp_root)) == ["ready"]
