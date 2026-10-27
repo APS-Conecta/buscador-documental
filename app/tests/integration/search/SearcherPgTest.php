@@ -270,4 +270,17 @@ class SearcherPgTest extends DbTestCase {
 			$this->assertSame([2], $this->ids($this->searcher()->search('b', $this->req(['mode' => $mode, 'filters' => ['uncertain' => true]]))), "$mode uncertain");
 		}
 	}
+
+	public function testAStatementTimeoutIsRecognisedByItsSqlStateAndLeavesTheConnectionUsable(): void {
+		$db = $this->db();
+		$e = null;
+		try {
+			$db->withTimeout(1, fn () => $db->rows('SELECT pg_sleep(1)'));
+		} catch (\Throwable $caught) {
+			$e = $caught;
+		}
+		$this->assertNotNull($e);
+		$this->assertTrue(IndexDb::timedOut($e));
+		$this->assertSame(1, (int)$db->rows('SELECT 1 AS one')[0]['one'], 'the timed-out transaction was rolled back');
+	}
 }
