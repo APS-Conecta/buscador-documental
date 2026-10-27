@@ -111,7 +111,7 @@ class OutboxListenerTest extends TestCase {
 		$l = $this->listener();
 		$l->handle(new TagAssignedEvent('files', ['7'], [5]));
 		$l->handle(new TagUnassignedEvent('files', ['8'], [5]));
-		$this->assertSame([[7, 'file'], [8, 'file']], $this->touched);
+		$this->assertSame([[7, 'subtree'], [8, 'subtree']], $this->touched);
 	}
 
 	public function testAListenerNeverThrowsIntoTheRequestAndLogsOnlyTheClassName(): void {
