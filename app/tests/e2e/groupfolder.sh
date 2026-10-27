@@ -22,7 +22,7 @@ $OCC config:system:set trusted_domains 2 --value=nextcloud >/dev/null
 $OCC config:app:set buscador_documental worker_secret --value="$SECRET" --sensitive >/dev/null
 $C exec -T nextcloud chown www-data:www-data /var/www/html/custom_apps
 # The app comes from the Nextcloud app store: retry a few times, and say why when it cannot be installed (the output used to be hidden).
-if ! $OCC app:list 2>/dev/null | grep -q "groupfolders"; then
+if ! $OCC app:list 2>/dev/null | grep "groupfolders" >/dev/null; then
 	for attempt in 1 2 3 4; do
 		if OUT=$($OCC app:install groupfolders 2>&1); then break; fi
 		echo "  groupfolders install attempt $attempt failed: $OUT" >&2
@@ -57,7 +57,7 @@ STORAGE=$($PSQL -c "select s.id from oc_filecache f join oc_storages s on s.nume
 ok "file $FID lives on $STORAGE with path files/acta.txt (not under __groupfolders/ in the path)"
 
 $ENQ ensure-tag >/dev/null
-$ENQ enqueue "$FID" | grep -q enqueued || die "enqueue refused"
+$ENQ enqueue "$FID" | grep enqueued >/dev/null || die "enqueue refused"
 $C --profile worker run --rm --no-deps -T worker python3 main.py --once >/dev/null
 [ "$($PSQL -c "select text_state from aps_search.file_state where file_id=$FID")" = indexed ] || die "file not indexed"
 
