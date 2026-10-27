@@ -77,13 +77,24 @@ class OutboxProcessorTest extends DbTestCase {
 		return [$db, $rules, $settings, $processor, new Outbox($db), $audit];
 	}
 
-	private function indexedRow(int $id): void {
+	/** @param list<int> $ancestors the parent chain as of the file's last evaluation, closest first (FileIndexer) */
+	private function indexedRow(int $id, array $ancestors = []): void {
 		$a = $this->app();
 		$a->exec("INSERT INTO aps_search.file_state (file_id, etag, text_state) VALUES ($id, 'e', 'indexed')");
 		$a->exec("INSERT INTO aps_search.page (file_id, page_no, text) VALUES ($id, 1, 'x')");
 		$a->exec("INSERT INTO aps_search.chunk (file_id, page_no, ord, text) VALUES ($id, 1, 0, 'x')");
 		$a->exec("INSERT INTO aps_search.file_acl (file_id, principals) VALUES ($id, ARRAY['u:alice'])");
-		$a->exec("INSERT INTO aps_search.file_meta (file_id, name) VALUES ($id, 'x')");
+		$a->exec("INSERT INTO aps_search.file_meta (file_id, name, ancestors) VALUES ($id, 'x', '{" . implode(',', $ancestors) . "}')");
+	}
+
+	/** Changes the fixture's file cache the way Nextcloud does on a move (the app's DB user may only read it). */
+	private function alterFileCache(string $sql): void {
+		self::connect('postgres', 'dev', self::$dbName)->exec($sql);
+	}
+
+	/** @return list<int> the files waiting in the outbox */
+	private function queued(IndexDb $db): array {
+		return array_map('intval', array_column($db->rows("SELECT file_id FROM aps_search.outbox WHERE kind = 'file' ORDER BY file_id"), 'file_id'));
 	}
 
 	public function testAFileGoneFromNextcloudIsPurgedAndLeavesATombstone(): void {
@@ -162,10 +173,98 @@ class OutboxProcessorTest extends DbTestCase {
 	}
 
 	public function testAFolderEventExpandsToItsFilesOnly(): void {
-		[$db, , , $p] = $this->build();
+		[$db, $rules, , $p] = $this->build();
+		$rules->addFolder(10, 'occ');                                    // in scope, nothing below it indexed yet
 		$this->assertSame('expanded', $p->process(11, 'file'));                 // a folder arriving as a plain file event
-		$ids = array_map('intval', array_column($db->rows("SELECT file_id FROM aps_search.outbox WHERE kind = 'file' ORDER BY file_id"), 'file_id'));
-		$this->assertSame([13, 17], $ids, 'files under 11, never the folders themselves');
+		$this->assertSame([13, 17], $this->queued($db), 'files under 11, never the folders themselves');
+	}
+
+	public function testAnUnchangedInScopeFolderIsNotExpanded(): void {
+		[$db, $rules, , $p] = $this->build();
+		$rules->addFolder(10, 'occ');
+		$this->indexedRow(13, [12, 11, 10]);
+		$this->indexedRow(17, [12, 11, 10]);
+		$this->assertSame('folder_unchanged', $p->process(11, 'file'), 'a write below 11 only corrected its mtime');
+		$this->assertSame([], $this->queued($db), 'no descendant is evaluated again');
+	}
+
+	public function testAFolderOutsideTheScopeWithNothingIndexedAddsNoRows(): void {
+		[$db, $rules, , $p] = $this->build();
+		$rules->addFolder(20, 'occ');                                    // the team folder only, not alice's home
+		$this->assertSame('folder_unchanged', $p->process(10, 'file'), 'an upload to a home root that is not in scope');
+		$this->assertSame('folder_unchanged', $p->process(11, 'file'));
+		$this->assertSame([], $this->queued($db));
+	}
+
+	public function testATagChangeOnAFolderAlwaysExpands(): void {
+		[$db, $rules, , $p] = $this->build(['11' => ['3']]);            // rag-excluded assigned to 11
+		$rules->addFolder(10, 'occ');
+		$this->indexedRow(13, [12, 11, 10]);
+		$this->indexedRow(17, [12, 11, 10]);
+		$this->assertSame('expanded', $p->process(11, 'subtree'), 'parent and index unchanged, yet every verdict below changed');
+		$this->assertSame([13, 17], $this->queued($db));
+		$this->assertSame('erased_excluded', $p->process(13, 'file'));
+
+		[, , , $p] = $this->build();                                    // and removed again
+		$this->assertSame('expanded', $p->process(11, 'subtree'));
+		$this->assertSame('enqueued', $p->process(13, 'file'));
+		$this->assertSame('enqueued', $p->process(13, 'subtree'), 'a file tagged directly is evaluated like any file row');
+	}
+
+	public function testAnExcludedInScopeFolderWithNothingIndexedIsNotExpanded(): void {
+		[$db, $rules, , $p] = $this->build(['11' => ['3']]);
+		$rules->addFolder(10, 'occ');                                    // nothing below 11 is indexed: erasure removed it
+		$this->assertSame('folder_unchanged', $p->process(11, 'file'), 'a write below an excluded folder erases nothing again');
+		$this->assertSame([], $this->queued($db));
+	}
+
+	public function testAFolderWhoseExclusionStateIsUnavailableIsRetriedAndAddsNoRows(): void {
+		[$db, $rules, , $p] = $this->build(['11' => ['3']], new \RuntimeException('tag service down'));
+		$rules->addFolder(10, 'occ');
+		$this->assertSame('retry', $p->process(11, 'file'));
+		$this->assertSame([], $this->queued($db));
+	}
+
+	public function testAStorageRootIsNotExpandedOnEveryWrite(): void {
+		[$db, $rules, , $p] = $this->build();
+		$rules->addFolder(10, 'occ');
+		$this->indexedRow(13, [12, 11, 10]);                            // the chain stops at the root: its parent -1 is never stored
+		$this->assertSame('folder_unchanged', $p->process(10, 'file'));
+		$this->assertSame([], $this->queued($db));
+	}
+
+	public function testAFolderMovedToAnotherParentIsExpandedAndItsFilesFollow(): void {
+		[$db, $rules, , $p] = $this->build(tree: [12 => 14] + self::TREE);
+		$rules->addFolder(11, 'occ');
+		$this->indexedRow(13, [12, 11, 10]);
+		$this->indexedRow(17, [12, 11, 10]);
+		$this->alterFileCache("UPDATE oc_filecache SET path = replace(path, 'files/top/mid', 'files/other/mid') WHERE fileid IN (12, 13, 17)");
+		$this->alterFileCache('UPDATE oc_filecache SET parent = 14 WHERE fileid = 12');
+		$this->assertSame('expanded', $p->process(12, 'file'), 'mid moved from top (in scope) to other');
+		$this->assertSame([13, 17], $this->queued($db));
+		$this->assertSame('erased_out_of_scope', $p->process(13, 'file'));
+	}
+
+	public function testAFolderMovedIntoTheTrashIsExpandedAndItsFilesAreErased(): void {
+		[$db, $rules, , $p] = $this->build(tree: [11 => 30, 30 => -1] + self::TREE);
+		$rules->addFolder(10, 'occ');
+		$this->indexedRow(13, [12, 11, 10]);
+		$this->indexedRow(17, [12, 11, 10]);
+		$this->alterFileCache("INSERT INTO oc_filecache (fileid, storage, path, parent, mimetype) VALUES (30, 1, 'files_trashbin/files', -1, 1)");
+		$this->alterFileCache("UPDATE oc_filecache SET path = replace(path, 'files/top', 'files_trashbin/files/top.d1') WHERE fileid IN (11, 12, 13, 17)");
+		$this->alterFileCache('UPDATE oc_filecache SET parent = 30 WHERE fileid = 11');
+		$this->assertSame('expanded', $p->process(11, 'file'));
+		$this->assertSame([13, 17], $this->queued($db));
+		$this->assertSame('erased_trashed', $p->process(13, 'file'));
+	}
+
+	public function testAMoveIsSeenWhenOnlySomeIndexedDescendantsCarryTheOldParent(): void {
+		[$db, $rules, , $p] = $this->build();
+		$rules->addFolder(10, 'occ');
+		$this->indexedRow(13, [12, 11, 10]);                            // evaluated after 11 came back to 10
+		$this->indexedRow(17, [12, 11, 99]);                            // evaluated while 11 still sat in folder 99
+		$this->assertSame('expanded', $p->process(11, 'file'), 'every indexed descendant is compared, not a sample');
+		$this->assertSame([13, 17], $this->queued($db));
 	}
 
 	public function testAShareOnAFolderMarksIndexedDescendantsAndTheRefreshClearsThem(): void {
@@ -225,6 +324,22 @@ class OutboxProcessorTest extends DbTestCase {
 		$this->assertSame(0, (int)$db->rows('SELECT attempts FROM aps_search.outbox')[0]['attempts']);
 		$settings->setPaused(false);
 		$this->assertSame(['enqueued' => 1], $runner->runBatch(50));
+	}
+
+	public function testAnUploadWhileReadingIsPausedLeavesNoRowOfTheBatchClaimed(): void {
+		[$db, $rules, $settings, $p, $outbox] = $this->build();
+		$rules->addFolder(11, 'occ');
+		$settings->setPaused(true);
+		$outbox->touch(13, 'file');                                       // the uploaded file
+		$outbox->touch(12, 'subtree');                                    // its folder, which queues 13 again in the same batch
+		$runner = new OutboxRunner($db, $outbox, $p, $this->createMock(LoggerInterface::class));
+		$this->assertSame(['held' => 1, 'expanded' => 1], $runner->runBatch(50));
+		$this->assertSame(0, (int)$db->rows('SELECT count(*) AS n FROM aps_search.outbox WHERE claimed_at IS NOT NULL AND processed_at IS NULL')[0]['n']);
+		$waiting = $db->rows("SELECT attempts FROM aps_search.outbox WHERE file_id = 13 AND kind = 'file' AND processed_at IS NULL AND claimed_at IS NULL");
+		$this->assertSame([0], array_map('intval', array_column($waiting, 'attempts')), 'one waiting row for the file, no attempt spent');
+		$settings->setPaused(false);
+		$runner->runBatch(50);
+		$this->assertSame(1, array_count_values($this->enqueued)[13] ?? 0, 'read once after resume');
 	}
 
 	public function testATenThousandEventStormIsOneRow(): void {
@@ -314,6 +429,72 @@ class OutboxProcessorTest extends DbTestCase {
 		$pending = $db->rows('SELECT id FROM aps_search.outbox WHERE processed_at IS NULL');
 		$this->assertCount(1, $pending, 'the later event survived as its own row');
 		$this->assertNotSame($claimed[0]['id'], (int)$pending[0]['id']);
+	}
+
+	public static function handBacks(): array {
+		return ['held while paused' => ['release'], 'failed, retried later' => ['retryLater']];
+	}
+
+	/** @dataProvider handBacks */
+	public function testHandingBackARowWhoseFileHasANewerEventKeepsOnlyTheNewer(string $method): void {
+		[$db, , , , $outbox] = $this->build();
+		$outbox->touch(13, 'file');
+		$oldId = $outbox->claim(10)[0]['id'];
+		$outbox->touch(13, 'file');                                       // a newer event while the row is in flight
+		$newId = (int)$db->rows('SELECT max(id) AS id FROM aps_search.outbox')[0]['id'];
+		$outbox->{$method}([$oldId]);
+		$waiting = $db->rows("SELECT id, attempts, (not_before <= now())::int AS due FROM aps_search.outbox
+			WHERE file_id = 13 AND kind = 'file' AND processed_at IS NULL AND claimed_at IS NULL");
+		$this->assertCount(1, $waiting, 'one waiting row for the file');
+		$this->assertSame($newId, (int)$waiting[0]['id'], 'the newer event carries the work');
+		$this->assertSame(0, (int)$waiting[0]['attempts']);
+		$this->assertSame(1, (int)$waiting[0]['due'], 'and is not held back by a backoff');
+		$this->assertNotNull($db->rows('SELECT processed_at FROM aps_search.outbox WHERE id = ?', [$oldId])[0]['processed_at'], 'the old row is settled');
+		$this->assertSame([$newId], array_column($outbox->claim(10), 'id'), 'the old row is never claimed again');
+	}
+
+	public function testHandingBackAMixOfSupersededAndOrdinaryRowsSettlesEachCorrectly(): void {
+		[$db, , , , $outbox] = $this->build();
+		$outbox->touch(13, 'file');
+		$outbox->touch(17, 'file');
+		[$a13, $b17] = array_column($outbox->claim(10), 'id');
+		$outbox->touch(13, 'file');
+		$n13 = (int)$db->rows('SELECT max(id) AS id FROM aps_search.outbox')[0]['id'];
+		// the first run died: its stale claims are taken again together with the newer row (also how rows stuck before this fix recover)
+		$db->execute("UPDATE aps_search.outbox SET claimed_at = now() - interval '11 minutes' WHERE claimed_at IS NOT NULL");
+		$this->assertSame([$a13, $b17, $n13], array_column($outbox->claim(10), 'id'));
+		$outbox->release([$a13, $b17, $n13]);
+		$row = fn (int $id): array => array_map('intval', $db->rows('SELECT attempts, (processed_at IS NOT NULL)::int AS done, (claimed_at IS NOT NULL)::int AS claimed
+			FROM aps_search.outbox WHERE id = ?', [$id])[0]);
+		$this->assertSame(['attempts' => 0, 'done' => 0, 'claimed' => 0], $row($n13), 'the newer row waits with its attempt given back');
+		$this->assertSame(1, $row($a13)['done'], 'the older row of the same file is settled');
+		$this->assertSame(['attempts' => 1, 'done' => 0, 'claimed' => 0], $row($b17), 'an ordinary row is released as before');
+		$this->assertSame(0, (int)$db->rows('SELECT count(*) AS n FROM aps_search.outbox WHERE claimed_at IS NOT NULL AND processed_at IS NULL')[0]['n']);
+	}
+
+	public function testAnEventCommittedWhileARowIsHandedBackDoesNotMakeItFail(): void {
+		$db = new class($this->connection($this->app())) extends IndexDb {
+			public ?\Closure $beforeHandBack = null;
+
+			public function execute(string $sql, array $params = []): int {
+				if ($this->beforeHandBack !== null && str_contains($sql, 'claimed_at = NULL')) {
+					[$hook, $this->beforeHandBack] = [$this->beforeHandBack, null];
+					$hook();
+				}
+				return parent::execute($sql, $params);
+			}
+		};
+		$outbox = new Outbox($db);
+		$outbox->touch(13, 'file');
+		$oldId = $outbox->claim(10)[0]['id'];
+		$other = new Outbox(new IndexDb($this->connection($this->app())));    // another request on its own session
+		$db->beforeHandBack = static fn () => $other->touch(13, 'file');   // commits after the check for a newer row, before the hand-back
+		$outbox->release([$oldId]);
+		$newId = (int)$db->rows('SELECT max(id) AS id FROM aps_search.outbox')[0]['id'];
+		$this->assertNotSame($oldId, $newId);
+		$waiting = $db->rows("SELECT id FROM aps_search.outbox WHERE file_id = 13 AND kind = 'file' AND processed_at IS NULL AND claimed_at IS NULL");
+		$this->assertSame([$newId], array_map('intval', array_column($waiting, 'id')), 'the concurrent event carries the work');
+		$this->assertNotNull($db->rows('SELECT processed_at FROM aps_search.outbox WHERE id = ?', [$oldId])[0]['processed_at'], 'the old row is settled');
 	}
 
 	public function testAParkedRowNeverBlocksALaterEvent(): void {

@@ -4,6 +4,7 @@ import json
 import sys
 
 import extract
+import jobbox
 import ocr
 import pdfocr
 
@@ -19,7 +20,8 @@ def main(req_path: str, res_path: str) -> None:
             head = fh.read(4)
         if head.startswith(OCR_KINDS):
             layer = pages if pages and head == b"%PDF" else None
-            out = {"status": "ok", **pdfocr.run(req["input"], layer=layer),
+            out = {"status": "ok", **pdfocr.run(req["input"], layer=layer,
+                                                announce=lambda s: jobbox.announce(res_path, s)),
                    "ocr_ver": pdfocr.version()}
         else:
             out = {"status": "ok", "pages": pages, "ocr_ver": "extract-1"}

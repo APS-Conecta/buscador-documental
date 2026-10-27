@@ -115,7 +115,8 @@ INDEXES = [
 def finish_steps(cur, res):
     """The vector index (the slow one), statistics, then the generation goes live exactly as the product's own functions do it."""
     for label, sql in [
-        ("hnsw", "SELECT aps_search.build_vec_index(1)"),
+        ("hnsw", "DO $$ BEGIN EXECUTE format('CREATE INDEX chunk_vec_1_hnsw ON aps_search.chunk_vec_1 USING hnsw (vec %I.halfvec_cosine_ops) "
+                 "WITH (m = 16, ef_construction = 64)', aps_search.vec_schema()); END $$"),
         ("analyze", "ANALYZE aps_search.chunk; ANALYZE aps_search.chunk_vec_1; ANALYZE aps_search.file_acl; ANALYZE aps_search.file_meta; ANALYZE aps_search.page; ANALYZE aps_search.file_state"),
     ]:
         timed(cur, res["seconds"], label, sql)
