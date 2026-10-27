@@ -31,6 +31,24 @@ class EnsureExclusionTagTest extends TestCase {
 		(new EnsureExclusionTag($m))->run($this->createMock(IOutput::class));
 	}
 
+	public function testItLeavesACaseVariantAlone(): void {
+		$tag = $this->createMock(ISystemTag::class);
+		$tag->method('getName')->willReturn('RAG-excluded');
+		$m = $this->createMock(ISystemTagManager::class);
+		$m->method('getAllTags')->willReturn([$tag]);
+		$m->expects($this->never())->method('createTag');
+		(new EnsureExclusionTag($m))->run($this->createMock(IOutput::class));
+	}
+
+	public function testANameThatOnlyContainsTheTagNameIsNotTheTag(): void {
+		$tag = $this->createMock(ISystemTag::class);
+		$tag->method('getName')->willReturn('rag-excluded-old');
+		$m = $this->createMock(ISystemTagManager::class);
+		$m->method('getAllTags')->willReturn([$tag]);
+		$m->expects($this->once())->method('createTag')->with('rag-excluded', true, true);
+		(new EnsureExclusionTag($m))->run($this->createMock(IOutput::class));
+	}
+
 	public function testARaceWithAnotherCreatorIsHarmless(): void {
 		$m = $this->createMock(ISystemTagManager::class);
 		$m->method('getAllTags')->willReturn([]);

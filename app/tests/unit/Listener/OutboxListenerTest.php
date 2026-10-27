@@ -45,7 +45,7 @@ class OutboxListenerTest extends TestCase {
 		// The events carry tag IDS (list<int>), not tag objects (NC 34 TagAssignedEvent::getTags): the listener resolves names.
 		$tags = $this->createMock(ISystemTagManager::class);
 		$tags->method('getTagsByIds')->willReturnCallback(function (array $ids): array {
-			$known = ['3' => 'rag-excluded', '4' => 'urgente'];
+			$known = ['3' => 'rag-excluded', '4' => 'urgente', '5' => 'Rag-Excluded'];
 			$out = [];
 			foreach ($ids as $id) {
 				if (!isset($known[(string)$id])) {
@@ -107,6 +107,13 @@ class OutboxListenerTest extends TestCase {
 		$this->assertSame([[7, 'subtree'], [8, 'subtree'], [9, 'subtree'], [12, 'subtree']], $this->touched);
 	}
 
+	public function testACaseVariantOfTheExclusionTagOnFilesTriggersAnEvaluation(): void {
+		$l = $this->listener();
+		$l->handle(new TagAssignedEvent('files', ['7'], [5]));
+		$l->handle(new TagUnassignedEvent('files', ['8'], [5]));
+		$this->assertSame([[7, 'subtree'], [8, 'subtree']], $this->touched);
+	}
+
 	public function testAListenerNeverThrowsIntoTheRequestAndLogsOnlyTheClassName(): void {
 		$l = $this->listener(new \RuntimeException('contrato de Juan Pérez.pdf'));
 		$captured = [];
@@ -124,6 +131,12 @@ class OutboxListenerTest extends TestCase {
 		$l->handle(new \OCP\SystemTag\ManagerEvent(\OCP\SystemTag\ManagerEvent::EVENT_DELETE, $this->tag('rag-excluded')));
 		$l->handle(new \OCP\SystemTag\ManagerEvent(\OCP\SystemTag\ManagerEvent::EVENT_DELETE, $this->tag('urgente')));
 		$l->handle(new \OCP\SystemTag\ManagerEvent(\OCP\SystemTag\ManagerEvent::EVENT_CREATE, $this->tag('rag-excluded')));
+		$this->assertSame([[0, 'rule']], $this->touched);
+	}
+
+	public function testDeletingACaseVariantOfTheExclusionTagTriggersAGlobalReevaluation(): void {
+		$l = $this->listener();
+		$l->handle(new \OCP\SystemTag\ManagerEvent(\OCP\SystemTag\ManagerEvent::EVENT_DELETE, $this->tag('Rag-Excluded')));
 		$this->assertSame([[0, 'rule']], $this->touched);
 	}
 
