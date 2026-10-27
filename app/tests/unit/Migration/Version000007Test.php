@@ -24,7 +24,7 @@ class Version000007Test extends TestCase {
 			$ran[] = $sql;
 			return 0;
 		});
-		(new Version000007Date20261027120000($db))->changeSchema($this->createMock(IOutput::class), static fn () => $this->createMock(ISchemaWrapper::class), []);
+		(new Version000007Date20261027120000($db))->changeSchema($this->createMock(IOutput::class), fn () => $this->createMock(ISchemaWrapper::class), []);
 		return $ran;
 	}
 
