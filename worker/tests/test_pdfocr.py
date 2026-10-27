@@ -1,11 +1,25 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Per-page OCR policy (ADR-0012): classify every page, OCR only what needs it, report confidence for OCR'd pages."""
+import tempfile
+from pathlib import Path
+
 import pytest
 
 import fixtures as fx
+import ocr
 import pdfocr
 
 KEY = "hemoglobina glicosilada"
+NATIVE = "La paciente fue derivada a nutricion y control en tres meses"
+
+
+@pytest.fixture
+def scratch(tmp_path, monkeypatch):
+    """The run's temp root. tempfile.gettempdir() caches its answer, so TMPDIR set here would not take effect."""
+    root = tmp_path / "scratch"
+    root.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(root))
+    return root
 
 
 def has(text, words=KEY):
@@ -134,6 +148,59 @@ def test_the_source_pdf_is_opened_once_no_matter_how_many_pages_need_ocr(tmp_pat
     out = pdfocr.run(pdf, layer=["", "", ""])
     assert out["source"] == ["ocr", "ocr", "ocr"]
     assert opens == [pdf]                                            # one open, not one per page
+
+
+def test_each_ocrd_page_frees_its_scratch_before_the_next_page(tmp_path, monkeypatch, scratch):
+    """Issue 47: every OCR'd page's in.pdf, out.pdf, sidecar and PNG stayed until the whole document was done, so a
+    long grey scan ran the parser's 512 MB tmpfs out of space part-way through."""
+    leftovers, calls = [], []
+
+    def fake_ocr(src, force, workdir, image=False):
+        work = Path(workdir)
+        assert scratch in work.parents
+        leftovers.append(sorted(str(p.relative_to(scratch)) for p in scratch.rglob("*")
+                                if p != work and work not in p.parents and p not in work.parents))
+        calls.append(src)
+        out = work / "out.pdf"
+        out.write_bytes(b"%PDF")
+        (work / "side.txt").write_text("sidecar")
+        return f"texto {len(calls)}", str(out)
+
+    def fake_confidence(pdf, workdir):
+        assert Path(pdf).is_file() and Path(pdf).parent == Path(workdir)
+        (Path(workdir) / "page.png").write_bytes(b"\x89PNG")
+        return float(len(calls))
+
+    monkeypatch.setattr(pdfocr, "ocr_page", fake_ocr)
+    monkeypatch.setattr(pdfocr, "page_confidence", fake_confidence)
+    pdf = fx.pdf_text(tmp_path / "m.pdf", text="#@!", pages=3)
+    out = pdfocr.run(pdf, layer=["", NATIVE, ""])
+    assert leftovers == [[], []]
+    assert out == {"pages": ["texto 1", NATIVE, "texto 2"], "conf": [1.0, None, 2.0], "source": ["ocr", "layer", "ocr"]}
+    assert list(scratch.iterdir()) == []
+
+
+@pytest.mark.parametrize("error", [ocr.OcrFailed, ocr.OcrTimeout])
+def test_a_failing_page_leaves_no_scratch_behind(tmp_path, monkeypatch, scratch, error):
+    calls = []
+
+    def fake_ocr(src, force, workdir, image=False):
+        calls.append(src)
+        out = Path(workdir) / "out.pdf"
+        out.write_bytes(b"%PDF")
+        if len(calls) == 2:
+            raise error()
+        return "texto", str(out)
+
+    def fake_confidence(pdf, workdir):
+        (Path(workdir) / "page.png").write_bytes(b"\x89PNG")
+        return 50.0
+
+    monkeypatch.setattr(pdfocr, "ocr_page", fake_ocr)
+    monkeypatch.setattr(pdfocr, "page_confidence", fake_confidence)
+    with pytest.raises(error):
+        pdfocr.run(fx.pdf_text(tmp_path / "f.pdf", text="#@!", pages=2), layer=["", ""])
+    assert list(scratch.iterdir()) == []
 
 
 def test_a_page_that_times_out_fails_the_job_as_a_timeout(tmp_path, monkeypatch):

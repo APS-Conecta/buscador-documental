@@ -9,9 +9,9 @@ namespace OCA\BuscadorDocumental\Search;
 use RuntimeException;
 
 /**
- * Query-time expansion of the APS acronym dictionary (S4 design section 4). For a query it returns extra plain phrases; the
- * caller hands each to websearch_to_tsquery and ORs the result with the user's own query, so no tsquery operator text is ever
- * built here. Ambiguous keys are never expanded and an ambiguous key's expansion never adds the key.
+ * Query-time expansion of the APS acronym dictionary (S4 design section 4). For a query it returns extra plain phrases and, for
+ * each, the folded query words that phrase stands for; the caller builds the tsquery, so no tsquery operator text is ever built
+ * here. Ambiguous keys are never expanded and an ambiguous key's expansion never adds the key.
  */
 final class Glossary {
 	public const MAX_ALTERNATIVES = 5;
@@ -65,17 +65,24 @@ final class Glossary {
 
 	/** @return list<string> at most MAX_ALTERNATIVES folded phrases, in query order */
 	public function alternatives(string $query): array {
+		return array_column($this->pairs($query), 1);
+	}
+
+	/** @return list<array{0: string, 1: string}> at most MAX_ALTERNATIVES [folded query words, phrase that stands for them], in query order */
+	public function pairs(string $query): array {
 		$folded = self::fold($query);
 		if ($folded === '') {
 			return [];
 		}
 		$tokens = explode(' ', $folded);
 		$out = [];
+		$seen = [];
 		foreach ($tokens as $i => $t) {
 			foreach ([$this->byKey, $this->byExpansion] as $index) {
 				foreach ($index[$t] ?? [] as [$seq, $add]) {
-					if (array_slice($tokens, $i, count($seq)) === $seq && $add !== $folded) {
-						$out[$add] = true;
+					if (array_slice($tokens, $i, count($seq)) === $seq && $add !== $folded && !isset($seen[$add])) {
+						$seen[$add] = true;
+						$out[] = [implode(' ', $seq), $add];
 					}
 				}
 			}
@@ -83,6 +90,6 @@ final class Glossary {
 				break;
 			}
 		}
-		return array_slice(array_keys($out), 0, self::MAX_ALTERNATIVES);
+		return array_slice($out, 0, self::MAX_ALTERNATIVES);
 	}
 }

@@ -24,6 +24,7 @@ from ocr import LANGS, OcrFailed, OcrTimeout
 POLICY = "perpage-3"
 ROTATE_THRESHOLD = "2.0"       # ocrmypdf default 14 ignores sparse pages (OSD confidence ~4.5 on a four-line page)
 PAGE_TIMEOUT = int(os.environ.get("BD_PAGE_TIMEOUT", "300"))
+OCR_PAGE_SECONDS = 13         # perpage-2 cost of one OCR'd page, confidence pass included (capacity-sheet.md, S2 additions)
 MIN_CHARS = 5
 MAX_BAD_SHARE = 0.02          # U+FFFD, private-use and control characters
 MIN_LETTER_SHARE = 0.5
@@ -158,8 +159,9 @@ def _is_image(path: str) -> bool:
         return fh.read(4).startswith((b"\x89PNG", b"\xff\xd8\xff", b"II*\x00", b"MM\x00*"))
 
 
-def run(path: str, layer: list = None) -> dict:
-    """Returns {"pages": [...], "conf": [... or None], "source": ["layer"|"ocr", ...]}."""
+def run(path: str, layer: list = None, announce=None) -> dict:
+    """Returns {"pages": [...], "conf": [... or None], "source": ["layer"|"ocr", ...]}. `announce`, if given, receives
+    once, before the first OCR, the extra seconds the OCR'd pages need."""
     import pikepdf
     pages, conf, source = [], [], []
     with tempfile.TemporaryDirectory() as tmp:
@@ -169,19 +171,20 @@ def run(path: str, layer: list = None) -> dict:
         layer = layer if layer is not None else _layer_texts(path)
         with pikepdf.open(path) as pdf:         # one parse for the whole run: scan flags below, page extraction in the loop
             heavy = _image_heavy(pdf)
-            for i, text in enumerate(layer):
-                kind = classify(text, heavy[i] if i < len(heavy) else False)
+            kinds = [classify(t, heavy[i] if i < len(heavy) else False) for i, t in enumerate(layer)]
+            if announce is not None:
+                announce(OCR_PAGE_SECONDS * sum(k != "native" for k in kinds))
+            for i, (text, kind) in enumerate(zip(layer, kinds)):
                 if kind == "native":
                     pages.append(text)
                     conf.append(None)
                     source.append("layer")
                     continue
-                work = os.path.join(tmp, f"p{i}")
-                os.makedirs(work)
-                one = os.path.join(work, "in.pdf")
-                _single_page(pdf, i, one)
-                ocr_text, out = ocr_page(one, force=(kind == "untrusted"), workdir=work)
-                pages.append(ocr_text)
-                conf.append(page_confidence(out, work))
-                source.append("ocr")
+                with tempfile.TemporaryDirectory(dir=tmp) as work:  # scratch holds one page at a time
+                    one = os.path.join(work, "in.pdf")
+                    _single_page(pdf, i, one)
+                    ocr_text, out = ocr_page(one, force=(kind == "untrusted"), workdir=work)
+                    pages.append(ocr_text)
+                    conf.append(page_confidence(out, work))
+                    source.append("ocr")
     return {"pages": pages, "conf": conf, "source": source}

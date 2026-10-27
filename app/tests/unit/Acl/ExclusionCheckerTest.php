@@ -65,9 +65,33 @@ class ExclusionCheckerTest extends TestCase {
 		$this->assertTrue($c->isExcluded(10));
 	}
 
-	public function testNoSuchTagFailsClosed(): void {
-		$this->expectException(ExclusionUnavailable::class);
-		$this->checker([10 => -1], [], [])->isExcluded(10);
+	public function testNoSuchTagExcludesNothingAndCreatesNothing(): void {
+		$m = $this->createMock(ISystemTagManager::class);
+		$m->method('getAllTags')->willReturn([]);
+		$m->expects($this->never())->method('createTag');
+		$o = $this->createMock(ISystemTagObjectMapper::class);
+		$o->expects($this->never())->method('getTagIdsForObjects');
+		$c = new FakeTreeChecker([10 => 5, 5 => 1, 1 => -1], $this->createMock(IDBConnection::class), $m, $o);
+		$this->assertSame([10 => false], $c->excludedAmong([10]));
+
+		$this->expectException(\OCA\BuscadorDocumental\Acl\FileGone::class);
+		$this->checker([], [], [])->isExcluded(10);
+	}
+
+	public function testACaseVariantTagStillExcludes(): void {
+		$m = $this->createMock(ISystemTagManager::class);
+		$m->method('getAllTags')->willReturn([$this->tag(3, 'RAG-excluded')]);
+		$m->expects($this->never())->method('createTag');
+		$o = $this->createMock(ISystemTagObjectMapper::class);
+		$o->method('getTagIdsForObjects')->willReturn(['5' => ['3']]);
+		$c = new FakeTreeChecker([10 => 5, 5 => 1, 1 => -1], $this->createMock(IDBConnection::class), $m, $o);
+		$this->assertTrue($c->isExcluded(10), 'Nextcloud compares tag names case-insensitively: this tag is the control');
+		$this->assertFalse($c->ensureTag(), 'a case variant is the tag: nothing is created beside it');
+	}
+
+	public function testANameThatOnlyContainsTheTagNameDoesNotExclude(): void {
+		$c = $this->checker([10 => 5, 5 => 1, 1 => -1], [$this->tag(3, 'rag-excluded'), $this->tag(4, 'rag-excluded-old')], ['10' => ['4']]);
+		$this->assertFalse($c->isExcluded(10));
 	}
 
 	public function testTagServiceFailureFailsClosed(): void {

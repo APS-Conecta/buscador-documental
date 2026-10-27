@@ -15,15 +15,19 @@ use Throwable;
 /**
  * The search API (S4 design section 3): modes, filters, sorts and paging over one ranked candidate list.
  *
- * Page 1 builds the list (at most 1 000 files, best first, then sorted), stores its ids and pages through it by position;
- * every page is rechecked against the live permissions and refilled from later positions when hits are dropped. The list
- * holds ids only. The semantic modes fall back to keyword search with a notice and never turn a model outage into an empty list.
+ * Page 1 ranks at most 1 000 files (best first, then sorted), rechecks them in that order against the live permissions and
+ * stores the ids of at most LISTED files the caller can read; the pages go through that list by position. Every later page is
+ * rechecked again and refilled from later positions when hits are dropped. The list holds ids only. The semantic modes fall back
+ * to keyword search with a notice and never turn a model outage into an empty list.
  *
  * Result: status ok|too_many|unavailable|invalid_cursor|cursor_expired, message, notice (null or code + Spanish message),
  * hits (same shape as Retrieve), page (from, to, total, capped, size), cursors (first, prev, next, last; null when none).
  */
 class Searcher {
+	/** Files ranked and sorted on page 1. */
 	public const CAP = 1000;
+	/** Files the caller can read that page 1 stores, at most. */
+	public const LISTED = 100;
 	public const TIMEOUT_MS = 5000;
 	private const REFILL_ROUNDS = 5;
 
@@ -77,6 +81,7 @@ class Searcher {
 				$qid = $token['qid'];
 				$start = $token['pos'];
 				$back = $token['back'];
+				$accepted = null;
 			} else {
 				// A folder id is only a filter for folders the person can read: otherwise the filter would tell them which folders
 				// sit above a file shared with them.
@@ -84,18 +89,18 @@ class Searcher {
 					return $this->empty('ok', '');
 				}
 				[$files, $chunks, $notice] = $this->db->withTimeout(self::TIMEOUT_MS, fn (): array => $this->rank($uid, $request));
-				[$files, $chunks] = $this->withoutUnreadableUnmodelled($uid, $files, $chunks);
+				[$files, $chunks, $accepted] = $this->readableOnly($uid, $files, $chunks, $request->pageSize);
 				$snap = ['file_ids' => $files, 'chunk_ids' => $chunks];
 				$qid = $this->snapshots->save($uid, $files, $chunks);
 				$start = 0;
 				$back = null;
 			}
-			return $this->page($uid, $request, $snap, $qid, $start, $back, $notice);
+			return $this->page($uid, $request, $snap, $qid, $start, $back, $notice, $accepted);
 		} catch (ExclusionUnavailable $e) {
 			$this->logger->warning('buscador_documental: exclusion state unavailable, search refused (' . get_class($e) . ')');
 			return $this->empty('unavailable', 'La búsqueda no está disponible en este momento.');
 		} catch (Throwable $e) {
-			if (str_contains($e->getMessage(), 'statement timeout')) {
+			if (IndexDb::timedOut($e)) {
 				return $this->empty('too_many', 'Demasiados resultados: acote la búsqueda con más términos.');
 			}
 			$this->logger->error('buscador_documental: search failed (' . get_class($e) . ')');
@@ -125,7 +130,7 @@ class Searcher {
 		}
 		// Mixta keeps the keyword leg strict: the OR relaxation of plain keyword search only adds common-word noise that dilutes the
 		// fusion, while the vector leg already covers the fuzzy matches (S4 evaluation: recall@10 0.67 with it, 0.79 without).
-		$keyword = $mode === 'significado' ? [] : $this->candidates->exacta($r->query, $this->glossary->alternatives($r->query), $set, $filters, self::CAP, $mode === 'mixta' ? false : null);
+		$keyword = $mode === 'significado' ? [] : $this->candidates->exacta($r->query, $this->glossary->pairs($r->query), $set, $filters, self::CAP, $mode === 'mixta' ? false : null);
 		$semantic = [];
 		if ($mode !== 'exacta') {
 			$exact = !$this->candidates->hasAnnIndex($profile['gen'])
@@ -145,27 +150,29 @@ class Searcher {
 	}
 
 	/**
-	 * The stored principals judge most files well, but not the ones with access they cannot model. Those are rechecked now,
-	 * before the list is stored, so the totals, positions and cursors the caller sees never count a file they cannot read.
+	 * The ranked list as page 1 stores it: walked in order through the live recheck, keeping the files it accepts (at most LISTED)
+	 * with their chunk ids. The first batch is LISTED files, a later one what is still missing but at least a page. The hits,
+	 * totals, positions and cursors of the stored list count only files the live recheck accepted here.
 	 *
 	 * @param list<int> $files @param list<int> $chunks
-	 * @return array{0: list<int>, 1: list<int>}
+	 * @return array{0: list<int>, 1: list<int>, 2: array<int, RecheckResult>} the kept files, their chunks, their recheck results
 	 */
-	private function withoutUnreadableUnmodelled(string $uid, array $files, array $chunks): array {
-		$unmodelled = array_flip($this->candidates->unmodelledAmong($files));
-		if ($unmodelled === []) {
-			return [$files, $chunks];
-		}
-		$readable = $this->recheck->filter($uid, array_keys($unmodelled));
-		$f = [];
-		$c = [];
-		foreach ($files as $i => $id) {
-			if (!isset($unmodelled[$id]) || isset($readable[$id])) {
-				$f[] = $id;
-				$c[] = $chunks[$i];
+	private function readableOnly(string $uid, array $files, array $chunks, int $size): array {
+		$keptFiles = [];
+		$keptChunks = [];
+		$accepted = [];
+		for ($pos = 0; $pos < count($files) && count($keptFiles) < self::LISTED; $pos += count($batch)) {
+			$batch = array_slice($files, $pos, max(self::LISTED - count($keptFiles), $size));
+			$ok = $this->recheck->filter($uid, $batch);
+			foreach ($batch as $k => $id) {
+				if (isset($ok[$id]) && count($keptFiles) < self::LISTED) {
+					$keptFiles[] = $id;
+					$keptChunks[] = $chunks[$pos + $k];
+					$accepted[$id] = $ok[$id];
+				}
 			}
 		}
-		return [$f, $c];
+		return [$keptFiles, $keptChunks, $accepted];
 	}
 
 	/** @param list<array<string, mixed>> $ranked @return list<array<string, mixed>> */
@@ -191,16 +198,17 @@ class Searcher {
 	/**
 	 * @param array{file_ids: list<int>, chunk_ids: list<int>} $snap
 	 * @param ?array{code: string, message: string} $notice
+	 * @param ?array<int, RecheckResult> $accepted page 1's recheck results for the stored files; null on a cursor page
 	 * @return array<string, mixed>
 	 */
-	private function page(string $uid, SearchRequest $r, array $snap, string $qid, int $start, ?int $back, ?array $notice): array {
+	private function page(string $uid, SearchRequest $r, array $snap, string $qid, int $start, ?int $back, ?array $notice, ?array $accepted): array {
 		$total = count($snap['file_ids']);
 		$size = $r->pageSize;
 		$pos = min($start, $total);
 		$picked = [];
 		for ($round = 0; $round < self::REFILL_ROUNDS && count($picked) < $size && $pos < $total; $round++) {
 			$batch = range($pos, min($total, $pos + $size) - 1);
-			$ok = $this->recheck->filter($uid, array_map(static fn (int $i): int => $snap['file_ids'][$i], $batch));
+			$ok = $accepted ?? $this->recheck->filter($uid, array_map(static fn (int $i): int => $snap['file_ids'][$i], $batch));
 			foreach ($batch as $i) {
 				$pos = $i + 1;
 				if (isset($ok[$snap['file_ids'][$i]])) {
@@ -226,7 +234,7 @@ class Searcher {
 			'message' => '',
 			'notice' => $notice,
 			'hits' => $hits,
-			'page' => ['from' => $hits === [] ? 0 : $start + 1, 'to' => $pos, 'total' => $total, 'capped' => $total >= self::CAP, 'size' => $size],
+			'page' => ['from' => $hits === [] ? 0 : $start + 1, 'to' => $pos, 'total' => $total, 'capped' => $total >= self::LISTED, 'size' => $size],
 			'cursors' => [
 				'first' => $start > 0 ? $this->cursor->make($qid, 0, $uid) : null,
 				'prev' => $start > 0 ? $this->cursor->make($qid, $back ?? max(0, $start - $size), $uid) : null,

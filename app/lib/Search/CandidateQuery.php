@@ -30,24 +30,25 @@ class CandidateQuery {
 	}
 
 	/**
-	 * Keyword leg. $alternatives are extra plain phrases (glossary) ORed with the query; $relax: null = relax only when the
-	 * strict pass is thin, true = only the OR form, false = strict only.
+	 * Keyword leg. $pairs are the glossary's [folded query words, alternative]: the strict pass lets each alternative stand for
+	 * its words, the OR relaxation adds it as one more term; $relax: null = relax only when the strict pass is thin, true = only
+	 * the OR form, false = strict only.
 	 *
-	 * @param list<string> $alternatives
+	 * @param list<array{0: string, 1: string}> $pairs
 	 * @return list<array{file_id: int, chunk_id: int}>
 	 */
-	public function exacta(string $query, array $alternatives, string $principalSet, Filters $filters, int $limit, ?bool $relax = null): array {
+	public function exacta(string $query, array $pairs, string $principalSet, Filters $filters, int $limit, ?bool $relax = null): array {
 		$strict = [];
 		$words = $this->words($query);
 		$common = $words === [] ? [] : $this->commonTerms($words);
 		if ($relax !== true) {
 			// A required word that is not common narrows the matches a lot: let the word index lead (see fts()).
-			$strict = $this->fts($this->strictTsquery($query, $alternatives), $principalSet, $filters, $limit, array_diff($words, $common) !== []);
+			$strict = $this->fts($this->strictTsquery($query, $pairs), $principalSet, $filters, $limit, array_diff($words, $common) !== []);
 		}
 		if ($relax === false || ($relax === null && count($strict) >= self::THIN)) {
 			return $strict;
 		}
-		$or = $this->relaxedTsquery($query, $alternatives);
+		$or = $this->relaxedTsquery($query, array_column($pairs, 1));
 		if ($or === null) {
 			return $strict;
 		}
@@ -108,35 +109,36 @@ class CandidateQuery {
 		return (int)$rows[0]['n'];
 	}
 
-	/**
-	 * Of these files, the ones whose stored principals carry x:recheck: access the prefilter cannot model (circle, Talk, Deck,
-	 * mail or federated shares, team folders with advanced ACL). Whether the caller may read them is only known to Nextcloud.
-	 *
-	 * @param list<int> $fileIds
-	 * @return list<int>
-	 */
-	public function unmodelledAmong(array $fileIds): array {
-		if ($fileIds === []) {
-			return [];
-		}
-		$rows = $this->db->rows(
-			'SELECT file_id FROM aps_search.file_acl WHERE file_id = ANY(?::bigint[]) AND principals @> ARRAY[?]::text[]',
-			[IndexDb::textArray(array_map('strval', $fileIds)), \OCA\BuscadorDocumental\Acl\PrincipalResolver::RECHECK],
-		);
-		return array_map(static fn (array $r): int => (int)$r['file_id'], $rows);
-	}
-
+	/** Whether generation $gen has a valid HNSW index (an interrupted concurrent build leaves an invalid one). Takes no table lock. */
 	public function hasAnnIndex(int $gen): bool {
 		$this->dimOf($gen);
 		return $this->db->rows(
-			"SELECT 1 FROM pg_indexes WHERE schemaname = 'aps_search' AND tablename = ? AND indexdef ILIKE '%hnsw%'",
-			['chunk_vec_' . $gen],
+			"SELECT 1 FROM pg_index i JOIN pg_class x ON x.oid = i.indexrelid JOIN pg_am am ON am.oid = x.relam
+			WHERE i.indrelid = to_regclass(?) AND am.amname = 'hnsw' AND i.indisvalid",
+			['aps_search.chunk_vec_' . $gen],
 		) !== [];
 	}
 
-	public function buildIndex(int $gen): void {
+	/**
+	 * Builds the HNSW index of generation $gen unless a valid one exists; true when it built one. Writers to the vector table
+	 * keep working meanwhile (CONCURRENTLY), so it must run outside a transaction. It takes the owner role for the build, so only
+	 * administrator commands call it, never background jobs or web requests.
+	 */
+	public function buildIndex(int $gen): bool {
 		$this->dimOf($gen);
-		$this->db->rows('SELECT aps_search.build_vec_index(?)', [$gen]);
+		if ($this->hasAnnIndex($gen)) {
+			return false;
+		}
+		$table = 'chunk_vec_' . $gen;                                // names are built from the integer generation only
+		$this->db->execute('SET ROLE bd_owner');
+		try {
+			$vs = (string)$this->db->rows('SELECT quote_ident(aps_search.vec_schema()) AS s')[0]['s'];
+			$this->db->execute("DROP INDEX CONCURRENTLY IF EXISTS aps_search.{$table}_hnsw");          // an invalid leftover of a failed build
+			$this->db->execute("CREATE INDEX CONCURRENTLY {$table}_hnsw ON aps_search.$table USING hnsw (vec $vs.halfvec_cosine_ops) WITH (m = 16, ef_construction = 64)");
+		} finally {
+			$this->db->execute('RESET ROLE');
+		}
+		return true;
 	}
 
 	private function dimOf(int $gen): int {
@@ -147,13 +149,28 @@ class CandidateQuery {
 		return (int)$rows[0]['dim'];
 	}
 
-	/** @param list<string> $alternatives @return array{0: string, 1: list<string>} */
-	private function strictTsquery(string $query, array $alternatives): array {
-		$sql = 'websearch_to_tsquery(' . self::CFG . ', ?)';
-		foreach ($alternatives as $_) {
-			$sql .= ' || websearch_to_tsquery(' . self::CFG . ', ?)';
+	/** @param list<array{0: string, 1: string}> $pairs @return array{0: string, 1: list<string>} */
+	private function strictTsquery(string $query, array $pairs): array {
+		$t = 'websearch_to_tsquery(' . self::CFG . ', ?)';
+		$sql = $t;
+		$params = [$query];
+		$folded = Glossary::fold($query);
+		// A shorter span rewritten first takes the words that a longer span containing it needs.
+		usort($pairs, static fn (array $a, array $b): int => substr_count($b[0], ' ') <=> substr_count($a[0], ' '));
+		foreach ($pairs as [$words, $alternative]) {
+			if ($words === $folded) {
+				// The alternative stands for the whole query ("REM", or a stopword key such as "LES" whose own tsquery is empty).
+				$sql = "$sql || $t";
+				$params[] = $alternative;
+				continue;
+			}
+			// Swap the alternative in for its words only, inside the parsed query, so exclusions and phrases still apply to it.
+			foreach (array_unique([$words, str_replace(' ', '-', $words)]) as $form) {     // a typed "CIE-10" parses as a phrase
+				$sql = "ts_rewrite($sql, $t, $t || $t)";
+				array_push($params, $form, $form, $alternative);
+			}
 		}
-		return [$sql, [$query, ...$alternatives]];
+		return [$sql, $params];
 	}
 
 	/** @param list<string> $alternatives @return array{0: string, 1: list<string>}|null null when OR would equal the strict form */

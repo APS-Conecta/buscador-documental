@@ -24,7 +24,7 @@ def test_born_digital_documents_are_extracted_without_ocr(tmp_path, monkeypatch)
 
 
 def test_pdfs_and_images_go_through_ocr_after_the_safety_checks(tmp_path, monkeypatch):
-    monkeypatch.setattr(pdfocr, "run", lambda path, layer=None: {"pages": ["texto reconocido"], "conf": [88.0], "source": ["ocr"]})
+    monkeypatch.setattr(pdfocr, "run", lambda path, layer=None, **k: {"pages": ["texto reconocido"], "conf": [88.0], "source": ["ocr"]})
     out = run(tmp_path, fx.pdf_text(tmp_path / "a.pdf"))
     assert out["status"] == "ok" and out["pages"] == ["texto reconocido"] and out["conf"] == [88.0] and out["source"] == ["ocr"]
 
@@ -55,7 +55,7 @@ def test_the_input_header_is_read_once_and_the_layer_is_routed_by_kind(tmp_path,
     p = make(tmp_path)
     got = {}
 
-    def fake_run(path, layer=None):
+    def fake_run(path, layer=None, **k):
         got["layer"] = layer
         return {"pages": ["x"], "conf": [None], "source": ["layer"]}
 
@@ -73,6 +73,28 @@ def test_the_input_header_is_read_once_and_the_layer_is_routed_by_kind(tmp_path,
     assert out["status"] == "ok"
     assert seen.count(p) == 1                    # one open of the input for the routing decisions
     assert got["layer"] == (["página uno"] if kind == "pdf" else None)
+
+
+def test_the_ocr_time_is_announced_before_ocr_starts(tmp_path, monkeypatch):
+    """Issue 46: the child tells the parser how long its OCR will take before the first page is read."""
+    prose = "La paciente fue derivada a nutricion y control en tres meses"
+    pdf = fx.merge_pdfs(tmp_path / "m.pdf", [
+        fx.pdf_text(tmp_path / "n.pdf", text=prose),
+        fx.scan_pdf(tmp_path / "s.pdf"),
+        fx.scan_pdf(tmp_path / "l.pdf", layer_text=prose)])       # a prose layer: only the scan flag sends it to OCR
+    sidecar = tmp_path / "out.json.extra"                          # next to the result run() asks for
+    seen = []
+
+    def first_ocr(*a, **k):
+        if not seen:
+            seen.append(sidecar.read_text() if sidecar.exists() else None)
+        return "texto reconocido", str(tmp_path / "o.pdf")
+
+    monkeypatch.setattr(pdfocr, "ocr_page", first_ocr)
+    monkeypatch.setattr(pdfocr, "page_confidence", lambda *a, **k: 50.0)
+    out = run(tmp_path, pdf)
+    assert out["source"] == ["layer", "ocr", "ocr"]
+    assert seen == [str(2 * pdfocr.OCR_PAGE_SECONDS)]
 
 
 SCANS = pytest.mark.parametrize("scan", [

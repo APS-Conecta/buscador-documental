@@ -135,10 +135,9 @@ class RecheckTest extends TestCase {
 		$r->filter('b', [10]);
 	}
 
-	public function testMissingExclusionTagFailsClosed(): void {
+	public function testMissingExclusionTagKeepsReadableHits(): void {
 		$r = ScriptedRecheck::make([10 => [$this->node()]], $this->checker([], []));
-		$this->expectException(ExclusionUnavailable::class);
-		$r->filter('b', [10]);
+		$this->assertSame([10], array_keys($r->filter('b', [10])), 'Nextcloud deletes the assignments with the tag: nothing is excluded');
 	}
 
 	public function testOrderFollowsTheInputAndDuplicatesCollapse(): void {

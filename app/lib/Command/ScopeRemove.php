@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace OCA\BuscadorDocumental\Command;
 
+use OCA\BuscadorDocumental\Audit\Actor;
 use OCA\BuscadorDocumental\Scope\ScopeRules;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -23,7 +24,7 @@ class ScopeRemove extends Command {
 	}
 
 	protected function execute(InputInterface $input, OutputInterface $output): int {
-		if (!$this->rules->remove((int)$input->getArgument('id'), 'occ')) {
+		if (!$this->rules->remove((int)$input->getArgument('id'), Actor::Occ)) {
 			$output->writeln('<error>No such rule</error>');
 			return 1;
 		}
