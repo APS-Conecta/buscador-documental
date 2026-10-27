@@ -108,17 +108,36 @@ class CandidateQuery {
 		return (int)$rows[0]['n'];
 	}
 
+	/** Whether generation $gen has a valid HNSW index (an interrupted concurrent build leaves an invalid one). Takes no table lock. */
 	public function hasAnnIndex(int $gen): bool {
 		$this->dimOf($gen);
 		return $this->db->rows(
-			"SELECT 1 FROM pg_indexes WHERE schemaname = 'aps_search' AND tablename = ? AND indexdef ILIKE '%hnsw%'",
-			['chunk_vec_' . $gen],
+			"SELECT 1 FROM pg_index i JOIN pg_class x ON x.oid = i.indexrelid JOIN pg_am am ON am.oid = x.relam
+			WHERE i.indrelid = to_regclass(?) AND am.amname = 'hnsw' AND i.indisvalid",
+			['aps_search.chunk_vec_' . $gen],
 		) !== [];
 	}
 
-	public function buildIndex(int $gen): void {
+	/**
+	 * Builds the HNSW index of generation $gen unless a valid one exists; true when it built one. Writers to the vector table
+	 * keep working meanwhile (CONCURRENTLY), so it must run outside a transaction. It takes the owner role for the build, so only
+	 * administrator commands call it, never background jobs or web requests.
+	 */
+	public function buildIndex(int $gen): bool {
 		$this->dimOf($gen);
-		$this->db->rows('SELECT aps_search.build_vec_index(?)', [$gen]);
+		if ($this->hasAnnIndex($gen)) {
+			return false;
+		}
+		$table = 'chunk_vec_' . $gen;                                // names are built from the integer generation only
+		$this->db->execute('SET ROLE bd_owner');
+		try {
+			$vs = (string)$this->db->rows('SELECT quote_ident(aps_search.vec_schema()) AS s')[0]['s'];
+			$this->db->execute("DROP INDEX CONCURRENTLY IF EXISTS aps_search.{$table}_hnsw");          // an invalid leftover of a failed build
+			$this->db->execute("CREATE INDEX CONCURRENTLY {$table}_hnsw ON aps_search.$table USING hnsw (vec $vs.halfvec_cosine_ops) WITH (m = 16, ef_construction = 64)");
+		} finally {
+			$this->db->execute('RESET ROLE');
+		}
+		return true;
 	}
 
 	private function dimOf(int $gen): int {

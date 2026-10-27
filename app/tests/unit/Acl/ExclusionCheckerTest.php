@@ -89,6 +89,11 @@ class ExclusionCheckerTest extends TestCase {
 		$this->assertFalse($c->ensureTag(), 'a case variant is the tag: nothing is created beside it');
 	}
 
+	public function testANameThatOnlyContainsTheTagNameDoesNotExclude(): void {
+		$c = $this->checker([10 => 5, 5 => 1, 1 => -1], [$this->tag(3, 'rag-excluded'), $this->tag(4, 'rag-excluded-old')], ['10' => ['4']]);
+		$this->assertFalse($c->isExcluded(10));
+	}
+
 	public function testTagServiceFailureFailsClosed(): void {
 		$this->expectException(ExclusionUnavailable::class);
 		$this->checker([10 => -1], [$this->tag(3, 'rag-excluded')], [], new \RuntimeException('down'))->isExcluded(10);

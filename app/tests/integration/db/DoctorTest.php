@@ -10,6 +10,7 @@ use OCA\BuscadorDocumental\Acl\ExclusionChecker;
 use OCA\BuscadorDocumental\Db\IndexDb;
 use OCA\BuscadorDocumental\Ops\Doctor;
 use OCA\BuscadorDocumental\Scope\Settings;
+use OCA\BuscadorDocumental\Search\CandidateQuery;
 use OCA\BuscadorDocumental\Search\EmbedClient;
 use OCA\BuscadorDocumental\Search\ProbeFailed;
 use OCP\IAppConfig;
@@ -50,7 +51,7 @@ class DoctorTest extends DbTestCase {
 			return [$t];
 		});
 		$exclusion = new ExclusionChecker($this->createMock(IDBConnection::class), $tags, $this->createMock(ISystemTagObjectMapper::class));
-		return new Doctor($db, new Settings($db), $cfg, $sys, $embed, $exclusion);
+		return new Doctor($db, new Settings($db), $cfg, $sys, $embed, new CandidateQuery($db), $exclusion);
 	}
 
 	/** @return array<string, array{status: string, detail: string}> */
@@ -166,10 +167,17 @@ class DoctorTest extends DbTestCase {
 	public function testAMissingVectorIndexAndFailedFilesAreWarnings(): void {
 		$this->profile();
 		$this->assertSame('warn', $this->statusOf('vector_index'), 'ready or active without an HNSW index');
-		$this->app()->exec('SELECT aps_search.build_vec_index(1)');
+		$this->candidates()->buildIndex(1);
 		$this->assertSame('ok', $this->statusOf('vector_index'));
 		$this->app()->exec("INSERT INTO aps_search.file_state (file_id, etag, text_state, vec_state) VALUES (1, 'e', 'indexed', 'failed')");
 		$this->assertSame('warn', $this->statusOf('vector_failures'));
+	}
+
+	public function testAnInvalidVectorIndexIsAWarning(): void {
+		$this->profile();
+		$this->candidates()->buildIndex(1);
+		self::connect('postgres', 'dev', self::$dbName)->exec("UPDATE pg_index SET indisvalid = false WHERE indexrelid = 'aps_search.chunk_vec_1_hnsw'::regclass");
+		$this->assertSame('warn', $this->statusOf('vector_index'), 'a failed concurrent build leaves an index searches do not use');
 	}
 
 	public function testNothingSecretOrTextCanAppearInTheReport(): void {
