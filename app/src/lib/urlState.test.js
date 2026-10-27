@@ -33,6 +33,16 @@ describe('urlState', () => {
 		expect(toRequest({ ...DEFAULTS, q: 'x', when: 'range', from: '2026-01-01', to: '2026-02-01' }).filters).toEqual({ modified_from: '2026-01-01', modified_to: '2026-02-01' })
 	})
 
+	it('counts relative ranges back from the Santiago calendar day', () => {
+		const lateEvening = new Date('2026-10-28T02:30:00Z') // 2026-10-27 23:30 -03
+		const from = (when, today) => toRequest({ ...DEFAULTS, q: 'x', when }, null, today).filters.modified_from
+		expect(from('week', lateEvening)).toBe('2026-10-20')
+		expect(from('month', lateEvening)).toBe('2026-09-27')
+		expect(from('year', lateEvening)).toBe('2025-10-27')
+		// 2026-09-12 00:30 -03: 7 x 24 h back lands on 2026-09-04 23:30 -04 across the 23-hour 2026-09-06, so it must count calendar days.
+		expect(from('week', new Date('2026-09-12T03:30:00Z'))).toBe('2026-09-05')
+	})
+
 	it('sends the cursor only when there is one and clears all filters on request', () => {
 		expect(toRequest({ ...DEFAULTS, q: 'x' }, 'abc').cursor).toBe('abc')
 		expect('cursor' in toRequest({ ...DEFAULTS, q: 'x' })).toBe(false)
