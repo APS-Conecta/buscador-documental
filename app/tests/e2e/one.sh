@@ -33,14 +33,14 @@ $C exec -T --user www-data nextcloud php "$APP/tests/canary/enqueue.php" enqueue
 [ "$($PSQL -c "select count(*) from aps_search.job where file_id=$FID")" = 1 ] || { echo "no job queued"; exit 1; }
 
 # S3: while paused the worker is handed nothing, the job stays, and status says so; resume restores normal work.
-$OCC buscador:pause | grep -q paused
+$OCC buscador:pause | grep paused >/dev/null
 $C --profile worker run --rm --no-deps -T worker python3 main.py --once
 [ "$($PSQL -c "select text_state from aps_search.file_state where file_id=$FID")" = pending ] || { echo "paused run changed the file"; exit 1; }
 [ "$($PSQL -c "select count(*) from aps_search.chunk where file_id=$FID")" = 0 ] || { echo "paused run indexed"; exit 1; }
 [ "$($PSQL -c "select count(*) from aps_search.job where file_id=$FID")" = 1 ] || { echo "paused run lost the job"; exit 1; }
-$OCC buscador:status | grep -q "paused: yes" || { echo "status does not show the pause"; exit 1; }
-$OCC buscador:resume | grep -q resumed
-$OCC buscador:status | grep -q "paused: no" || { echo "status does not show the resume"; exit 1; }
+$OCC buscador:status | grep "paused: yes" >/dev/null || { echo "status does not show the pause"; exit 1; }
+$OCC buscador:resume | grep resumed >/dev/null
+$OCC buscador:status | grep "paused: no" >/dev/null || { echo "status does not show the resume"; exit 1; }
 $C --profile worker run --rm --no-deps -T worker python3 main.py --once
 
 STATE=$($PSQL -c "select text_state from aps_search.file_state where file_id=$FID")

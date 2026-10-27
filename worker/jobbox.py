@@ -3,7 +3,8 @@
 
 The supervisor copies the input to <work>/in/<id>.bin and writes <work>/in/<id>.req.json; the parser container runs
 `serve_once` in a loop, starts one child per request in its own session, and writes <work>/out/<id>.json. The parser has
-no network and no secrets; the files are the whole interface. The child gets (request path, result path) as argv.
+no network and no secrets; the files are the whole interface. The child gets (request path, result path) as argv, and
+may write <result>.extra: the extra seconds it needs beyond the request's base budget (`announce`, `granted`).
 
 Both sides treat the other as untrusted: the parser survives any malformed request (it answers with an error and removes
 the file), and the supervisor reads an answer only through a non-following, regular-file-only, size-capped open."""
@@ -91,15 +92,22 @@ def _read_answer(path: str) -> dict:
             return {"status": "error", "reason": "ocr_failed", "detail": "answer is not JSON"}
 
 
+def _tmp_result(work: str, job_id: str) -> str:
+    """Where the parser's child writes its result (and its budget sidecar) before the answer is published."""
+    return os.path.join(work, "out", f"{job_id}.json.tmp")
+
+
 def submit(work: str, job_id: str, src: str, request: dict, timeout: int, grace: int = 30) -> dict:
-    """Copies src in, waits for the parser's answer. `timeout` is the per-file budget the parser enforces; `grace` is how
-    long past it the supervisor waits before declaring the parser unavailable."""
+    """Copies src in, waits for the parser's answer. `timeout` is the base per-file budget the parser enforces; the wait
+    follows whatever extension the parser's child announced. `grace` is how long past the budget the supervisor waits
+    before declaring the parser unavailable."""
     _check_id(job_id)
     prepare(work)
     binp = os.path.join(work, "in", f"{job_id}.bin")
     req = os.path.join(work, "in", f"{job_id}.req.json")
     res = os.path.join(work, "out", f"{job_id}.json")
-    _unlink(res, res + ".final", res + ".err", binp, req, req + ".tmp")   # ids repeat after a database reset: start clean
+    tmp_res = _tmp_result(work, job_id)
+    _unlink(res, res + ".final", res + ".err", tmp_res + ".extra", binp, req, req + ".tmp")   # ids repeat after a database reset: start clean
     try:
         with open(src, "rb") as fin, _create(binp, "wb") as fout:
             shutil.copyfileobj(fin, fout, 1024 * 1024)
@@ -107,14 +115,37 @@ def submit(work: str, job_id: str, src: str, request: dict, timeout: int, grace:
         with _create(tmp) as fh:
             json.dump({**request, "input": binp, "timeout": timeout}, fh)
         os.replace(tmp, req)                       # the parser only sees complete requests
-        deadline = time.monotonic() + timeout + grace
-        while time.monotonic() < deadline:
+        start, budget = time.monotonic(), timeout
+        while time.monotonic() < start + budget + grace:
             if os.path.lexists(res):
                 return _read_answer(res)
+            budget = max(budget, granted(timeout, tmp_res))      # only grows: a restart's purge does not shorten it
             time.sleep(0.1)
         raise ParserUnavailable(job_id)
     finally:
-        _unlink(binp, req, res, res + ".final", res + ".err", req + ".tmp")
+        _unlink(binp, req, res, res + ".final", res + ".err", req + ".tmp", tmp_res + ".extra")
+
+
+def announce(res: str, seconds: int) -> None:
+    """Child side: asks for `seconds` beyond the base budget, in a sidecar next to its result. Best effort: if the write
+    fails (a full tmpfs) the file keeps its base budget and a timeout stays retryable."""
+    try:
+        with _create(res + ".extra") as fh:
+            fh.write(str(int(seconds)))
+    except OSError:
+        pass
+
+
+def granted(timeout: int, res: str) -> int:
+    """The one budget rule: the base `timeout` plus the extra seconds the child announced next to `res`, at most
+    MAX_TIMEOUT and never less than `timeout`. The sidecar is untrusted: anything but a regular file holding an integer
+    grants nothing."""
+    try:
+        with _open_regular(res + ".extra") as fh:
+            extra = int(fh.read(16))
+    except (OSError, ValueError):
+        return timeout
+    return max(timeout, min(MAX_TIMEOUT, timeout + extra))
 
 
 def _limits():
@@ -123,17 +154,26 @@ def _limits():
 
 
 def run_child(cmd: list, req: str, res: str, timeout: int) -> dict:
-    """Runs one child in its own session; on timeout the whole group is killed."""
+    """Runs one child in its own session; when its budget runs out the whole group is killed. `timeout` is the base
+    budget; the child may extend it through the sidecar (`announce`), and the extension is read every second."""
     errp = res + ".err"
     with _create(errp, "wb") as errf:
         p = subprocess.Popen(cmd + [req, res], start_new_session=True, stdin=subprocess.DEVNULL,
                              stdout=subprocess.DEVNULL, stderr=errf, preexec_fn=_limits)
+    start, budget = time.monotonic(), timeout
     try:
-        p.wait(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        os.killpg(p.pid, signal.SIGKILL)
-        p.wait()
-        return {"status": "error", "reason": "timeout"}
+        while True:
+            budget = max(budget, granted(timeout, res))
+            left = start + budget - time.monotonic()
+            if left <= 0:
+                os.killpg(p.pid, signal.SIGKILL)
+                p.wait()
+                return {"status": "error", "reason": "timeout"}
+            try:
+                p.wait(timeout=min(left, 1))
+                break
+            except subprocess.TimeoutExpired:
+                pass
     finally:
         try:
             os.killpg(p.pid, signal.SIGKILL)   # stray grandchildren of a child that exited
@@ -174,7 +214,7 @@ def serve_once(work: str, child_cmd: list = None, wait: float = 1.0) -> bool:
             job_id = name[: -len(".req.json")]
             req = os.path.join(work, "in", name)
             binp = os.path.join(work, "in", f"{job_id}.bin")
-            tmp_res = os.path.join(work, "out", f"{job_id}.json.tmp")
+            tmp_res = _tmp_result(work, job_id)
             if not ID_RE.fullmatch(job_id):
                 _unlink(req, binp)
                 continue
@@ -192,7 +232,7 @@ def serve_once(work: str, child_cmd: list = None, wait: float = 1.0) -> bool:
                 _answer(work, job_id, {"status": "error", "reason": "internal", "detail": f"bad request: {type(e).__name__}"})
                 return True
             out = run_child(child_cmd or DEFAULT_CHILD, req, tmp_res, timeout)
-            _unlink(tmp_res, tmp_res + ".err", req, binp)       # request files go first: nothing left when the answer is visible
+            _unlink(tmp_res, tmp_res + ".err", tmp_res + ".extra", req, binp)       # request files go first: nothing left when the answer is visible
             _answer(work, job_id, out)
             return True
         if time.monotonic() >= end:

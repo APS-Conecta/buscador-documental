@@ -6,19 +6,26 @@ declare(strict_types=1);
 
 namespace OCA\BuscadorDocumental\Tests\integration\db;
 
+use OCA\BuscadorDocumental\Acl\ExclusionChecker;
 use OCA\BuscadorDocumental\Db\IndexDb;
 use OCA\BuscadorDocumental\Ops\Doctor;
 use OCA\BuscadorDocumental\Scope\Settings;
+use OCA\BuscadorDocumental\Search\CandidateQuery;
 use OCA\BuscadorDocumental\Search\EmbedClient;
 use OCA\BuscadorDocumental\Search\ProbeFailed;
 use OCP\IAppConfig;
 use OCP\IConfig;
+use OCP\IDBConnection;
+use OCP\SystemTag\ISystemTag;
+use OCP\SystemTag\ISystemTagManager;
+use OCP\SystemTag\ISystemTagObjectMapper;
 
 class DoctorTest extends DbTestCase {
 	/** @var array<string, string> */
 	private array $app = ['worker_secret' => 'a-long-enough-worker-secret-0123456789ab', 'embed_url' => 'http://x'];
 	private string $cron = 'cron';
 	private string|ProbeFailed $digest = 'sha256:abc';
+	private bool $tagExists = true;
 
 	private function doctor(): Doctor {
 		$db = new IndexDb($this->connection($this->app()));
@@ -33,7 +40,18 @@ class DoctorTest extends DbTestCase {
 			}
 			return $this->digest;
 		});
-		return new Doctor($db, new Settings($db), $cfg, $sys, $embed);
+		$tags = $this->createMock(ISystemTagManager::class);
+		$tags->method('getAllTags')->willReturnCallback(function (): array {
+			if (!$this->tagExists) {
+				return [];
+			}
+			$t = $this->createMock(ISystemTag::class);
+			$t->method('getId')->willReturn('3');
+			$t->method('getName')->willReturn(ExclusionChecker::TAG_NAME);
+			return [$t];
+		});
+		$exclusion = new ExclusionChecker($this->createMock(IDBConnection::class), $tags, $this->createMock(ISystemTagObjectMapper::class));
+		return new Doctor($db, new Settings($db), $cfg, $sys, $embed, new CandidateQuery($db), $exclusion);
 	}
 
 	/** @return array<string, array{status: string, detail: string}> */
@@ -62,6 +80,16 @@ class DoctorTest extends DbTestCase {
 		$bad = array_filter($this->checks(), static fn (array $c): bool => $c['status'] !== 'ok');
 		$this->assertSame([], $bad);
 		$this->assertCount(0, array_filter($this->doctor()->run(), static fn (array $c): bool => !in_array($c['status'], ['ok', 'warn', 'fail'], true)));
+	}
+
+	public function testAMissingExclusionTagFailsWithARemedyThatWorksOnAnEnabledApp(): void {
+		$this->assertSame('ok', $this->statusOf('exclusion_tag'));
+		$this->tagExists = false;
+		$checks = $this->checks();
+		$this->assertSame('fail', $checks['exclusion_tag']['status'] ?? 'missing');
+		$this->assertStringContainsString('occ tag:add rag-excluded public', $checks['exclusion_tag']['detail']);
+		$this->assertStringNotContainsString('enable', $checks['exclusion_tag']['detail'], 'enabling an enabled app does nothing');
+		$this->assertSame(1, Doctor::exitCode($this->doctor()->run()));
 	}
 
 	public function testAnUnboundedWorkerRoleIsAWarning(): void {
@@ -139,10 +167,17 @@ class DoctorTest extends DbTestCase {
 	public function testAMissingVectorIndexAndFailedFilesAreWarnings(): void {
 		$this->profile();
 		$this->assertSame('warn', $this->statusOf('vector_index'), 'ready or active without an HNSW index');
-		$this->app()->exec('SELECT aps_search.build_vec_index(1)');
+		$this->candidates()->buildIndex(1);
 		$this->assertSame('ok', $this->statusOf('vector_index'));
 		$this->app()->exec("INSERT INTO aps_search.file_state (file_id, etag, text_state, vec_state) VALUES (1, 'e', 'indexed', 'failed')");
 		$this->assertSame('warn', $this->statusOf('vector_failures'));
+	}
+
+	public function testAnInvalidVectorIndexIsAWarning(): void {
+		$this->profile();
+		$this->candidates()->buildIndex(1);
+		self::connect('postgres', 'dev', self::$dbName)->exec("UPDATE pg_index SET indisvalid = false WHERE indexrelid = 'aps_search.chunk_vec_1_hnsw'::regclass");
+		$this->assertSame('warn', $this->statusOf('vector_index'), 'a failed concurrent build leaves an index searches do not use');
 	}
 
 	public function testNothingSecretOrTextCanAppearInTheReport(): void {

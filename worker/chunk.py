@@ -12,7 +12,7 @@ The header regexes are adapted from the legal-corpus converter in the org's Data
 import math
 import re
 
-CHUNKER_VER = "struct-1"
+CHUNKER_VER = "struct-2"
 MAX_CHUNKS = 2000
 MAX_CHARS = 20000
 TARGET = 350
@@ -20,18 +20,22 @@ MAX_TOKENS = 500
 OVERLAP_MAX = 52                 # about 15 % of TARGET
 MAX_HEADER_TOKENS = 60
 
+# Ordinal words and Latin suffixes shared by article and section labels.
+_ORDINALS = (r"primero|segundo|tercero|cuarto|quinto|sexto|séptimo|septimo"
+             r"|octavo|noveno|décimo|decimo|undécimo|undecimo|duodécimo|duodecimo")
+_SUFFIXES = r"bis|ter|quáter|quater|quinquies|sexies|septies|octies|nonies|decies"
 # "Artículo" is capitalised when it opens an article and lower-case in a cross-reference ("el artículo 173 del Código"),
 # and the label must be followed by punctuation: both keep in-sentence references from opening a new article.
 RE_ARTICULO = re.compile(
     r"^((?:Art[íi]culo|ART[ÍI]CULO)\s+"
-    r"(?i:(\d+|primero|segundo|tercero|cuarto|quinto|sexto|séptimo|septimo"
-    r"|octavo|noveno|décimo|decimo|undécimo|undecimo|duodécimo|duodecimo"
+    rf"(?i:(\d+|{_ORDINALS}"
     r"|[IVXLC]+)(?![A-Za-záéíóúñüÁÉÍÓÚÑÜ])"
-    r"(?:\s*(?:º|°|\.º|bis|ter|quáter|quater|quinquies|sexies|septies|octies|nonies|decies))*)"
+    rf"(?:\s*(?:º|°|\.º|{_SUFFIXES}))*)"
     r"\s*[.\-–]+(?!\d))")      # not "Artículo 21.719": a number with a thousands dot is a reference, not a header
 RE_ESTRUCTURA = re.compile(
-    r"^(?P<kw>T[ÍI]TULO|Cap[íi]tulo|CAP[ÍI]TULO|P[áa]rrafo|P[ÁA]RRAFO|LIBRO)"
-    r"\s+(?:\d+|[IVXLC]+|Preliminar|Final|[ÚU]nico)(?:\s*[º°])?"
+    r"^(?P<kw>T[ÍI]TULO|T[íi]tulo|Cap[íi]tulo|CAP[ÍI]TULO|P[áa]rrafo|P[ÁA]RRAFO|LIBRO|Libro)"
+    rf"\s+(?:\d+|[IVXLC]+|(?i:{_ORDINALS})|Preliminar|PRELIMINAR|Final|FINAL|[ÚU]nico|[ÚU]NICO)"
+    rf"(?:\s*[º°])?(?:\s+(?i:{_SUFFIXES}))?"                # "III bis", never a suffix glued to the numeral ("IIbis")
     r"(?=\s*$|\s*[.:\-–—]|\s+[A-ZÁÉÍÓÚÑ])"          # a numeral, then nothing, punctuation or a capital: not "Capítulo 3 del presente..."
     r"|^(?P<tr>[Dd]isposiciones\s+[Tt]ransitorias|DISPOSICIONES\s+TRANSITORIAS|[Aa]rt[íi]culos?\s+[Tt]ransitorios?)\b")
 LEVELS = {"LIBRO": 0, "TÍTULO": 1, "TITULO": 1, "CAPÍTULO": 2, "CAPITULO": 2, "PÁRRAFO": 3, "PARRAFO": 3}

@@ -22,7 +22,7 @@ use Psr\Log\LoggerInterface;
  * (ADR-0013). Removals come first and are never held back; additions wait for a pause to end.
  *
  * Outcomes: purged, erased_trashed, erased_excluded, erased_out_of_scope, ignored, held, retry, enqueued, acl_written,
- * expanded, acl_marked, rule.
+ * expanded, folder_unchanged, acl_marked, rule.
  */
 class Processor {
 	public const TRASH_LEDGER_DAYS = 30;
@@ -55,8 +55,15 @@ class Processor {
 
 	public function process(int $fileId, string $kind): string {
 		if ($kind === 'rule') {
-			// The exclusion tag was deleted: whatever it had excluded must be looked at again.
+			// The exclusion tag was deleted: whatever it had excluded must be looked at again, and the tag comes back empty so
+			// folder owners can opt out again. Creating it is a best effort (refused under webcron): the row never retries for
+			// it, the doctor's exclusion_tag check reports the missing tag.
 			$this->db->execute("INSERT INTO aps_search.outbox (file_id, kind) SELECT file_id, 'file' FROM aps_search.file_state WHERE skip_reason = 'excluded' ON CONFLICT DO NOTHING");
+			try {
+				$this->exclusion->ensureTag();
+			} catch (\Throwable $e) {
+				$this->logger->warning('buscador_documental: could not create the exclusion tag (' . get_class($e) . ')');
+			}
 			return 'rule';
 		}
 		$node = $this->tree->node($fileId);
@@ -73,6 +80,17 @@ class Processor {
 				$this->outbox->markAclDirtySubtree($fileId);
 				return 'acl_marked';
 			}
+			// 'subtree' is a tag change on the folder: it can change every verdict below, and nothing in the cache shows it.
+			if ($kind === 'file') {
+				try {
+					$needed = $this->subtreeNeedsEvaluation($fileId, $node['parent']);
+				} catch (ExclusionUnavailable $e) {
+					return $this->unavailable($e);
+				}
+				if (!$needed) {
+					return 'folder_unchanged';
+				}
+			}
 			$this->outbox->expandSubtree($fileId);
 			return 'expanded';
 		}
@@ -85,7 +103,7 @@ class Processor {
 			return 'erased_trashed';
 		}
 		// Removals first, and they need nothing but the rules: leaving the scope is erased even while the tag service is down.
-		if (!$this->predicate->inScope($this->batchScope ?? $this->rules->current(), $fileId)) {
+		if (!$this->predicate->inScope($this->scope(), $fileId)) {
 			if ($this->known($fileId)) {
 				$this->erase($fileId, 'out_of_scope');
 				return 'erased_out_of_scope';
@@ -95,8 +113,7 @@ class Processor {
 		try {
 			$excluded = $this->exclusion->isExcluded($fileId);
 		} catch (ExclusionUnavailable $e) {
-			$this->logger->warning('buscador_documental: exclusion state unavailable (' . get_class($e) . ')');
-			return 'retry';
+			return $this->unavailable($e);
 		}
 		if ($excluded) {
 			$this->erase($fileId, 'excluded');
@@ -135,6 +152,44 @@ class Processor {
 			}
 		}
 		return $done;
+	}
+
+	/**
+	 * Can a plain cache event on this folder have changed a verdict below it? Nextcloud fires the same event for the
+	 * parent's mtime correction on every child write (the child brings its own event) and for a move, so the answer
+	 * comes from the index: yes when the folder has a new parent (moved, trashed, into or out of a scope root), or when
+	 * it is in scope, not excluded and nothing below it is indexed yet (moved or copied in, restored). A rename in place
+	 * keeps the parent: scope rules, exclusion, shares and the folder filter are keyed by ids.
+	 *
+	 * Every indexed descendant is compared, not a sample: a folder moved back halfway through an expansion leaves files
+	 * whose ancestors carry the other chain, and no reconcile pass compares ancestors. The exclusion test is needed
+	 * because erase_files deletes file_meta: an excluded folder always reads as unindexed, and every write below it would
+	 * erase each child again. The chain stops below a storage root (FileFactsSource), so its parent is compared as NULL.
+	 * One aggregate over file_meta_ancestors_idx, not two EXISTS: those plan as a LIMIT 1 sequential scan, which reads
+	 * the whole table whenever nothing matches (an unchanged folder, a folder with nothing indexed).
+	 *
+	 * @throws ExclusionUnavailable
+	 */
+	private function subtreeNeedsEvaluation(int $folderId, int $parent): bool {
+		$r = $this->db->rows(
+			'SELECT count(*) FILTER (WHERE ancestors[array_position(ancestors, ?::bigint) + 1] IS DISTINCT FROM ?::bigint) AS moved,
+				count(*) AS indexed
+			 FROM aps_search.file_meta WHERE ancestors @> ARRAY[?]::bigint[]',
+			[$folderId, $parent > 0 ? $parent : null, $folderId],
+		)[0];
+		if ((int)$r['moved'] > 0) {
+			return true;
+		}
+		return (int)$r['indexed'] === 0 && $this->predicate->inScope($this->scope(), $folderId) && !$this->exclusion->isExcluded($folderId);
+	}
+
+	private function unavailable(ExclusionUnavailable $e): string {
+		$this->logger->warning('buscador_documental: exclusion state unavailable (' . get_class($e) . ')');
+		return 'retry';
+	}
+
+	private function scope(): ScopeSet {
+		return $this->batchScope ?? $this->rules->current();
 	}
 
 	private function known(int $fileId): bool {
