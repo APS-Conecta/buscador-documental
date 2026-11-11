@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   release:
-    uses: APS-Conecta/.github/.github/workflows/app-release.yml@7884528d4e283decc2c8e639cb6e9ca6ed180c80 # 2026-10-22
+    uses: APS-Conecta/.github/.github/workflows/app-release.yml@064711df8c14749c1de0be7f4975cf737103eed9 # 2026-11-10
     permissions:
       contents: write
     with:
