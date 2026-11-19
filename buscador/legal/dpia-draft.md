@@ -52,9 +52,10 @@ No new access: every read and every view is checked live against Nextcloud's per
 | A half-written Edition shows after a crash | an Edition is published only when complete; work resumes from its last step | APS-Conecta/ia#6, #10 |
 | Document text leaves the server | the Model runs in the suite; «IA» reaches it only through TaskProcessing and the standard connector | APS-Conecta/ia#2, APS-Conecta/gestion-aio#167 |
 | Copies of document text pile up | each TaskProcessing task deleted once its result is stored; report and Edition retention; Readings replaced and deleted with their document | APS-Conecta/ia#2, #10, #16 |
+| Document text in logs | no document text or Model output in any log, checked with a sentinel document | APS-Conecta/ia#2 |
 
 ## 8. «IA»: residual risks to assess
-Health data appears in reports, Readings and Editions by design; nothing can tell who looked at what through «IA»; an administrator can point the standard connector at another server, which would send text out; the quality test copies about 20 real protocols to the owner's own machine; the spec sets no rule that keeps document text and Model output out of logs; the small Model publishes mistakes until an Editor corrects them; a compromised administrator can read «IA»'s tables; backups carry «IA»'s tables.
+Health data appears in reports, Readings and Editions by design; nothing can tell who looked at what through «IA»; an administrator can point the standard connector at another server, which would send text out; the quality test copies about 20 real protocols to the owner's own machine; the small Model publishes mistakes until an Editor corrects them; a compromised administrator can read «IA»'s tables; backups carry «IA»'s tables.
 
 ## 9. Decision
 Buscador Documental: approved / approved with conditions / not approved: _owner, date, reference_.
