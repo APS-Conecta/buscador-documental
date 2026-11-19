@@ -1,5 +1,7 @@
 # Brief for counsel (draft)
 
+It covers two apps of the suite, reviewed together: Buscador Documental first, then «IA».
+
 ## What the system is
 Buscador Documental is a Nextcloud app for the staff of a primary-care establishment. It reads the text of the documents in folders the administrator includes (including scanned documents, by text recognition) and lets each person search only what they can already open in Nextcloud. It is installed on the establishment's own server.
 
@@ -22,3 +24,28 @@ Buscador Documental is a Nextcloud app for the staff of a primary-care establish
 
 ## Options we can implement either way
 Smaller scope only (some folders), per-folder notice, shorter audit retention, disabling meaning search entirely (word search still works), disabling the Files tab text view, a stricter pause procedure. All are settings or small changes.
+
+## «IA», reviewed together with Buscador Documental
+
+### What it is
+«IA» is a Nextcloud app of the same suite, not built yet (spec: APS-Conecta/gestion-aio#162). It uses a language model that runs on the establishment's own server for two things. It reviews documents: it lists errors, gaps and unclear wording with suggested fixes, and never changes the document. And it writes recurring bulletins that summarise documents and calendars chosen by a group of staff (Editors) for other groups (Readers). It is not a chat; chat stays in Nextcloud's Assistant.
+
+### What it does with personal data
+- **Reads** whatever the person it works for can open in Nextcloud, files with patient data included: the document a person asks it to review; files that arrive in a folder with an automatic review rule, as the person who added them; a bulletin's sources, as one of its Editors; a Reader's own calendars, to list their meetings.
+- **Stores** review reports, which quote the document, for 90 days. For each version of a bulletin's documents, it stores a short summary, the expiry date and the job roles (Cargos) the document concerns, until the document changes or is deleted. Each bulletin edition, with its summary and the list of file versions read, is kept 12 months. The model's input and output pass through Nextcloud's task tables and are deleted as soon as the result is stored.
+- **Does not record** what the model read. There is no read log, so «IA» cannot answer "who looked at this data". Nextcloud's permissions, checked live on every read and every view, are the only limit.
+- **Publishes without prior approval.** A bulletin edition reaches its Readers as soon as it is complete, marked «Escrito por IA», and Editors can correct or withdraw it. Before release, a person checks the model's expiry dates and job roles on about 20 real protocols; below 90 % right, the AI-written summary and the dates stay hidden.
+- **Does not send text out of the server.** The model runs in the suite, and apps reach it only through Nextcloud's AI layer. An administrator could point that layer at another server; the suite never does.
+- **Backups**: the suite's backup carries «IA»'s tables.
+
+### Questions about «IA»
+1. Is it lawful under Ley 21.719 and Ley 20.584 for a local model to read documents with health data that the person can already open, in order to review them and to summarise them for groups of staff? On what legal basis? Should folders or apps with patient data (Farmacia, Epidemiología) be kept out, as the suite's earlier rule said?
+2. Is it acceptable to keep no record of what the model read, or must reads be recorded?
+3. May AI-written bulletin editions be published without a person approving each one, given the marking, correction and withdrawal, and the quality test?
+4. Is the retention right: reports 90 days, editions 12 months, document summaries while the version exists, backups?
+5. May «IA» read each Reader's calendars to list their meetings, without storing them?
+6. What must the staff notice say, and must staff be able to keep a document or folder out of «IA»?
+7. Is the DPIA owner the same as for Buscador Documental?
+
+### Options we can implement either way
+Keep folders or apps with patient data out; record each read in the audit log; require an Editor's approval before an edition is published; shorter retention; a tag that keeps a file or folder out of «IA»; reviews only, without bulletins; the AI-written summary hidden, keeping the parts built from data.
