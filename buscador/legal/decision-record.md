@@ -18,8 +18,11 @@
 |---|---|---|---|---|
 | Legal basis and lawfulness of reading documents with health data (Ley 21.719, Ley 20.584) | _ | counsel | _ | _ |
 | Folders and apps with patient data: read by «IA» or kept out | _ (owner's choice: read) | counsel and the establishment | _ | _ |
-| No record of what the Model read | _ (owner's choice: no record) | counsel | _ | _ |
+| No read or view log | _ (owner's choice: none) | counsel | _ | _ |
 | Editions published without prior approval | _ (owner's choice: no approval) | counsel and the establishment | _ | _ |
-| Retention: reports, Editions, Readings, backups | _ (proposed: 90 days, 12 months, while the document version exists) | counsel | _ | _ |
+| Retention: reports, Editions, Readings, backups | _ (proposed: 90 days, 12 months, while the document version exists, backups per the establishment's policy) | counsel | _ | _ |
+| Reading each Reader's calendars for the Personal list, without storing them | _ | counsel | _ | _ |
+| A tag that keeps a file or folder out of «IA» | _ (proposed: none) | counsel and the establishment | _ | _ |
+| Connector pointed away from the suite server? conditions | _ (default: suite server only) | establishment | _ | _ |
 | DPIA part for «IA» approved, owner | _ | data protection owner | _ | _ |
 | «IA» staff notice approved | _ | counsel and the establishment | _ | _ |

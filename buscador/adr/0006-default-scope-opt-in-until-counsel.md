@@ -29,4 +29,4 @@ The project owner decided to allow installation while the four rows above are st
 What is already in place whatever the answer: scope is opt-in folders by default; nothing leaves the server unless the administrator points the optional endpoint elsewhere; the `rag-excluded` tag always wins; erasure follows account deletion; the pause is one click. When every row is filled, this ADR is superseded by a short note recording the dates and references, and A-SEC-7 turns green.
 
 ### Shared with «IA» (2026-11-19)
-The same review covers «IA» (APS-Conecta/gestion-aio#164), and its rows are in `buscador/legal/decision-record.md`. The deferral above applies to Buscador only: «IA» ships after its own rows are filled.
+The same review covers «IA» (APS-Conecta/gestion-aio#164); its rows are in `buscador/legal/decision-record.md`. The deferral above applies to Buscador only. A-SEC-7 turns green only when the «IA» rows are filled too.

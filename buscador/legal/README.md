@@ -8,7 +8,7 @@ The package covers two apps of the suite, reviewed together: Buscador Documental
 |---|---|---|
 | `counsel-brief.md` | counsel | what the system does with personal data, the questions that need an answer, the options |
 | `dpia-draft.md` | the data protection owner | a first Data Protection Impact Assessment built from the actual design and tests: data flows, risks, the controls that exist and where they are proven |
-| `notice-draft.md` | counsel and the establishment | the staff notice (Spanish), a draft of the text the first-run notice in the administration page points to |
+| `notice-draft.md` | counsel and the establishment | the staff notices (Spanish): Buscador's, which the first-run notice in the administration page points to, and «IA»'s |
 | `decision-record.md` | the establishment | the form that records the decisions and the references; filling it is what lets ADR-0006 be superseded |
 
-How the gate closes: the owners review the drafts, change what is wrong, sign the decision record outside this repository (or attach its reference), and someone with authority gives the references to the maintainer, who copies them into the table in ADR-0006 and marks A-SEC-7 met in `buscador/acceptance.md`. The same references close APS-Conecta/gestion-aio#164, release gate 1 of «IA».
+How the gate closes: the owners review the drafts, change what is wrong, sign the decision record outside this repository (or attach its reference), and someone with authority gives the references to the maintainer, who copies them into the table in ADR-0006 and marks A-SEC-7 met in `buscador/acceptance.md`. The «IA» rows, filled the same way, close APS-Conecta/gestion-aio#164, release gate 1 of «IA».
